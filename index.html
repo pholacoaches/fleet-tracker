@@ -282,7 +282,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .section-actions { display: flex; gap: 8px; margin-left: auto; }
 
 /* VEHICLE BLOCKS */
-.vehicles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
+.vehicles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; align-items: stretch; }
+.vehicle-card { display: flex; flex-direction: column; }
+.tx-table { flex: 1; }
+.vehicle-card-footer { margin-top: auto; }
 .vehicles-table-wrap { overflow-x: auto; }
 .vehicles-table {
   width: 100%; border-collapse: collapse; background: var(--surface);
@@ -820,7 +823,7 @@ function renderDashboard(){
   document.getElementById('litresChart').innerHTML=byLitres.map(v=>`
     <div class="bar-row">
       <div class="bar-label">${v.plate}</div>
-      <div class="bar-track"><div class="bar-fill green" style="width:${(v.totalLitres/maxLitres*100).toFixed(1)}%"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="background:#5BA3D0;" style="width:${(v.totalLitres/maxLitres*100).toFixed(1)}%"></div></div>
       <div class="bar-val">${v.totalLitres.toFixed(2)} L</div>
     </div>`).join('');
 
@@ -866,7 +869,7 @@ function renderVehicleBlock(v,vi){
   const rows=v.transactions.map(tx=>`
     <tr>
       <td class="td-date">${tx.date}</td>
-      <td class="td-merchant">${tx.merchant}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;">[COMPETITOR]</span>':''}</td>
+      <td class="td-merchant">${tx.merchant}${tx.isCompetitor?' <span style="font-size:9px;color:#C92A2A;font-weight:700;">[COMPETITOR]</span>':''}</td>
       <td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-ZA')+(tx.odometerFlag?' ⚠':''):'—'}</td>
       <td class="td-litres r">${tx.litres.toFixed(2)} L</td>
       <td class="td-amount r">R${tx.amount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
