@@ -282,10 +282,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .section-actions { display: flex; gap: 8px; margin-left: auto; }
 
 /* VEHICLE BLOCKS */
-.vehicles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; align-items: stretch; }
-.vehicle-card { display: flex; flex-direction: column; }
-.tx-table { flex: 1; }
-.vehicle-card-footer { margin-top: auto; }
+.vehicles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;align-items:stretch;}
+.vehicle-card{display:flex;flex-direction:column;height:100%;}
+.vehicle-card .card-body{flex:1;}
+.vehicle-card-footer{margin-top:auto;}
 .vehicles-table-wrap { overflow-x: auto; }
 .vehicles-table {
   width: 100%; border-collapse: collapse; background: var(--surface);
@@ -823,7 +823,7 @@ function renderDashboard(){
   document.getElementById('litresChart').innerHTML=byLitres.map(v=>`
     <div class="bar-row">
       <div class="bar-label">${v.plate}</div>
-      <div class="bar-track"><div class="bar-fill" style="background:#5BA3D0;" style="width:${(v.totalLitres/maxLitres*100).toFixed(1)}%"></div></div>
+      <div class="bar-track"><div class="bar-fill blue" style="width:${(v.totalLitres/maxLitres*100).toFixed(1)}%;background:#5BA3D0;"></div></div>
       <div class="bar-val">${v.totalLitres.toFixed(2)} L</div>
     </div>`).join('');
 
