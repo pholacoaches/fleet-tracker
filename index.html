@@ -282,7 +282,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .section-actions { display: flex; gap: 8px; margin-left: auto; }
 
 /* VEHICLE BLOCKS */
-.vehicles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;}
+.vehicles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;align-items:start;}
+.empty-row td{height:28px;border-color:transparent!important;background:transparent;}
 .vehicles-table-wrap { overflow-x: auto; }
 .vehicles-table {
   width: 100%; border-collapse: collapse; background: var(--surface);
@@ -833,6 +834,35 @@ function renderDashboard(){
   renderComparison();
 }
 
+function equalizeVehicleBlocks(){
+  const cards=Array.from(document.querySelectorAll('#vehiclesGrid .vehicle-card'));
+  if(!cards.length)return;
+  // Group cards into rows by their rendered top position
+  const rows=[];
+  let currentRow=[],currentTop=null;
+  cards.forEach(card=>{
+    const top=Math.round(card.getBoundingClientRect().top);
+    if(currentTop===null||Math.abs(top-currentTop)>5){
+      if(currentRow.length)rows.push(currentRow);
+      currentRow=[card];currentTop=top;
+    } else { currentRow.push(card); }
+  });
+  if(currentRow.length)rows.push(currentRow);
+  // Pad shorter cards with empty rows to match the tallest in each row
+  rows.forEach(rowCards=>{
+    const tbodies=rowCards.map(c=>c.querySelector('tbody'));
+    const counts=tbodies.map(tb=>tb?tb.querySelectorAll('tr').length:0);
+    const maxCount=Math.max(...counts);
+    tbodies.forEach((tb,i)=>{
+      if(!tb)return;
+      const diff=maxCount-counts[i];
+      for(let j=0;j<diff;j++){
+        tb.insertAdjacentHTML('beforeend','<tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>');
+      }
+    });
+  });
+}
+
 function filterVehicles(){
   if(!currentReport)return;
   const search=(document.getElementById('searchInput')?.value||'').toLowerCase();
@@ -848,6 +878,7 @@ function filterVehicles(){
     document.getElementById('vehiclesGrid').classList.remove('hidden');
     document.getElementById('vehiclesTableWrap').classList.add('hidden');
     document.getElementById('vehiclesGrid').innerHTML=vehicles.map((v,i)=>renderVehicleBlock(v,i)).join('');
+    requestAnimationFrame(equalizeVehicleBlocks);
   } else {
     document.getElementById('vehiclesGrid').classList.add('hidden');
     document.getElementById('vehiclesTableWrap').classList.remove('hidden');
