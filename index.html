@@ -409,60 +409,55 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 }
 .export-label { font-size: 12px; color: var(--text2); margin-right: 4px; }
 
-/* SERVICE TRACKER */
-.service-section { margin-bottom: 28px; }
-.service-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: 14px; }
-.svc-card {
-  background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--border2);
-  border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); transition: box-shadow 0.15s;
+/* SERVICE ROW (inside vehicle card) */
+.vc-service-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 14px; border-top: 1px solid var(--border); background: var(--surface);
+  flex-wrap: wrap;
 }
-.svc-card:hover { box-shadow: var(--shadow-lg); }
-.svc-card.svc-green  { border-left-color: var(--green); }
-.svc-card.svc-yellow { border-left-color: var(--amber); }
-.svc-card.svc-red    { border-left-color: var(--red); }
-.svc-card.svc-setup  { border-left-color: var(--border2); border-style: dashed; }
-.svc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.svc-plate { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: 1px; }
-.svc-edit-btn {
+.vc-service-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.vc-service-label { font-size: 11px; font-weight: 700; color: var(--text3); white-space: nowrap; }
+.vc-service-val { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text2); }
+.vc-service-val.sv-red    { color: var(--red); }
+.vc-service-val.sv-yellow { color: var(--amber); }
+.vc-service-val.sv-green  { color: var(--green); }
+.vc-svc-btn {
   font-size: 11px; padding: 3px 9px; border: 1.5px solid var(--border2); border-radius: var(--radius-sm);
   background: var(--surface2); color: var(--text2); cursor: pointer; font-family: var(--font); font-weight: 700;
-  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap; transition: border-color 0.15s, color 0.15s; flex-shrink: 0;
 }
-.svc-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
-.svc-bar-track { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; margin-bottom: 8px; border: 1px solid var(--border); }
-.svc-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; background: var(--border2); }
-.svc-card.svc-green  .svc-bar-fill { background: var(--green); }
-.svc-card.svc-yellow .svc-bar-fill { background: var(--amber); }
-.svc-card.svc-red    .svc-bar-fill { background: var(--red); }
-.svc-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.svc-km-used { font-family: var(--font-mono); font-size: 11px; color: var(--text3); }
-.svc-status { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
-.svc-status.st-green  { background: var(--green-light); color: var(--green); }
-.svc-status.st-yellow { background: var(--amber-light); color: var(--amber); }
-.svc-status.st-red    { background: var(--red-light);   color: var(--red); }
-.svc-remaining { font-size: 12px; color: var(--text2); font-weight: 700; margin-top: 2px; }
-.svc-remaining span { font-family: var(--font-mono); }
-.svc-setup-prompt { font-size: 12px; color: var(--text3); font-style: italic; margin-top: 4px; }
-.svc-form {
-  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+.vc-svc-btn:hover { border-color: var(--accent); color: var(--accent); }
+.vc-service-form {
+  padding: 10px 14px 12px; border-top: 1px solid var(--border); background: var(--surface2);
   display: none; flex-direction: column; gap: 8px;
 }
-.svc-form.open { display: flex; }
-.svc-form label { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 2px; display: block; }
-.svc-form input {
-  width: 100%; padding: 6px 10px; border: 1.5px solid var(--border2);
-  border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 12px;
-  color: var(--text); background: var(--surface); outline: none; box-sizing: border-box;
+.vc-service-form.open { display: flex; }
+.vc-service-form label { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 2px; display: block; }
+.vc-service-form input {
+  width: 100%; padding: 6px 10px; border: 1.5px solid var(--border2); border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 12px; color: var(--text); background: var(--surface);
+  outline: none; box-sizing: border-box;
 }
-.svc-form input:focus { border-color: var(--accent); }
-.svc-form-row { display: flex; gap: 8px; }
-.svc-form-row > div { flex: 1; min-width: 0; }
-.svc-save-btn {
+.vc-service-form input:focus { border-color: var(--accent); }
+.vsf-row { display: flex; gap: 8px; }
+.vsf-row > div { flex: 1; min-width: 0; }
+.vsf-save {
   padding: 7px 14px; background: var(--accent); color: #fff; border: none;
   border-radius: var(--radius-sm); font-family: var(--font); font-size: 12px;
   font-weight: 700; cursor: pointer; align-self: flex-start; transition: background 0.15s;
 }
-.svc-save-btn:hover { background: var(--accent2); }
+.vsf-save:hover { background: var(--accent2); }
+/* Header service-status theming */
+.vc-header.svc-urgent { background: var(--red) !important; }
+.vc-header.svc-urgent .vehicle-plate,
+.vc-header.svc-urgent .vc-stat,
+.vc-header.svc-urgent .vc-stat strong { color: #fff !important; }
+.vc-header.svc-urgent .vc-chevron { color: rgba(255,255,255,0.8); }
+.vc-header.svc-urgent .badge { background: rgba(255,255,255,0.2) !important; color: #fff !important; }
+.vc-header.svc-warn { background: #FFF3BF !important; }
+.vc-header.svc-warn .vehicle-plate { color: #7C5C00; }
+.vc-header.svc-warn .vc-stat,
+.vc-header.svc-warn .vc-stat strong { color: #5C4200; }
 
 .hidden { display: none !important; }
 input[type=file] { display: none; }
@@ -550,14 +545,6 @@ input[type=file] { display: none; }
     <div id="alertBanner" class="hidden"></div>
     <div class="stats-grid" id="statsGrid"></div>
 
-    <!-- SERVICE TRACKER -->
-    <div class="service-section" id="serviceSection">
-      <div class="section-header">
-        <div class="section-title">🔧 Service Tracker</div>
-      </div>
-      <div class="service-grid" id="serviceGrid"></div>
-    </div>
-
     <!-- TOP 3 -->
     <div class="section-header">
       <div class="section-title">🏆 Highest Spend Vehicles</div>
@@ -642,83 +629,23 @@ const SERVICE_KEY='fleet_service_v1';
 function loadServiceData(){try{return JSON.parse(localStorage.getItem(SERVICE_KEY))||{};}catch{return{};}}
 function saveServiceData(d){localStorage.setItem(SERVICE_KEY,JSON.stringify(d));}
 
-function renderServiceForm(plate,svc){
-  const id=plate.replace(/\s+/g,'_');
-  return `<div class="svc-form" id="svcform-${id}">
-    <div class="svc-form-row">
-      <div>
-        <label>Last service odometer (km)</label>
-        <input type="number" id="svc-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000">
-      </div>
-      <div>
-        <label>Service interval (km)</label>
-        <input type="number" id="svc-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000">
-      </div>
-    </div>
-    <button class="svc-save-btn" onclick="saveServiceSettings('${plate}')">Save</button>
-  </div>`;
-}
-
-function renderServiceTracker(){
-  if(!currentReport)return;
-  const svcData=loadServiceData();
-  document.getElementById('serviceGrid').innerHTML=currentReport.vehicles.map(v=>{
-    const plate=v.plate;
-    const id=plate.replace(/\s+/g,'_');
-    const lastTx=v.transactions[v.transactions.length-1];
-    const currentOdo=(lastTx&&lastTx.odometer)?lastTx.odometer:null;
-    const svc=svcData[plate];
-    if(!svc||!svc.lastServiceOdo||!svc.interval){
-      return `<div class="svc-card svc-setup" id="svc-${id}">
-        <div class="svc-header">
-          <span class="svc-plate">${plate}</span>
-          <button class="svc-edit-btn" onclick="editServiceCard('${plate}')">＋ Set up</button>
-        </div>
-        <div class="svc-setup-prompt">No service data yet — click Set up to enter the last service odometer and interval.</div>
-        ${renderServiceForm(plate,svc)}
-      </div>`;
-    }
-    const kmUsed=currentOdo?currentOdo-svc.lastServiceOdo:0;
-    const kmRemaining=svc.interval-kmUsed;
-    const pct=Math.min(100,Math.max(0,(kmUsed/svc.interval)*100));
-    let cardClass,statusClass,statusLabel;
-    if(kmRemaining<=0){cardClass='svc-red';statusClass='st-red';statusLabel='⚠ Overdue';}
-    else if(kmRemaining<=500){cardClass='svc-red';statusClass='st-red';statusLabel='🔴 Service Due';}
-    else if(kmRemaining<=2000){cardClass='svc-yellow';statusClass='st-yellow';statusLabel='🟡 Service Soon';}
-    else{cardClass='svc-green';statusClass='st-green';statusLabel='✓ On Track';}
-    const remainingText=kmRemaining<=0
-      ?`<span>${Math.abs(kmRemaining).toLocaleString('en-ZA')} km</span> overdue`
-      :`<span>${kmRemaining.toLocaleString('en-ZA')} km</span> remaining`;
-    return `<div class="svc-card ${cardClass}" id="svc-${id}">
-      <div class="svc-header">
-        <span class="svc-plate">${plate}</span>
-        <button class="svc-edit-btn" onclick="editServiceCard('${plate}')">✎ Edit</button>
-      </div>
-      <div class="svc-bar-track"><div class="svc-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
-      <div class="svc-meta">
-        <span class="svc-km-used">${kmUsed.toLocaleString('en-ZA')} / ${svc.interval.toLocaleString('en-ZA')} km used</span>
-        <span class="svc-status ${statusClass}">${statusLabel}</span>
-      </div>
-      <div class="svc-remaining">${remainingText}</div>
-      ${renderServiceForm(plate,svc)}
-    </div>`;
-  }).join('');
-}
-
-function editServiceCard(plate){
-  const form=document.getElementById('svcform-'+plate.replace(/\s+/g,'_'));
+function editVehicleService(plate){
+  const form=document.getElementById('vsf-'+plate.replace(/\s+/g,'_'));
   if(form)form.classList.toggle('open');
 }
 
-function saveServiceSettings(plate){
+function saveVehicleService(plate){
   const id=plate.replace(/\s+/g,'_');
-  const odo=parseInt(document.getElementById('svc-odo-'+id)?.value,10);
-  const interval=parseInt(document.getElementById('svc-int-'+id)?.value,10);
-  if(!odo||!interval||odo<=0||interval<=0){alert('Please enter valid values for both fields.');return;}
+  const odo=parseInt(document.getElementById('vs-odo-'+id)?.value,10);
+  const interval=parseInt(document.getElementById('vs-int-'+id)?.value,10);
+  if(!odo||!interval||odo<=0||interval<=0){alert('Please enter a valid odometer and interval.');return;}
   const svcData=loadServiceData();
   svcData[plate]={lastServiceOdo:odo,interval};
   saveServiceData(svcData);
-  renderServiceTracker();
+  filterVehicles();
+  // Re-open the card that was just saved
+  const card=document.getElementById('vc-'+id);
+  if(card)card.classList.add('open');
 }
 
 let state=loadStorage();
@@ -992,7 +919,6 @@ function renderDashboard(){
 
   document.getElementById('vehicleCount').textContent=`${r.vehicles.length} vehicles`;
   filterVehicles();
-  renderServiceTracker();
   renderHistory();
   renderComparison();
 }
@@ -1031,9 +957,70 @@ function toggleVehicleCard(btn){
 }
 
 function renderVehicleBlock(v,vi){
+  const plate=v.plate;
+  const id=plate.replace(/\s+/g,'_');
   const lastTx=v.transactions[v.transactions.length-1];
   const lastOdo=lastTx&&lastTx.odometer?lastTx.odometer.toLocaleString('en-ZA')+' km':'—';
+  const currentOdo=lastTx&&lastTx.odometer?lastTx.odometer:null;
 
+  // ── Service data ──
+  const svc=loadServiceData()[plate];
+  let svcHeaderClass='';
+  let svcRowHtml='';
+  if(!svc||!svc.lastServiceOdo||!svc.interval){
+    svcRowHtml=`
+      <div class="vc-service-row">
+        <div class="vc-service-info">
+          <span class="vc-service-label">🔧 Service:</span>
+          <span class="vc-service-val" style="color:var(--text3);font-style:italic;font-family:var(--font);">Not set up</span>
+        </div>
+        <button class="vc-svc-btn" onclick="editVehicleService('${plate}')">＋ Set up service</button>
+      </div>`;
+  } else {
+    const kmUsed=currentOdo?currentOdo-svc.lastServiceOdo:0;
+    const kmRemaining=svc.interval-kmUsed;
+    let valClass,svcText;
+    if(kmRemaining<=0){
+      svcHeaderClass='svc-urgent';
+      valClass='sv-red';
+      svcText=`${Math.abs(kmRemaining).toLocaleString('en-ZA')} km overdue`;
+    } else if(kmRemaining<=500){
+      svcHeaderClass='svc-urgent';
+      valClass='sv-red';
+      svcText=`${kmRemaining.toLocaleString('en-ZA')} km remaining`;
+    } else if(kmRemaining<=2000){
+      svcHeaderClass='svc-warn';
+      valClass='sv-yellow';
+      svcText=`${kmRemaining.toLocaleString('en-ZA')} km remaining`;
+    } else {
+      valClass='sv-green';
+      svcText=`${kmRemaining.toLocaleString('en-ZA')} km remaining`;
+    }
+    svcRowHtml=`
+      <div class="vc-service-row">
+        <div class="vc-service-info">
+          <span class="vc-service-label">🔧 Service:</span>
+          <span class="vc-service-val ${valClass}">${svcText}</span>
+        </div>
+        <button class="vc-svc-btn" onclick="editVehicleService('${plate}')">✎ Edit</button>
+      </div>`;
+  }
+  svcRowHtml+=`
+    <div class="vc-service-form" id="vsf-${id}">
+      <div class="vsf-row">
+        <div>
+          <label>Last service odometer (km)</label>
+          <input type="number" id="vs-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000">
+        </div>
+        <div>
+          <label>Service interval (km)</label>
+          <input type="number" id="vs-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000">
+        </div>
+      </div>
+      <button class="vsf-save" onclick="saveVehicleService('${plate}')">Save</button>
+    </div>`;
+
+  // ── Badges ──
   const badges=[];
   if(v.hasOdometerIssue)badges.push('<span class="badge badge-warn">Odo anomaly</span>');
   if(v.isHighSpend)badges.push('<span class="badge badge-high">High spend</span>');
@@ -1041,6 +1028,7 @@ function renderVehicleBlock(v,vi){
 
   const alertClass=(v.hasOdometerIssue||v.isHighSpend)?'alert-red':v.hasCompetitor?'alert-blue':'';
 
+  // ── Transaction rows ──
   const rows=v.transactions.map(tx=>`
     <tr>
       <td class="td-date">${tx.date}</td>
@@ -1058,11 +1046,11 @@ function renderVehicleBlock(v,vi){
   const chevron=`<svg class="vc-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 8 10 13 15 8"/></svg>`;
 
   return `
-    <div class="vc ${alertClass}" style="animation-delay:${vi*0.04}s">
-      <button class="vc-header" onclick="toggleVehicleCard(this)" aria-expanded="false">
+    <div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s">
+      <button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)">
         <div class="vc-title-row">
           <div class="vc-left">
-            <span class="vehicle-plate">${v.plate}</span>
+            <span class="vehicle-plate">${plate}</span>
             <div class="vc-badges">${badges.join('')}</div>
           </div>
           ${chevron}
@@ -1092,6 +1080,7 @@ function renderVehicleBlock(v,vi){
           <span class="footer-total">R${v.totalAmount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
         </div>
         ${odoNote}${highNote}
+        ${svcRowHtml}
       </div>
     </div>`;
 }
