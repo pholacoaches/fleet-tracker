@@ -756,12 +756,27 @@ async function parseFreightExcel(file){
     const buf=await file.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array',cellDates:true});
     const ws=wb.Sheets[wb.SheetNames[0]];
+    // Use {header:1} to get raw arrays; row 0 is the header row
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    console.log('[Freight] Total rows (inc. header):', rows.length);
+    console.log('[Freight] Row 0 (header):', rows[0]);
+    console.log('[Freight] Row 1:', rows[1]);
+    console.log('[Freight] Row 2:', rows[2]);
+    console.log('[Freight] Row 3:', rows[3]);
     // Strip R prefix, commas, and whitespace before parsing any numeric cell
     function parseNum(v){return parseFloat(String(v).replace(/[R,\s]/g,''))||0;}
     function parseOdo(v){return parseInt(String(v).replace(/[^0-9]/g,''))||0;}
-    const data=rows.slice(1).filter(r=>String(r[4]).trim()&&parseNum(r[7])>0);
-    if(data.length===0)throw new Error('No valid fuel rows found. The file must have a plate in column E (index 4) and litres > 0 in column H (index 7).');
+    // Skip row 0 (header); require row[4] non-empty (plate) and row[7] > 0 (volume)
+    const data=rows.slice(1).filter(r=>{
+      const plate=r[4]!==undefined&&r[4]!==null&&String(r[4]).trim()!=='';
+      const vol=r[7]!==undefined&&r[7]!==null&&parseNum(r[7])>0;
+      return plate&&vol;
+    });
+    console.log('[Freight] Valid data rows after filter:', data.length);
+    if(data.length===0){
+      console.error('[Freight] Filter failed. First 3 raw rows:', rows.slice(1,4));
+      throw new Error('No valid fuel rows found. Check the browser console (F12) for raw row data to diagnose the column layout.');
+    }
 
     // Duplicate check
     const orderNums=data.map(r=>String(r[2]).trim()).filter(Boolean);
