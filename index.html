@@ -473,6 +473,7 @@ input[type=file] { display: none; }
   .vehicle-card { break-inside: avoid; }
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -491,7 +492,7 @@ input[type=file] { display: none; }
   </div>
 </div>
 
-<input type="file" id="fileInput" accept=".pdf" onchange="handleFileUpload(event)">
+<input type="file" id="fileInput" accept=".pdf,.xlsx" onchange="handleFileUpload(event)">
 
 <div class="loading-overlay hidden" id="loadingOverlay">
   <div class="loading-spinner"></div>
@@ -653,15 +654,175 @@ let activeReportIndex=state.reports.length-1;
 let currentView='grid';
 let currentReport=null;
 
+// ── UPLOAD ID TRACKING ────────────────────────────────────────────────────────
+const UPLOAD_IDS_KEY='fleet_upload_ids_v1';
+function loadUploadIds(){try{return JSON.parse(localStorage.getItem(UPLOAD_IDS_KEY))||{engen:[],freight:[]};}catch{return{engen:[],freight:[]};}}
+function saveUploadIds(d){localStorage.setItem(UPLOAD_IDS_KEY,JSON.stringify(d));}
+function checkEngenDuplicates(ids){const s=new Set(loadUploadIds().engen||[]);return ids.filter(i=>s.has(i));}
+function checkFreightDuplicates(nums){const s=new Set(loadUploadIds().freight||[]);return nums.filter(n=>s.has(n));}
+
+// ── PERIOD / DATE HELPERS ──────────────────────────────────────────────────────
+function getPeriod(scheduleDate){
+  if(!scheduleDate)return'';
+  const p=String(scheduleDate).split('.');
+  return p.length>=2?p[p.length-2]+'.'+p[p.length-1]:scheduleDate;
+}
+function parseDateStr(s){
+  const[d,m,y]=(s||'01.01.1970').split('.');
+  return new Date(+y,+m-1,+d);
+}
+
+// ── VEHICLE STATS ──────────────────────────────────────────────────────────────
+function computeVehicleStats(v,fleetAvg){
+  const txs=v.transactions;
+  txs.forEach((tx,i)=>{
+    if(i>0){
+      const prev=txs[i-1],km=tx.odometer-prev.odometer;
+      if(km>0&&tx.litres>0){tx.kmPerLitre=parseFloat((km/tx.litres).toFixed(2));tx.costPerKm=parseFloat((tx.amount/km).toFixed(2));}
+      else{tx.kmPerLitre=null;tx.costPerKm=null;if(km<0)tx.odometerFlag=true;}
+    }else{tx.kmPerLitre=null;tx.costPerKm=null;}
+  });
+  v.totalLitres=parseFloat(txs.reduce((s,t)=>s+t.litres,0).toFixed(2));
+  v.totalAmount=parseFloat(txs.reduce((s,t)=>s+t.amount,0).toFixed(2));
+  v.avgLitresPerFill=parseFloat((v.totalLitres/txs.length).toFixed(2));
+  const cons=txs.filter(t=>t.kmPerLitre).map(t=>t.kmPerLitre);
+  v.avgKmPerLitre=cons.length>0?parseFloat((cons.reduce((a,b)=>a+b,0)/cons.length).toFixed(2)):null;
+  v.hasOdometerIssue=txs.some(t=>t.odometerFlag);
+  v.hasCompetitor=txs.some(t=>t.isCompetitor);
+  if(fleetAvg!=null)v.isHighSpend=v.totalAmount>fleetAvg*1.5;
+  return v;
+}
+
+// ── MERGE & SAVE ──────────────────────────────────────────────────────────────
+function finaliseAndSave(reportData,newEngenIds,newFreightIds){
+  const period=getPeriod(reportData.scheduleDate);
+  const existingIdx=state.reports.findIndex(r=>getPeriod(r.scheduleDate)===period);
+  if(existingIdx>=0){
+    // Merge into existing period report
+    const ex=state.reports[existingIdx];
+    reportData.vehicles.forEach(nv=>{
+      const ei=ex.vehicles.findIndex(ev=>ev.plate===nv.plate);
+      if(ei>=0){
+        ex.vehicles[ei].transactions.push(...nv.transactions);
+        ex.vehicles[ei].transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
+      }else{ex.vehicles.push(nv);}
+    });
+    if(reportData.sources)ex.sources=[...new Set([...(ex.sources||[]),...reportData.sources])];
+    ex.filename=(ex.filename||'')+' + '+reportData.filename;
+    const fa=ex.vehicles.reduce((s,v)=>s+v.totalAmount,0)/ex.vehicles.length;
+    ex.vehicles=ex.vehicles.map(v=>computeVehicleStats(v,fa));
+    activeReportIndex=existingIdx;
+  }else{
+    const report={id:Date.now(),uploadedAt:new Date().toISOString(),...reportData};
+    const fa=report.vehicles.reduce((s,v)=>s+v.totalAmount,0)/report.vehicles.length;
+    report.vehicles=report.vehicles.map(v=>computeVehicleStats(v,fa));
+    state.reports.push(report);
+    activeReportIndex=state.reports.length-1;
+  }
+  const ids=loadUploadIds();
+  ids.engen=[...(ids.engen||[]),...newEngenIds];
+  ids.freight=[...(ids.freight||[]),...newFreightIds];
+  saveUploadIds(ids);
+  saveStorage(state);
+  hideLoading();
+  renderDashboard();
+}
+
 // ── FILE UPLOAD ────────────────────────────────────────────────────────────────
 function handleFileUpload(event){
   const file=event.target.files[0];
   if(!file)return;
   event.target.value='';
-  showLoading('Reading PDF...','Sending to AI for extraction');
-  const reader=new FileReader();
-  reader.onload=async(e)=>{await extractWithAI(e.target.result.split(',')[1],file.name);};
-  reader.readAsDataURL(file);
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='pdf'){
+    showLoading('Reading PDF...','Sending to AI for extraction');
+    const reader=new FileReader();
+    reader.onload=async(e)=>{await extractWithAI(e.target.result.split(',')[1],file.name);};
+    reader.readAsDataURL(file);
+  }else if(ext==='xlsx'){
+    parseFreightExcel(file);
+  }else{
+    alert('Unsupported file type. Please upload a PDF (Engen report) or XLSX (Freight report).');
+  }
+}
+
+// ── FREIGHT EXCEL PARSER ──────────────────────────────────────────────────────
+// Columns: A=Date, B=Month, C=Order#, D=Bowser Sheet, E=Reg Nr, F=Fleet Nr,
+//          G=Odometer, H=Volume(L), I=CPL, J=Final Price
+async function parseFreightExcel(file){
+  showLoading('Reading Excel file...','Parsing Freight report');
+  try{
+    if(typeof XLSX==='undefined')throw new Error('SheetJS library not loaded. Please check your internet connection and refresh.');
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array',cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    const data=rows.slice(1).filter(r=>r[4]&&parseFloat(r[7])>0);
+    if(data.length===0)throw new Error('No valid fuel rows found. The file must have a plate in column E and litres > 0 in column H.');
+
+    // Duplicate check
+    const orderNums=data.map(r=>String(r[2]).trim()).filter(Boolean);
+    const dupes=checkFreightDuplicates(orderNums);
+    if(dupes.length>0){
+      hideLoading();
+      alert(`Duplicate upload blocked.\n\nThe following Order Numbers already exist in the system:\n\n${dupes.slice(0,10).join('\n')}${dupes.length>10?`\n…and ${dupes.length-10} more`:''}\n\nThis file has already been uploaded.`);
+      return;
+    }
+
+    // Date formatter
+    function fmtDate(raw){
+      if(raw instanceof Date){const d=raw;return`${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;}
+      if(typeof raw==='number'){const d=XLSX.SSF.parse_date_code(raw);return`${String(d.d).padStart(2,'0')}.${String(d.m).padStart(2,'0')}.${d.y}`;}
+      if(typeof raw==='string'&&raw.trim()){
+        const iso=raw.match(/(\d{4})-(\d{2})-(\d{2})/);if(iso)return`${iso[3]}.${iso[2]}.${iso[1]}`;
+        const dmy=raw.match(/(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{4})/);if(dmy)return`${String(dmy[1]).padStart(2,'0')}.${String(dmy[2]).padStart(2,'0')}.${dmy[3]}`;
+      }
+      return'—';
+    }
+
+    // Group transactions by plate
+    const vehicleMap={};
+    data.forEach(r=>{
+      const plate=String(r[4]).trim().toUpperCase();
+      if(!vehicleMap[plate])vehicleMap[plate]={plate,transactions:[]};
+      vehicleMap[plate].transactions.push({
+        date:fmtDate(r[0]),merchant:'Freight',
+        odometer:parseInt(r[6])||0,
+        litres:parseFloat(r[7])||0,
+        amount:parseFloat(r[9])||0,
+        isCompetitor:false,source:'Freight',
+        orderNumber:String(r[2]).trim()
+      });
+    });
+    Object.values(vehicleMap).forEach(v=>v.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date)));
+
+    // Derive schedule date from column B (Transaction Month)
+    const MONTH_MAP={january:'01',february:'02',march:'03',april:'04',may:'05',june:'06',july:'07',august:'08',september:'09',october:'10',november:'11',december:'12'};
+    const monthFreq={};
+    data.forEach(r=>{const m=String(r[1]||'').trim();if(m)monthFreq[m]=(monthFreq[m]||0)+1;});
+    const topMonth=(Object.entries(monthFreq).sort((a,b)=>b[1]-a[1])[0]||[])[0]||'';
+    let scheduleDate='';
+    if(topMonth){
+      const named=topMonth.match(/([a-zA-Z]+)\s+(\d{4})/);
+      if(named){const mn=MONTH_MAP[named[1].toLowerCase()];if(mn)scheduleDate=`01.${mn}.${named[2]}`;}
+      if(!scheduleDate){const num=topMonth.match(/(\d{1,2})[\/\.](\d{4})/);if(num)scheduleDate=`01.${num[1].padStart(2,'0')}.${num[2]}`;}
+    }
+    if(!scheduleDate){
+      const fd=Object.values(vehicleMap)[0]?.transactions[0]?.date;
+      if(fd&&fd!=='—'){const[,m,y]=fd.split('.');scheduleDate=`01.${m}.${y}`;}
+    }
+    if(!scheduleDate)scheduleDate=new Date().toLocaleDateString('en-ZA');
+
+    finaliseAndSave({
+      scheduleDate,customer:'Phola Coaches',accountNo:'—',fleetNo:'—',
+      filename:file.name,sources:['Freight'],vehicles:Object.values(vehicleMap)
+    },[],orderNums);
+
+  }catch(err){
+    hideLoading();
+    alert('Error reading Excel file:\n\n'+err.message);
+    console.error(err);
+  }
 }
 
 // ── AI EXTRACTION ──────────────────────────────────────────────────────────────
@@ -726,40 +887,28 @@ Important rules:
     const clean=text.replace(/```json|```/g,'').trim();
     const parsed=JSON.parse(clean);
 
-    // Calculate consumption & flags
-    const fleetAvg=parsed.vehicles.reduce((s,v)=>s+v.totalAmount,0)/parsed.vehicles.length;
-    parsed.vehicles=parsed.vehicles.map(v=>{
-      const txs=v.transactions;
-      txs.forEach((tx,i)=>{
-        if(i>0){
-          const prev=txs[i-1];
-          const km=tx.odometer-prev.odometer;
-          if(km>0&&tx.litres>0){
-            tx.kmPerLitre=parseFloat((km/tx.litres).toFixed(2));
-            tx.costPerKm=parseFloat((tx.amount/km).toFixed(2));
-          } else {
-            tx.kmPerLitre=null; tx.costPerKm=null;
-            if(km<0)tx.odometerFlag=true;
-          }
-        } else { tx.kmPerLitre=null; tx.costPerKm=null; }
-      });
-      // Average fill size
-      v.avgLitresPerFill=parseFloat((v.totalLitres/txs.length).toFixed(2));
-      // Best km/L
-      const cons=txs.filter(t=>t.kmPerLitre).map(t=>t.kmPerLitre);
-      v.avgKmPerLitre=cons.length>0?parseFloat((cons.reduce((a,b)=>a+b,0)/cons.length).toFixed(2)):null;
-      v.hasOdometerIssue=txs.some(t=>t.odometerFlag);
-      v.hasCompetitor=txs.some(t=>t.isCompetitor);
-      v.isHighSpend=v.totalAmount>fleetAvg*1.5;
-      return v;
-    });
+    // Tag every Engen transaction with its source
+    parsed.vehicles.forEach(v=>v.transactions.forEach(tx=>{tx.source='Engen';}));
 
-    const report={id:Date.now(),filename,uploadedAt:new Date().toISOString(),...parsed};
-    state.reports.push(report);
-    saveStorage(state);
-    activeReportIndex=state.reports.length-1;
-    hideLoading();
-    renderDashboard();
+    // Engen duplicate detection: date|plate|litres fingerprint
+    const engenIds=[];
+    parsed.vehicles.forEach(v=>v.transactions.forEach(tx=>{
+      engenIds.push(`${tx.date}|${v.plate}|${tx.litres.toFixed(2)}`);
+    }));
+    const engenDupes=checkEngenDuplicates(engenIds);
+    if(engenDupes.length>0){
+      hideLoading();
+      alert(`Duplicate upload blocked.\n\n${engenDupes.length} transaction(s) from this PDF already exist in the system.\n\nThis report has already been uploaded.`);
+      return;
+    }
+
+    finaliseAndSave({
+      scheduleDate:parsed.scheduleDate,customer:parsed.customer,
+      accountNo:parsed.accountNo,fleetNo:parsed.fleetNo,
+      scheduleTotal:parsed.scheduleTotal,filename,sources:['Engen'],
+      vehicles:parsed.vehicles
+    },engenIds,[]);
+
   }catch(err){
     hideLoading();
     alert('Error extracting data:\n\n'+err.message+'\n\nPlease check your internet connection and try again.');
@@ -1029,16 +1178,22 @@ function renderVehicleBlock(v,vi){
   const alertClass=(v.hasOdometerIssue||v.isHighSpend)?'alert-red':v.hasCompetitor?'alert-blue':'';
 
   // ── Transaction rows ──
-  const rows=v.transactions.map(tx=>`
+  const multiSource=(currentReport?.sources||[]).length>1;
+  const rows=v.transactions.map(tx=>{
+    const srcTag=multiSource
+      ?(tx.source==='Engen'?'<span style="font-size:9px;color:#1971C2;font-weight:600;margin-left:4px;">[ENGEN]</span>'
+        :tx.source==='Freight'?'<span style="font-size:9px;color:#2F9E44;font-weight:600;margin-left:4px;">[FREIGHT]</span>':'')
+      :'';
+    return`
     <tr>
       <td class="td-date">${tx.date}</td>
-      <td class="td-merchant">${tx.merchant}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;">[COMP]</span>':''}</td>
+      <td class="td-merchant">${tx.merchant}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}</td>
       <td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-ZA')+(tx.odometerFlag?' ⚠':''):'—'}</td>
       <td class="td-litres r">${tx.litres.toFixed(2)} L</td>
       <td class="td-amount r">R${tx.amount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td>
       <td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td>
-    </tr>`).join('');
+    </tr>`;}).join('');
 
   const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn"><span>⚠</span><span>Odometer query: one or more readings are lower than the previous entry. Please verify with Engen or the driver — may be a data capture error.</span></div>`:'';
   const highNote=v.isHighSpend?`<div class="vc-note note-high"><span>🔴</span><span>High spend alert: this vehicle's fuel cost is significantly above the fleet average for this period. Please review.</span></div>`:'';
