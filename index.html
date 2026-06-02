@@ -282,8 +282,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .section-actions { display: flex; gap: 8px; margin-left: auto; }
 
 /* VEHICLE BLOCKS */
-.vehicles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;align-items:start;}
-.empty-row td{height:28px;border-color:transparent!important;background:transparent;}
+.vehicles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;align-items:stretch;}
 .vehicles-table-wrap { overflow-x: auto; }
 .vehicles-table {
   width: 100%; border-collapse: collapse; background: var(--surface);
@@ -308,6 +307,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
   transition: box-shadow 0.15s, transform 0.15s;
   animation: fadeUp 0.35s ease both;
+  display: flex; flex-direction: column;
 }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .vehicle-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
@@ -331,6 +331,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .tx-table th {
   padding: 7px 12px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px;
   color: var(--text3); font-weight: 700; text-align: left; border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 .tx-table th.r, .tx-table td.r { text-align: right; }
 .tx-table td { padding: 8px 12px; font-size: 12px; border-bottom: 1px solid var(--border); }
@@ -340,14 +341,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .td-odo { font-family: var(--font-mono); font-size: 11px; color: var(--text2); }
 .td-odo.flagged { color: var(--red); font-weight: 700; }
 .td-litres { font-family: var(--font-mono); font-size: 11px; color: var(--text2); }
-.td-amount { font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+.td-amount { font-family: var(--font-mono); font-size: 12px; font-weight: 700; white-space: nowrap; }
 .td-cons { font-family: var(--font-mono); font-size: 11px; }
 .td-cons.val { color: var(--green); font-weight: 700; }
 .td-cons.dash { color: var(--text3); }
 .vehicle-card-footer {
   display: flex; justify-content: space-between; align-items: center;
   padding: 9px 14px; background: var(--surface2); border-top: 1px solid var(--border);
-  flex-wrap: wrap; gap: 8px;
+  flex-wrap: wrap; gap: 8px; margin-top: auto;
 }
 .footer-stats { display: flex; gap: 16px; flex-wrap: wrap; }
 .footer-stat { font-size: 11px; color: var(--text3); }
@@ -833,35 +834,6 @@ function renderDashboard(){
   renderComparison();
 }
 
-function equalizeVehicleBlocks(){
-  const cards=Array.from(document.querySelectorAll('#vehiclesGrid .vehicle-card'));
-  if(!cards.length)return;
-  // Group cards into rows by their rendered top position
-  const rows=[];
-  let currentRow=[],currentTop=null;
-  cards.forEach(card=>{
-    const top=Math.round(card.getBoundingClientRect().top);
-    if(currentTop===null||Math.abs(top-currentTop)>5){
-      if(currentRow.length)rows.push(currentRow);
-      currentRow=[card];currentTop=top;
-    } else { currentRow.push(card); }
-  });
-  if(currentRow.length)rows.push(currentRow);
-  // Pad shorter cards with empty rows to match the tallest in each row
-  rows.forEach(rowCards=>{
-    const tbodies=rowCards.map(c=>c.querySelector('tbody'));
-    const counts=tbodies.map(tb=>tb?tb.querySelectorAll('tr').length:0);
-    const maxCount=Math.max(...counts);
-    tbodies.forEach((tb,i)=>{
-      if(!tb)return;
-      const diff=maxCount-counts[i];
-      for(let j=0;j<diff;j++){
-        tb.insertAdjacentHTML('beforeend','<tr class="empty-row"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>');
-      }
-    });
-  });
-}
-
 function filterVehicles(){
   if(!currentReport)return;
   const search=(document.getElementById('searchInput')?.value||'').toLowerCase();
@@ -877,7 +849,6 @@ function filterVehicles(){
     document.getElementById('vehiclesGrid').classList.remove('hidden');
     document.getElementById('vehiclesTableWrap').classList.add('hidden');
     document.getElementById('vehiclesGrid').innerHTML=vehicles.map((v,i)=>renderVehicleBlock(v,i)).join('');
-    requestAnimationFrame(equalizeVehicleBlocks);
   } else {
     document.getElementById('vehiclesGrid').classList.add('hidden');
     document.getElementById('vehiclesTableWrap').classList.remove('hidden');
