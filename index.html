@@ -755,7 +755,20 @@ async function parseFreightExcel(file){
     if(typeof XLSX==='undefined')throw new Error('SheetJS library not loaded. Please check your internet connection and refresh.');
     const buf=await file.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array',cellDates:true});
-    const ws=wb.Sheets[wb.SheetNames[0]];
+    // Find the correct data sheet: prefer 'Phola Coaches', then first sheet whose
+    // header row contains 'Reg Nr' or 'Transaction Date', then bail with a clear error
+    let wsName=wb.SheetNames.find(n=>n.trim().toLowerCase()==='phola coaches');
+    if(!wsName){
+      wsName=wb.SheetNames.find(n=>{
+        const s=wb.Sheets[n];
+        const hdr=XLSX.utils.sheet_to_json(s,{header:1,defval:''})[0]||[];
+        const hdrStr=hdr.map(c=>String(c).toLowerCase());
+        return hdrStr.some(c=>c.includes('reg nr')||c.includes('transaction date'));
+      });
+    }
+    console.log('[Freight] Sheets:', wb.SheetNames, '→ using:', wsName);
+    if(!wsName)throw new Error(`Could not find the data sheet. Available sheets: ${wb.SheetNames.join(', ')}. Expected a sheet named "Phola Coaches" or one with "Reg Nr" / "Transaction Date" in its header row.`);
+    const ws=wb.Sheets[wsName];
     // Use {header:1} to get raw arrays; row 0 is the header row
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
     console.log('[Freight] Total rows (inc. header):', rows.length);
