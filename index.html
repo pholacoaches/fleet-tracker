@@ -453,6 +453,39 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .vc-header.svc-warn .vc-stat,
 .vc-header.svc-warn .vc-stat strong { color: #5C4200; }
 
+/* LOGIN */
+#loginScreen { min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); padding:24px; }
+.login-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow-lg); padding:40px 36px; width:100%; max-width:420px; text-align:center;
+}
+.login-logo { font-family:var(--font); font-size:22px; font-weight:700; color:var(--accent); margin-bottom:4px; }
+.login-sub { font-size:11px; color:var(--text3); margin-bottom:32px; letter-spacing:1.2px; text-transform:uppercase; }
+.login-label { font-size:11px; font-weight:700; color:var(--text2); text-align:left; display:block; margin-bottom:6px; }
+.login-input {
+  width:100%; padding:10px 14px; border:1.5px solid var(--border2); border-radius:var(--radius-sm);
+  font-family:var(--font); font-size:13px; color:var(--text); background:var(--surface);
+  outline:none; box-sizing:border-box; margin-bottom:14px;
+}
+.login-input:focus { border-color:var(--accent); }
+.login-btn {
+  width:100%; padding:11px; background:var(--accent); color:#fff; border:none;
+  border-radius:var(--radius-sm); font-family:var(--font); font-size:13px; font-weight:700;
+  cursor:pointer; transition:background 0.15s;
+}
+.login-btn:hover { background:var(--accent2); }
+.login-btn:disabled { opacity:0.55; cursor:not-allowed; }
+.login-err { font-size:12px; color:var(--red); margin-top:10px; min-height:18px; }
+.login-step2 { margin-top:20px; border-top:1px solid var(--border); padding-top:20px; }
+.login-code-hint { font-size:12px; color:var(--text3); margin-bottom:14px; line-height:1.5; }
+#loginCodeInput { text-align:center; letter-spacing:10px; font-family:var(--font-mono); font-size:22px; }
+.logout-btn {
+  font-size:11px; padding:4px 12px; border:1.5px solid rgba(255,255,255,0.4);
+  border-radius:var(--radius-sm); background:transparent; color:rgba(255,255,255,0.85);
+  cursor:pointer; font-family:var(--font); font-weight:700; transition:background 0.15s; white-space:nowrap;
+}
+.logout-btn:hover { background:rgba(255,255,255,0.15); color:#fff; }
+
 .hidden { display: none !important; }
 input[type=file] { display: none; }
 @media (max-width: 600px) {
@@ -471,6 +504,33 @@ input[type=file] { display: none; }
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">🚌 Phola Coaches</div>
+    <div class="login-sub">Fleet Fuel Dashboard</div>
+
+    <!-- Step 1: Email -->
+    <div id="loginStep1">
+      <label class="login-label" for="loginEmail">Email address</label>
+      <input class="login-input" type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" onkeydown="if(event.key==='Enter')requestCode()">
+      <button class="login-btn" id="sendCodeBtn" onclick="requestCode()">Send code</button>
+      <div class="login-err" id="loginErr1"></div>
+    </div>
+
+    <!-- Step 2: Code (hidden until code sent) -->
+    <div class="login-step2 hidden" id="loginStep2">
+      <div class="login-code-hint">A 6-digit code has been sent to <strong id="loginEmailDisplay"></strong>. Enter it below.</div>
+      <label class="login-label" for="loginCodeInput">Verification code</label>
+      <input class="login-input" type="text" id="loginCodeInput" placeholder="000000" maxlength="6" inputmode="numeric" onkeydown="if(event.key==='Enter')verifyCode()">
+      <button class="login-btn" id="verifyCodeBtn" onclick="verifyCode()">Verify</button>
+      <div class="login-err" id="loginErr2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- APP CONTENT (hidden until authenticated) -->
+<div id="appContent" class="hidden">
 
 <div class="hero-header" id="heroHeader">
   <div class="hero-bg"></div>
@@ -510,6 +570,9 @@ input[type=file] { display: none; }
     <div style="display:flex;flex-direction:column;justify-content:center;padding:12px 32px;">
       <div style="font-family:var(--font-mono);font-size:24px;font-weight:700;color:white;" id="heroReports">—</div>
       <div style="font-size:9px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1.2px;margin-top:2px;">Reports</div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;padding:0 8px;">
+      <button class="logout-btn" onclick="logout()">⎋ Log out</button>
     </div>
   </div>
 </div>
@@ -615,6 +678,98 @@ input[type=file] { display: none; }
 </main>
 
 <script>
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+const AUTH_TOKEN_KEY='fleet_auth_token';
+const AUTH_TIME_KEY='fleet_auth_time';
+const AUTH_TTL=24*60*60*1000; // 24 hours
+const AUTH_BASE='https://fleet-proxy.gjtucker83.workers.dev';
+
+function checkAuth(){
+  const token=localStorage.getItem(AUTH_TOKEN_KEY);
+  const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
+  return !!(token&&Date.now()-time<AUTH_TTL);
+}
+
+function showDashboard(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('appContent').classList.remove('hidden');
+  renderDashboard();
+}
+
+function showLogin(){
+  document.getElementById('appContent').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+  // Reset login form to step 1
+  document.getElementById('loginStep1').classList.remove('hidden');
+  document.getElementById('loginStep2').classList.add('hidden');
+  document.getElementById('loginEmail').value='';
+  document.getElementById('loginErr1').textContent='';
+  document.getElementById('loginErr2').textContent='';
+}
+
+function initApp(){
+  if(checkAuth()){showDashboard();}else{showLogin();}
+}
+
+function logout(){
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TIME_KEY);
+  showLogin();
+}
+
+async function requestCode(){
+  const email=document.getElementById('loginEmail').value.trim();
+  const errEl=document.getElementById('loginErr1');
+  const btn=document.getElementById('sendCodeBtn');
+  errEl.textContent='';
+  if(!email||!email.includes('@')){errEl.textContent='Please enter a valid email address.';return;}
+  btn.disabled=true;btn.textContent='Sending…';
+  try{
+    const res=await fetch(`${AUTH_BASE}/auth/request-code`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.error||data.message||`Error ${res.status}`);
+    // Show step 2
+    document.getElementById('loginEmailDisplay').textContent=email;
+    document.getElementById('loginStep1').classList.add('hidden');
+    document.getElementById('loginStep2').classList.remove('hidden');
+    document.getElementById('loginCodeInput').value='';
+    document.getElementById('loginCodeInput').focus();
+  }catch(err){
+    errEl.textContent=err.message||'Failed to send code. Please try again.';
+  }finally{
+    btn.disabled=false;btn.textContent='Send code';
+  }
+}
+
+async function verifyCode(){
+  const email=document.getElementById('loginEmail').value.trim();
+  const code=document.getElementById('loginCodeInput').value.trim();
+  const errEl=document.getElementById('loginErr2');
+  const btn=document.getElementById('verifyCodeBtn');
+  errEl.textContent='';
+  if(!code||code.length!==6){errEl.textContent='Please enter the 6-digit code.';return;}
+  btn.disabled=true;btn.textContent='Verifying…';
+  try{
+    const res=await fetch(`${AUTH_BASE}/auth/verify-code`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email,code})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.error||data.message||`Error ${res.status}`);
+    const token=data.token||data.access_token||'authenticated';
+    localStorage.setItem(AUTH_TOKEN_KEY,token);
+    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
+    showDashboard();
+  }catch(err){
+    errEl.textContent=err.message||'Invalid code. Please try again.';
+  }finally{
+    btn.disabled=false;btn.textContent='Verify';
+  }
+}
+
 const STORAGE_KEY='fleet_tracker_v2';
 function loadStorage(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{reports:[]};}catch{return{reports:[]};}}
 function saveStorage(d){localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}
@@ -1435,7 +1590,9 @@ function showLoading(t,s){document.getElementById('loadingText').textContent=t;d
 function updateLoading(t,s){document.getElementById('loadingText').textContent=t;document.getElementById('loadingSub').textContent=s;}
 function hideLoading(){document.getElementById('loadingOverlay').classList.add('hidden');}
 
-renderDashboard();
+initApp();
 </script>
+
+</div><!-- /appContent -->
 </body>
 </html>
