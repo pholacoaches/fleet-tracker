@@ -454,7 +454,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .vc-header.svc-warn .vc-stat strong { color: #5C4200; }
 
 /* LOGIN */
-#loginScreen { min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); padding:24px; }
+#loginScreen { min-height:100vh; display:flex; align-items:center; justify-content:center; background:#0a2a4a; padding:24px; position:relative; overflow:hidden; }
 .login-card {
   background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
   box-shadow:var(--shadow-lg); padding:40px 36px; width:100%; max-width:420px; text-align:center;
@@ -506,6 +506,8 @@ input[type=file] { display: none; }
 
 <!-- LOGIN SCREEN -->
 <div id="loginScreen">
+<div class="hero-bg"></div>
+<div class="hero-overlay"></div>
   <div class="login-card">
     <div class="login-logo">🚌 Phola Coaches</div>
     <div class="login-sub">Fleet Fuel Dashboard</div>
