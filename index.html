@@ -512,23 +512,12 @@ input[type=file] { display: none; }
   <div class="login-card">
     <div class="login-logo">🚌 Phola Coaches</div>
     <div class="login-sub">Fleet Fuel Dashboard</div>
-
-    <!-- Step 1: Email -->
-    <div id="loginStep1">
-      <label class="login-label" for="loginEmail">Email address</label>
-      <input class="login-input" type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" onkeydown="if(event.key==='Enter')requestCode()">
-      <button class="login-btn" id="sendCodeBtn" onclick="requestCode()">Send code</button>
-      <div class="login-err" id="loginErr1"></div>
-    </div>
-
-    <!-- Step 2: Code (hidden until code sent) -->
-    <div class="login-step2 hidden" id="loginStep2">
-      <div class="login-code-hint">A 6-digit code has been sent to <strong id="loginEmailDisplay"></strong>. Enter it below.</div>
-      <label class="login-label" for="loginCodeInput">Verification code</label>
-      <input class="login-input" type="text" id="loginCodeInput" placeholder="000000" maxlength="6" inputmode="numeric" onkeydown="if(event.key==='Enter')verifyCode()">
-      <button class="login-btn" id="verifyCodeBtn" onclick="verifyCode()">Verify</button>
-      <div class="login-err" id="loginErr2"></div>
-    </div>
+    <label class="login-label" for="loginEmail">Email address</label>
+    <input class="login-input" type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
+    <label class="login-label" for="loginPassword">Password</label>
+    <input class="login-input" type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')login()">
+    <button class="login-btn" id="loginBtn" onclick="login()">Log in</button>
+    <div class="login-err" id="loginErr"></div>
   </div>
 </div>
 
@@ -685,7 +674,11 @@ input[type=file] { display: none; }
 const AUTH_TOKEN_KEY='fleet_auth_token';
 const AUTH_TIME_KEY='fleet_auth_time';
 const AUTH_TTL=24*60*60*1000; // 24 hours
-const AUTH_BASE='https://fleet-proxy.gjtucker83.workers.dev';
+
+const CREDENTIALS=[
+  {email:'tracy.tucker@luxliner.co.za',password:'Greg1981'},
+  {email:'gjtucker83@gmail.com',password:'Greg1981'},
+];
 
 function checkAuth(){
   const token=localStorage.getItem(AUTH_TOKEN_KEY);
@@ -702,12 +695,9 @@ function showDashboard(){
 function showLogin(){
   document.getElementById('appContent').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
-  // Reset login form to step 1
-  document.getElementById('loginStep1').classList.remove('hidden');
-  document.getElementById('loginStep2').classList.add('hidden');
   document.getElementById('loginEmail').value='';
-  document.getElementById('loginErr1').textContent='';
-  document.getElementById('loginErr2').textContent='';
+  document.getElementById('loginPassword').value='';
+  document.getElementById('loginErr').textContent='';
 }
 
 function initApp(){
@@ -720,57 +710,16 @@ function logout(){
   showLogin();
 }
 
-async function requestCode(){
-  const email=document.getElementById('loginEmail').value.trim();
-  const errEl=document.getElementById('loginErr1');
-  const btn=document.getElementById('sendCodeBtn');
+function login(){
+  const email=document.getElementById('loginEmail').value.trim().toLowerCase();
+  const password=document.getElementById('loginPassword').value;
+  const errEl=document.getElementById('loginErr');
   errEl.textContent='';
-  if(!email||!email.includes('@')){errEl.textContent='Please enter a valid email address.';return;}
-  btn.disabled=true;btn.textContent='Sending…';
-  try{
-    const res=await fetch(`${AUTH_BASE}/auth/request-code`,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email})
-    });
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok)throw new Error(data.error||data.message||`Error ${res.status}`);
-    // Show step 2
-    document.getElementById('loginEmailDisplay').textContent=email;
-    document.getElementById('loginStep1').classList.add('hidden');
-    document.getElementById('loginStep2').classList.remove('hidden');
-    document.getElementById('loginCodeInput').value='';
-    document.getElementById('loginCodeInput').focus();
-  }catch(err){
-    errEl.textContent=err.message||'Failed to send code. Please try again.';
-  }finally{
-    btn.disabled=false;btn.textContent='Send code';
-  }
-}
-
-async function verifyCode(){
-  const email=document.getElementById('loginEmail').value.trim();
-  const code=document.getElementById('loginCodeInput').value.trim();
-  const errEl=document.getElementById('loginErr2');
-  const btn=document.getElementById('verifyCodeBtn');
-  errEl.textContent='';
-  if(!code||code.length!==6){errEl.textContent='Please enter the 6-digit code.';return;}
-  btn.disabled=true;btn.textContent='Verifying…';
-  try{
-    const res=await fetch(`${AUTH_BASE}/auth/verify-code`,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email,code})
-    });
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok)throw new Error(data.error||data.message||`Error ${res.status}`);
-    const token=data.token||data.access_token||'authenticated';
-    localStorage.setItem(AUTH_TOKEN_KEY,token);
-    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
-    showDashboard();
-  }catch(err){
-    errEl.textContent=err.message||'Invalid code. Please try again.';
-  }finally{
-    btn.disabled=false;btn.textContent='Verify';
-  }
+  const match=CREDENTIALS.find(c=>c.email===email&&c.password===password);
+  if(!match){errEl.textContent='Incorrect email or password.';return;}
+  localStorage.setItem(AUTH_TOKEN_KEY,'authenticated');
+  localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
+  showDashboard();
 }
 
 const STORAGE_KEY='fleet_tracker_v2';
