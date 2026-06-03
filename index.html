@@ -995,9 +995,17 @@ function renderDashboard(){
   const odomAlerts=r.vehicles.filter(v=>v.hasOdometerIssue);
   const highSpend=r.vehicles.filter(v=>v.isHighSpend);
   const competitor=r.vehicles.filter(v=>v.hasCompetitor);
+  // Duplicate plate detection: plates with transactions from both Engen and Freight
+  const dupePlates=r.vehicles
+    .filter(v=>{
+      const sources=new Set(v.transactions.map(tx=>tx.source).filter(Boolean));
+      return sources.has('Engen')&&sources.has('Freight');
+    })
+    .map(v=>v.plate);
   if(odomAlerts.length>0)alerts.push(`⚠ ${odomAlerts.length} vehicle(s) have odometer anomalies`);
   if(highSpend.length>0)alerts.push(`🔴 ${highSpend.length} vehicle(s) are significantly above fleet average spend`);
   if(competitor.length>0)alerts.push(`⛽ ${competitor.length} vehicle(s) used competitor fuel stations`);
+  if(dupePlates.length>0)alerts.push(`🔁 ${dupePlates.length} plate(s) appear in both Engen and Freight data: <strong>${dupePlates.join(', ')}</strong> — verify no duplicate billing`);
   const ab=document.getElementById('alertBanner');
   if(alerts.length>0){
     ab.classList.remove('hidden');
