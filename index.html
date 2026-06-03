@@ -50,7 +50,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   position: relative;
   height: 200px;
   overflow: hidden;
-  display: flex; align-items: center;
+  display: flex; align-items: center; justify-content: center;
+}
+.hero-header::after {
+  content: ""; position: absolute; inset: 0; z-index: 1;
+  background: rgba(0,0,0,0.55);
 }
 .hero-bg {
   position: absolute; inset: 0; z-index: 0;
@@ -379,7 +383,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 /* DASHBOARD TABS */
 .dash-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:24px; overflow-x:auto; }
 .dash-tab-btn {
-  padding:11px 20px; font-size:12px; font-weight:700; font-family:var(--font);
+  flex:1; padding:11px 4px; text-align:center; font-size:12px; font-weight:700; font-family:var(--font);
   background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-2px;
   cursor:pointer; color:var(--text3); white-space:nowrap;
   transition:color 0.15s, border-color 0.15s;
@@ -562,8 +566,8 @@ input[type=file] { display: none; }
     <div class="hero-sub" style="margin-top:8px;">Phola Coaches &middot; Fleet Management</div>
     <div style="display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;align-items:center;justify-content:center;">
       <button class="hero-upload-btn" onclick="document.getElementById('fileInput').click()">&#8679; Upload Report</button>
-      <button class="hero-upload-btn" style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.4);" onclick="exportCSV()">&#8595; Export CSV</button>
-      <button class="hero-upload-btn" style="background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.8);" onclick="clearAllData()">&#128465; Clear Data</button>
+      <button class="hero-upload-btn" style="background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.9);" onclick="exportCSV()">&#8595; Export CSV</button>
+      <button class="hero-upload-btn" style="background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.9);color:rgba(255,255,255,0.9);" onclick="clearAllData()">&#128465; Clear Data</button>
     </div>
   </div>
 </div>
