@@ -798,7 +798,7 @@ async function parseFreightExcel(file){
     const dupes=checkFreightDuplicates(orderNums);
     if(dupes.length>0){
       hideLoading();
-      alert(`Duplicate upload blocked.\n\nThe following Order Numbers already exist in the system:\n\n${dupes.slice(0,10).join('\n')}${dupes.length>10?`\n…and ${dupes.length-10} more`:''}\n\nThis file has already been uploaded.`);
+      alert('This file has already been uploaded. Please check your upload history.');
       return;
     }
 
@@ -931,7 +931,7 @@ Important rules:
     const engenDupes=checkEngenDuplicates(engenIds);
     if(engenDupes.length>0){
       hideLoading();
-      alert(`Duplicate upload blocked.\n\n${engenDupes.length} transaction(s) from this PDF already exist in the system.\n\nThis report has already been uploaded.`);
+      alert('This file has already been uploaded. Please check your upload history.');
       return;
     }
 
