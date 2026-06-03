@@ -262,6 +262,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .chart-title { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.8px; }
 .bar-chart { display: flex; flex-direction: column; gap: 9px; }
+.bar-chart-toggle { margin-top: 10px; text-align: center; }
+.bar-chart-toggle button { font-size: 11px; font-weight: 700; color: var(--accent); background: none; border: 1.5px solid var(--accent); border-radius: var(--radius-sm); padding: 4px 14px; cursor: pointer; font-family: var(--font); transition: background 0.15s, color 0.15s; }
+.bar-chart-toggle button:hover { background: var(--accent); color: #fff; }
 .bar-row { display: flex; align-items: center; gap: 10px; }
 .bar-label { font-family: var(--font-mono); font-size: 10px; color: var(--text2); min-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-track { flex: 1; background: var(--surface2); border-radius: 3px; height: 18px; overflow: hidden; }
@@ -1077,22 +1080,19 @@ function renderDashboard(){
 
   // Bar charts
   const bySpend=[...r.vehicles].sort((a,b)=>b.totalAmount-a.totalAmount);
-  const maxSpend=bySpend[0]?.totalAmount||1;
-  document.getElementById('spendChart').innerHTML=bySpend.map(v=>`
-    <div class="bar-row">
-      <div class="bar-label">${v.plate}</div>
-      <div class="bar-track"><div class="bar-fill ${v.isHighSpend?'red':'blue'}" style="width:${(v.totalAmount/maxSpend*100).toFixed(1)}%"></div></div>
-      <div class="bar-val">R${v.totalAmount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-    </div>`).join('');
-
   const byLitres=[...r.vehicles].sort((a,b)=>b.totalLitres-a.totalLitres);
-  const maxLitres=byLitres[0]?.totalLitres||1;
-  document.getElementById('litresChart').innerHTML=byLitres.map(v=>`
+  renderBarChart('spendChart',bySpend,bySpend[0]?.totalAmount||1,v=>`
     <div class="bar-row">
       <div class="bar-label">${v.plate}</div>
-      <div class="bar-track"><div class="bar-fill blue" style="width:${(v.totalLitres/maxLitres*100).toFixed(1)}%;background:#5BA3D0;"></div></div>
+      <div class="bar-track"><div class="bar-fill ${v.isHighSpend?'red':'blue'}" style="width:${(v.totalAmount/(bySpend[0]?.totalAmount||1)*100).toFixed(1)}%"></div></div>
+      <div class="bar-val">R${v.totalAmount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+    </div>`);
+  renderBarChart('litresChart',byLitres,byLitres[0]?.totalLitres||1,v=>`
+    <div class="bar-row">
+      <div class="bar-label">${v.plate}</div>
+      <div class="bar-track"><div class="bar-fill blue" style="width:${(v.totalLitres/(byLitres[0]?.totalLitres||1)*100).toFixed(1)}%;background:#5BA3D0;"></div></div>
       <div class="bar-val">${v.totalLitres.toFixed(2)} L</div>
-    </div>`).join('');
+    </div>`);
 
   renderTrendChart('trendChart',state.reports.map(rep=>({label:rep.scheduleDate,value:rep.vehicles.reduce((s,v)=>s+v.totalAmount,0)})),'R','blue');
   renderTrendChart('trendLitres',state.reports.map(rep=>({label:rep.scheduleDate,value:rep.vehicles.reduce((s,v)=>s+v.totalLitres,0)})),'L','green');
@@ -1289,6 +1289,30 @@ function renderVehicleTable(vehicles){
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
+}
+
+const BAR_CHART_LIMIT=10;
+const _barState={};
+function renderBarChart(elId,sorted,_max,rowFn){
+  _barState[elId]={sorted,rowFn,expanded:false};
+  _drawBarChart(elId);
+}
+function toggleBarChart(elId){
+  if(!_barState[elId])return;
+  _barState[elId].expanded=!_barState[elId].expanded;
+  _drawBarChart(elId);
+}
+function _drawBarChart(elId){
+  const el=document.getElementById(elId);
+  if(!el)return;
+  const{sorted,rowFn,expanded}=_barState[elId];
+  const total=sorted.length;
+  const visible=expanded?sorted:sorted.slice(0,BAR_CHART_LIMIT);
+  let html=visible.map(rowFn).join('');
+  if(total>BAR_CHART_LIMIT){
+    html+=`<div class="bar-chart-toggle"><button onclick="toggleBarChart('${elId}')">${expanded?'Show less':'Show all '+total+' vehicles'}</button></div>`;
+  }
+  el.innerHTML=html;
 }
 
 function renderTrendChart(elId,points,unit,color){
