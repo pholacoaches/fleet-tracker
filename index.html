@@ -376,7 +376,20 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .vc-note.note-high { background: var(--red-light); border-top-color: #FFA8A8; color: var(--red); }
 
 /* HISTORY */
-.history-section { margin-top: 36px; }
+/* DASHBOARD TABS */
+.dash-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:24px; overflow-x:auto; }
+.dash-tab-btn {
+  padding:11px 20px; font-size:12px; font-weight:700; font-family:var(--font);
+  background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-2px;
+  cursor:pointer; color:var(--text3); white-space:nowrap;
+  transition:color 0.15s, border-color 0.15s;
+}
+.dash-tab-btn:hover { color:var(--text2); }
+.dash-tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+
+.history-section { margin-top: 0; }
 .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 14px; }
 .history-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -507,7 +520,8 @@ input[type=file] { display: none; }
   .top-vehicles { grid-template-columns: 1fr; }
 }
 @media print {
-  .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section { display: none !important; }
+  .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs { display: none !important; }
+  .tab-panel { display: block !important; }
   .vehicle-card { break-inside: avoid; }
 }
 </style>
@@ -607,80 +621,94 @@ input[type=file] { display: none; }
       <div class="period-tabs" id="periodTabs"></div>
     </div>
 
-    <div class="report-meta" id="reportMeta"></div>
-    <div id="alertBanner" class="hidden"></div>
-    <div class="stats-grid" id="statsGrid"></div>
-
-    <!-- TOP 3 -->
-    <div class="section-header">
-      <div class="section-title">🏆 Highest Spend Vehicles</div>
-    </div>
-    <div class="top-vehicles" id="topVehicles"></div>
-
-    <!-- CHARTS -->
-    <div class="charts-row">
-      <div class="chart-card">
-        <div class="chart-title">💰 Spend by Vehicle</div>
-        <div class="bar-chart" id="spendChart"></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">⛽ Litres by Vehicle</div>
-        <div class="bar-chart" id="litresChart"></div>
-      </div>
+    <!-- TAB NAV -->
+    <div class="dash-tabs">
+      <button class="dash-tab-btn active" data-tab="overview"     onclick="switchDashTab('overview')">📊 Overview</button>
+      <button class="dash-tab-btn"        data-tab="performance"  onclick="switchDashTab('performance')">🏆 Performance</button>
+      <button class="dash-tab-btn"        data-tab="vehicles"     onclick="switchDashTab('vehicles')">🚌 Vehicle Blocks</button>
+      <button class="dash-tab-btn"        data-tab="trends"       onclick="switchDashTab('trends')">📈 Trends</button>
+      <button class="dash-tab-btn"        data-tab="history"      onclick="switchDashTab('history')">📁 History</button>
     </div>
 
-    <div class="charts-row">
-      <div class="chart-card">
-        <div class="chart-title">📈 Total Spend Over Time</div>
-        <div class="trend-chart" id="trendChart"></div>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">🔄 Avg Litres Per Fill Over Time</div>
-        <div class="trend-chart" id="trendLitres"></div>
-      </div>
+    <!-- TAB 1: OVERVIEW -->
+    <div class="tab-panel active" id="tab-overview">
+      <div class="report-meta" id="reportMeta"></div>
+      <div id="alertBanner" class="hidden"></div>
+      <div class="stats-grid" id="statsGrid"></div>
     </div>
 
-    <!-- VEHICLE BLOCKS -->
-    <div class="section-header">
-      <div class="section-title">🚌 Vehicle Blocks</div>
-      <div class="section-count" id="vehicleCount"></div>
-      <div class="section-actions">
-        <button class="btn btn-outline" onclick="exportCSV()" style="font-size:11px;padding:6px 12px;">📥 CSV</button>
-        <button class="btn btn-outline" onclick="window.print()" style="font-size:11px;padding:6px 12px;">🖨 Print</button>
-        <input type="text" id="searchInput" placeholder="🔍  Search plate..." oninput="filterVehicles()"
-          style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-family:var(--font);font-size:12px;outline:none;width:180px;color:var(--text);background:var(--surface2);">
-        <select id="sortSelect" onchange="filterVehicles()" class="sort-select">
-          <option value="spend">Sort: Highest Spend</option>
-          <option value="litres">Sort: Most Litres</option>
-          <option value="plate">Sort: Plate A–Z</option>
-          <option value="cons">Sort: Best km/L</option>
-        </select>
-        <div class="view-toggle">
-          <button class="view-btn active" id="viewGrid" onclick="setView('grid')">⊞ Blocks</button>
-          <button class="view-btn" id="viewTable" onclick="setView('table')">≡ Table</button>
+    <!-- TAB 2: PERFORMANCE -->
+    <div class="tab-panel" id="tab-performance">
+      <div class="section-header">
+        <div class="section-title">🏆 Highest Spend Vehicles</div>
+      </div>
+      <div class="top-vehicles" id="topVehicles"></div>
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title">💰 Spend by Vehicle</div>
+          <div class="bar-chart" id="spendChart"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">⛽ Litres by Vehicle</div>
+          <div class="bar-chart" id="litresChart"></div>
         </div>
       </div>
     </div>
 
-    
-
-    <div id="vehiclesGrid" class="vehicles-grid"></div>
-    <div id="vehiclesTableWrap" class="vehicles-table-wrap hidden"></div>
-
-    <!-- COMPARISON -->
-    <div class="compare-section" id="compareSection">
+    <!-- TAB 3: VEHICLE BLOCKS -->
+    <div class="tab-panel" id="tab-vehicles">
       <div class="section-header">
-        <div class="section-title">📊 Period Comparison</div>
+        <div class="section-title">🚌 Vehicle Blocks</div>
+        <div class="section-count" id="vehicleCount"></div>
+        <div class="section-actions">
+          <button class="btn btn-outline" onclick="exportCSV()" style="font-size:11px;padding:6px 12px;">📥 CSV</button>
+          <button class="btn btn-outline" onclick="window.print()" style="font-size:11px;padding:6px 12px;">🖨 Print</button>
+          <input type="text" id="searchInput" placeholder="🔍  Search plate..." oninput="filterVehicles()"
+            style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-family:var(--font);font-size:12px;outline:none;width:180px;color:var(--text);background:var(--surface2);">
+          <select id="sortSelect" onchange="filterVehicles()" class="sort-select">
+            <option value="spend">Sort: Highest Spend</option>
+            <option value="litres">Sort: Most Litres</option>
+            <option value="plate">Sort: Plate A–Z</option>
+            <option value="cons">Sort: Best km/L</option>
+          </select>
+          <div class="view-toggle">
+            <button class="view-btn active" id="viewGrid" onclick="setView('grid')">⊞ Blocks</button>
+            <button class="view-btn" id="viewTable" onclick="setView('table')">≡ Table</button>
+          </div>
+        </div>
       </div>
-      <div id="compareContent"></div>
+      <div id="vehiclesGrid" class="vehicles-grid"></div>
+      <div id="vehiclesTableWrap" class="vehicles-table-wrap hidden"></div>
     </div>
 
-    <!-- HISTORY -->
-    <div class="history-section">
-      <div class="section-header">
-        <div class="section-title">📁 Upload History</div>
+    <!-- TAB 4: TRENDS -->
+    <div class="tab-panel" id="tab-trends">
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title">📈 Total Spend Over Time</div>
+          <div class="trend-chart" id="trendChart"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">🔄 Avg Litres Per Fill Over Time</div>
+          <div class="trend-chart" id="trendLitres"></div>
+        </div>
       </div>
-      <div class="history-grid" id="historyGrid"></div>
+      <div class="compare-section" id="compareSection">
+        <div class="section-header">
+          <div class="section-title">📊 Period Comparison</div>
+        </div>
+        <div id="compareContent"></div>
+      </div>
+    </div>
+
+    <!-- TAB 5: HISTORY -->
+    <div class="tab-panel" id="tab-history">
+      <div class="history-section">
+        <div class="section-header">
+          <div class="section-title">📁 Upload History</div>
+        </div>
+        <div class="history-grid" id="historyGrid"></div>
+      </div>
     </div>
 
   </div>
@@ -748,6 +776,13 @@ function login(){
   localStorage.setItem(AUTH_TOKEN_KEY,'authenticated');
   localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
   showDashboard();
+}
+
+let currentDashTab='overview';
+function switchDashTab(tab){
+  currentDashTab=tab;
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
+  document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
 }
 
 const STORAGE_KEY='fleet_tracker_v2';
