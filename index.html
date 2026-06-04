@@ -882,7 +882,7 @@ function computeVehicleStats(v,fleetAvg){
   txs.forEach((tx,i)=>{
     if(i>0){
       const prev=txs[i-1],km=tx.odometer-prev.odometer;
-      if(km>0&&tx.litres>0){tx.kmPerLitre=parseFloat((km/tx.litres).toFixed(2));tx.costPerKm=parseFloat((tx.amount/km).toFixed(2));}
+      if(km>0&&km<2000&&tx.litres>0){tx.kmPerLitre=parseFloat((km/tx.litres).toFixed(2));tx.costPerKm=parseFloat((tx.amount/km).toFixed(2));}
       else{tx.kmPerLitre=null;tx.costPerKm=null;if(km<0)tx.odometerFlag=true;}
     }else{tx.kmPerLitre=null;tx.costPerKm=null;}
   });
