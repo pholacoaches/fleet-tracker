@@ -578,6 +578,52 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .tef-save:hover { background: var(--accent2); }
 .tyre-threshold-note { font-size: 11px; color: var(--text3); padding: 8px 14px; border-top: 1px solid var(--border); background: var(--surface); font-style: italic; }
 
+/* DISC RENEWAL TAB */
+.disc-summary-strip { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+.disc-summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 20px; box-shadow:var(--shadow); flex:1; min-width:140px; position:relative; overflow:hidden; }
+.disc-summary-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--accent); }
+.disc-summary-card.ds-red::before { background:var(--red); }
+.disc-summary-card.ds-amber::before { background:var(--amber); }
+.disc-summary-card.ds-green::before { background:var(--green); }
+.disc-summary-label { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text3); font-weight:700; margin-bottom:6px; }
+.disc-summary-val { font-family:var(--font-mono); font-size:26px; font-weight:700; color:var(--accent); }
+.disc-summary-card.ds-red .disc-summary-val { color:var(--red); }
+.disc-summary-card.ds-amber .disc-summary-val { color:var(--amber); }
+.disc-summary-card.ds-green .disc-summary-val { color:var(--green); }
+.discs-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:14px; }
+.disc-card { background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; animation:fadeUp 0.35s ease both; }
+.disc-card.dc-red { border-left-color:var(--red); }
+.disc-card.dc-amber { border-left-color:var(--amber); }
+.disc-card.dc-green { border-left-color:var(--green); }
+.disc-card-header { display:flex; align-items:center; justify-content:space-between; padding:11px 14px; background:var(--surface2); border-bottom:1px solid var(--border); }
+.disc-card-plate { font-family:var(--font-mono); font-size:14px; font-weight:700; }
+.disc-card-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; }
+.dcb-expired { background:var(--red-light); color:var(--red); }
+.dcb-warn { background:var(--amber-light); color:var(--amber); }
+.dcb-ok { background:var(--green-light); color:var(--green); }
+.disc-card-body { padding:11px 14px; display:flex; flex-direction:column; gap:6px; }
+.disc-info-row { display:flex; justify-content:space-between; align-items:center; font-size:11px; }
+.disc-info-label { color:var(--text3); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+.disc-info-val { font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--text2); }
+.disc-info-val.dv-red { color:var(--red); }
+.disc-info-val.dv-amber { color:var(--amber); }
+.disc-info-val.dv-green { color:var(--green); }
+.disc-days { font-size:11px; font-weight:700; margin-top:2px; }
+.disc-days.dd-red { color:var(--red); }
+.disc-days.dd-amber { color:var(--amber); }
+.disc-days.dd-green { color:var(--green); }
+.disc-card-footer { display:flex; justify-content:flex-end; padding:8px 14px; border-top:1px solid var(--border); background:var(--surface2); }
+.disc-edit-btn { font-size:11px; padding:3px 9px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); color:var(--text2); cursor:pointer; font-family:var(--font); font-weight:700; transition:border-color 0.15s, color 0.15s; }
+.disc-edit-btn:hover { border-color:var(--accent); color:var(--accent); }
+.disc-edit-form { padding:12px 14px; border-top:1px solid var(--border); background:var(--surface2); display:none; flex-direction:column; gap:10px; }
+.disc-edit-form.open { display:flex; }
+.disc-edit-form label { font-size:11px; font-weight:700; color:var(--text2); display:block; margin-bottom:3px; }
+.disc-edit-form input { width:100%; padding:6px 10px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; color:var(--text); background:var(--surface); outline:none; }
+.disc-edit-form input:focus { border-color:var(--accent); }
+.def-row { display:flex; gap:8px; flex-wrap:wrap; }
+.def-row > div { flex:1; min-width:120px; }
+.def-save { padding:7px 16px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; font-weight:700; cursor:pointer; align-self:flex-start; transition:background 0.15s; }
+.def-save:hover { background:var(--accent2); }
 .hidden { display: none !important; }
 input[type=file] { display: none; }
 @media (max-width: 600px) {
@@ -696,6 +742,7 @@ input[type=file] { display: none; }
       <button class="dash-tab-btn"        data-tab="performance" onclick="switchDashTab('performance')">🏆 Performance</button>
       <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')">🚌 Vehicle Blocks</button>
       <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')">🛞 Tyres</button>
+      <button class="dash-tab-btn" data-tab="discs" onclick="switchDashTab('discs')">📋 Disc Renewal</button>
       <button class="dash-tab-btn"        data-tab="trends"      onclick="switchDashTab('trends')">📈 Trends</button>
       <button class="dash-tab-btn"        data-tab="history"     onclick="switchDashTab('history')">📁 History</button>
     </div>
@@ -758,6 +805,16 @@ input[type=file] { display: none; }
   </div>
   <div class="tyre-summary-strip" id="tyreSummaryStrip"></div>
   <div class="tyres-grid" id="tyresGrid"></div>
+</div>
+
+<!-- TAB 5: DISC RENEWAL -->
+<div class="tab-panel" id="tab-discs">
+  <div class="section-header">
+    <div class="section-title">📋 Disc Renewal</div>
+    <div style="font-size:12px;color:var(--text3);margin-left:8px;">Sorted by urgency — expired first</div>
+  </div>
+  <div class="disc-summary-strip" id="discSummaryStrip"></div>
+  <div class="discs-grid" id="discsGrid"></div>
 </div>
 
     <!-- TAB 5: TRENDS -->
@@ -856,6 +913,7 @@ function switchDashTab(tab){
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
   document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   if(tab==='tyres')renderTyresTab();
+  if(tab==='discs')renderDiscsTab();
 }
 
 const STORAGE_KEY='fleet_tracker_v2';
@@ -1565,6 +1623,145 @@ document.addEventListener('click',function(e){
 
 // Auto refresh every 2 minutes
 setInterval(fetchSubmissions,120000);
+
+// ── DISC RENEWAL ──────────────────────────────────────────────────────────────
+const DISCS_KEY='fleet_discs_v1';
+const DISC_WARN_DAYS=30;
+const DISC_URGENT_DAYS=7;
+
+function loadDiscData(){try{return JSON.parse(localStorage.getItem(DISCS_KEY))||{};}catch{return{};}}
+function saveDiscData(d){localStorage.setItem(DISCS_KEY,JSON.stringify(d));}
+
+function getDiscStatus(expiryDateStr){
+  if(!expiryDateStr)return'unknown';
+  const parts=expiryDateStr.split('.');
+  if(parts.length!==3)return'unknown';
+  const expiry=new Date(+parts[2],+parts[1]-1,+parts[0]);
+  const today=new Date();today.setHours(0,0,0,0);
+  const diffMs=expiry-today;
+  const diffDays=Math.ceil(diffMs/(1000*60*60*24));
+  if(diffDays<0)return{status:'expired',days:diffDays};
+  if(diffDays<=DISC_URGENT_DAYS)return{status:'urgent',days:diffDays};
+  if(diffDays<=DISC_WARN_DAYS)return{status:'warn',days:diffDays};
+  return{status:'ok',days:diffDays};
+}
+
+function seedDemoDiscData(plates){
+  const existing=loadDiscData();let changed=false;
+  const makes=['Yutong ZK6122H','Higer KLQ6129','King Long XMQ6127','Yutong ZK6119H','Scania K410'];
+  plates.forEach((plate,pi)=>{
+    if(!existing[plate]){
+      changed=true;
+      const today=new Date();
+      const offset=[-10,-3,5,15,25,45,90,180,270,365][pi%10];
+      const expiry=new Date(today);expiry.setDate(expiry.getDate()+offset);
+      const dd=String(expiry.getDate()).padStart(2,'0');
+      const mm=String(expiry.getMonth()+1).padStart(2,'0');
+      const yyyy=expiry.getFullYear();
+      existing[plate]={
+        expiryDate:`${dd}.${mm}.${yyyy}`,
+        licenceNo:`GP-20${(pi%5)+19}-${String(100+pi*7).slice(-3)}`,
+        makeModel:makes[pi%makes.length]
+      };
+    }
+  });
+  if(changed)saveDiscData(existing);
+}
+
+function toggleDiscEdit(plate){
+  const id=plate.replace(/\s+/g,'_');
+  const form=document.getElementById('def-'+id);
+  if(form)form.classList.toggle('open');
+}
+
+function saveDiscEdit(plate){
+  const id=plate.replace(/\s+/g,'_');
+  const data=loadDiscData();
+  if(!data[plate])data[plate]={};
+  const expEl=document.getElementById('de-exp-'+id);
+  const licEl=document.getElementById('de-lic-'+id);
+  const makeEl=document.getElementById('de-make-'+id);
+  if(expEl)data[plate].expiryDate=expEl.value;
+  if(licEl)data[plate].licenceNo=licEl.value;
+  if(makeEl)data[plate].makeModel=makeEl.value;
+  saveDiscData(data);
+  renderDiscsTab();
+}
+
+function renderDiscsTab(){
+  const vehicles=currentReport?[...currentReport.vehicles]:[];
+  if(vehicles.length===0){
+    document.getElementById('discsGrid').innerHTML='<p style="color:var(--text3);font-size:13px;font-style:italic;">Upload a fuel report first to populate vehicle list.</p>';
+    document.getElementById('discSummaryStrip').innerHTML='';
+    return;
+  }
+  seedDemoDiscData(vehicles.map(v=>v.plate));
+  const discData=loadDiscData();
+
+  // Sort by urgency
+  const sorted=vehicles.map(v=>{
+    const d=discData[v.plate]||{};
+    const result=getDiscStatus(d.expiryDate||'');
+    return{...v,discInfo:d,statusResult:result};
+  }).sort((a,b)=>{
+    const order={expired:0,urgent:1,warn:2,ok:3,unknown:4};
+    const as=a.statusResult.status||'unknown';
+    const bs=b.statusResult.status||'unknown';
+    if(order[as]!==order[bs])return order[as]-order[bs];
+    return(a.statusResult.days||0)-(b.statusResult.days||0);
+  });
+
+  // Summary counts
+  let expired=0,warn=0,ok=0;
+  sorted.forEach(v=>{
+    const s=v.statusResult.status;
+    if(s==='expired'||s==='urgent')expired++;
+    else if(s==='warn')warn++;
+    else ok++;
+  });
+
+  document.getElementById('discSummaryStrip').innerHTML=`
+    <div class="disc-summary-card ds-red"><div class="disc-summary-label">🔴 Expired / Urgent</div><div class="disc-summary-val">${expired}</div></div>
+    <div class="disc-summary-card ds-amber"><div class="disc-summary-label">⚠ Due Within 30 Days</div><div class="disc-summary-val">${warn}</div></div>
+    <div class="disc-summary-card ds-green"><div class="disc-summary-label">✅ Valid</div><div class="disc-summary-val">${ok}</div></div>
+    <div class="disc-summary-card"><div class="disc-summary-label">🚌 Total Vehicles</div><div class="disc-summary-val">${vehicles.length}</div></div>
+  `;
+
+  document.getElementById('discsGrid').innerHTML=sorted.map((v,vi)=>{
+    const plate=v.plate;
+    const id=plate.replace(/\s+/g,'_');
+    const d=v.discInfo;
+    const sr=v.statusResult;
+    const s=sr.status||'unknown';
+    const cardClass=s==='expired'||s==='urgent'?'dc-red':s==='warn'?'dc-amber':'dc-green';
+    const badgeClass=s==='expired'?'dcb-expired':s==='urgent'?'dcb-expired':s==='warn'?'dcb-warn':'dcb-ok';
+    const badgeText=s==='expired'?'Expired':s==='urgent'?'Urgent':s==='warn'?'Due Soon':'Valid';
+    const dateClass=s==='expired'||s==='urgent'?'dv-red':s==='warn'?'dv-amber':'dv-green';
+    const daysClass=s==='expired'||s==='urgent'?'dd-red':s==='warn'?'dd-amber':'dd-green';
+    const daysText=s==='expired'?`Expired ${Math.abs(sr.days)} day${Math.abs(sr.days)!==1?'s':''} ago`:s==='unknown'?'Expiry date not set':`${sr.days} day${sr.days!==1?'s':''} remaining`;
+    return`<div class="disc-card ${cardClass}" style="animation-delay:${vi*0.03}s">
+      <div class="disc-card-header">
+        <span class="disc-card-plate">${plate}</span>
+        <span class="disc-card-badge ${badgeClass}">${badgeText}</span>
+      </div>
+      <div class="disc-card-body">
+        <div class="disc-info-row"><span class="disc-info-label">Expiry Date</span><span class="disc-info-val ${dateClass}">${d.expiryDate||'Not set'}</span></div>
+        <div class="disc-info-row"><span class="disc-info-label">Licence No.</span><span class="disc-info-val">${d.licenceNo||'Not set'}</span></div>
+        <div class="disc-info-row"><span class="disc-info-label">Make / Model</span><span class="disc-info-val">${d.makeModel||'Not set'}</span></div>
+        <div class="disc-days ${daysClass}">${daysText}</div>
+      </div>
+      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleDiscEdit('${plate}')">✎ Update Disc</button></div>
+      <div class="disc-edit-form" id="def-${id}">
+        <div class="def-row">
+          <div><label>Expiry Date (DD.MM.YYYY)</label><input type="text" id="de-exp-${id}" value="${d.expiryDate||''}" placeholder="e.g. 31.12.2026"></div>
+          <div><label>Licence Number</label><input type="text" id="de-lic-${id}" value="${d.licenceNo||''}" placeholder="e.g. GP-2021-447"></div>
+        </div>
+        <div><label>Make / Model</label><input type="text" id="de-make-${id}" value="${d.makeModel||''}" placeholder="e.g. Yutong ZK6122H"></div>
+        <button class="def-save" onclick="saveDiscEdit('${plate}')">💾 Save</button>
+      </div>
+    </div>`;
+  }).join('');
+}
 
 initApp();
 </script>
