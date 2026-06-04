@@ -1081,7 +1081,21 @@ async function parseFreightExcel(file){
 
     finaliseAndSave({scheduleDate,customer:'Phola Coaches',accountNo:'—',fleetNo:'—',filename:file.name,sources:['Freight'],vehicles:Object.values(vehicleMap)},[],orderNums);
 
-  }catch(err){ hideLoading(); alert('Error reading Excel file:\n\n'+err.message); console.error(err); }
+  }catch(err){
+    hideLoading();
+    console.error(err);
+    let msg='';
+    if(!navigator.onLine){
+      msg='No internet connection detected.\n\nPlease check your connection and try again.';
+    }else if(err.message&&err.message.includes('sheet')){
+      msg='Could not find the correct sheet in this Excel file.\n\nPlease make sure this is a Freight fuel report.';
+    }else if(err.message&&err.message.includes('No valid')){
+      msg='No valid fuel rows were found in this Excel file.\n\nPlease check the file format and try again.';
+    }else{
+      msg='Something went wrong reading your Excel file.\n\n'+err.message;
+    }
+    showErrorBanner(msg);
+  }
 }
 
 async function extractWithAI(base64Data,filename){
@@ -1160,8 +1174,20 @@ Important rules:
 
   }catch(err){
     hideLoading();
-    alert('Error extracting data:\n\n'+err.message+'\n\nPlease check your internet connection and try again.');
     console.error(err);
+    let msg='';
+    if(!navigator.onLine){
+      msg='No internet connection detected.\n\nPlease check your connection and try again.';
+    }else if(err.message&&err.message.includes('timeout')){
+      msg='The request timed out — the PDF may be too large or your connection is slow.\n\nPlease try again.';
+    }else if(err.message&&err.message.includes('JSON')){
+      msg='Could not read the PDF correctly.\n\nPlease make sure this is an Engen Schedule of Purchases PDF and try again.';
+    }else if(err.message&&err.message.includes('fetch')){
+      msg='Could not connect to the server.\n\nPlease check your internet connection and try again.';
+    }else{
+      msg='Something went wrong reading your PDF.\n\nPlease try again. If the problem continues, try a different PDF.';
+    }
+    showErrorBanner(msg);
   }
 }
 
@@ -1447,6 +1473,27 @@ document.addEventListener('drop',function(e){
   reader.readAsDataURL(file);
 });
 
+function showErrorBanner(msg){
+  const existing=document.getElementById('uploadErrorBanner');
+  if(existing)existing.remove();
+  const banner=document.createElement('div');
+  banner.id='uploadErrorBanner';
+  banner.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#FFF5F5;border:1.5px solid #FFA8A8;border-radius:10px;padding:16px 20px;max-width:480px;width:90%;z-index:300;box-shadow:0 4px 20px rgba(0,0,0,0.15);font-family:var(--font);';
+  banner.innerHTML=`
+    <div style="display:flex;align-items:flex-start;gap:12px;">
+      <div style="font-size:22px;flex-shrink:0;">⚠️</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:#C92A2A;margin-bottom:6px;">Upload Failed</div>
+        <div style="font-size:12px;color:#862e2e;line-height:1.6;white-space:pre-line;">${msg}</div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button onclick="document.getElementById('fileInput').click();document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:#1971C2;color:white;border:none;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">Try Again</button>
+          <button onclick="document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:transparent;border:1.5px solid #CED4DA;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;color:#495057;">Dismiss</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(banner);
+  setTimeout(()=>{if(document.getElementById('uploadErrorBanner'))document.getElementById('uploadErrorBanner').remove();},10000);
+}
 function showLoading(t,s){document.getElementById('loadingText').textContent=t;document.getElementById('loadingSub').textContent=s;document.getElementById('loadingOverlay').classList.remove('hidden');}
 function updateLoading(t,s){document.getElementById('loadingText').textContent=t;document.getElementById('loadingSub').textContent=s;}
 function hideLoading(){document.getElementById('loadingOverlay').classList.add('hidden');}
