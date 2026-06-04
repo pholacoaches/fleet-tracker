@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Phola Coaches — Odometer Submission</title>
+<style>
+@font-face { font-family: 'Century Gothic'; src: local('Century Gothic'), local('CenturyGothic'); }
+:root {
+  --accent: #1971C2; --accent2: #0C5A99; --green: #2F9E44; --red: #C92A2A;
+  --amber: #E67700; --bg: #F8F9FA; --surface: #FFFFFF; --border: #DEE2E6;
+  --text: #212529; --text2: #495057; --text3: #868E96;
+  --font: 'Century Gothic', 'Trebuchet MS', sans-serif;
+  --radius: 12px; --shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.header {
+  background: var(--accent); padding: 20px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.header-logo { font-size: 22px; font-weight: 700; color: white; letter-spacing: 0.5px; }
+.header-sub { font-size: 11px; color: rgba(255,255,255,0.75); text-transform: uppercase; letter-spacing: 1.5px; }
+
+.vehicle-banner {
+  background: var(--accent2); padding: 14px 24px;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+}
+.vehicle-plate-display {
+  font-family: 'Courier New', monospace; font-size: 22px; font-weight: 700;
+  color: white; letter-spacing: 2px; background: rgba(255,255,255,0.15);
+  padding: 6px 16px; border-radius: 6px;
+}
+.vehicle-label { font-size: 11px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px; }
+
+.main { padding: 24px 20px; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+.card {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.card-header {
+  padding: 14px 18px; background: #F8F9FA; border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 700; color: var(--text2);
+  text-transform: uppercase; letter-spacing: 0.8px;
+}
+.card-body { padding: 18px; }
+
+/* PHOTO CAPTURE */
+.photo-area {
+  border: 2px dashed var(--border); border-radius: 10px;
+  min-height: 200px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+  cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden;
+  background: #FAFAFA;
+}
+.photo-area:hover, .photo-area.has-photo { border-color: var(--accent); border-style: solid; }
+.photo-area img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; border-radius: 8px; }
+.photo-area-text { font-size: 14px; color: var(--text3); text-align: center; line-height: 1.6; z-index: 1; }
+.photo-area-icon { font-size: 40px; z-index: 1; }
+.photo-overlay {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.5); padding: 8px; text-align: center;
+  font-size: 12px; color: white; font-weight: 700; z-index: 2;
+}
+.photo-btn {
+  width: 100%; padding: 12px; background: var(--accent); color: white;
+  border: none; border-radius: 8px; font-family: var(--font); font-size: 14px;
+  font-weight: 700; cursor: pointer; margin-top: 12px; transition: background 0.15s;
+}
+.photo-btn:hover { background: var(--accent2); }
+.photo-btn.secondary {
+  background: transparent; color: var(--accent);
+  border: 2px solid var(--accent); margin-top: 8px;
+}
+
+/* ODO INPUT */
+.odo-input-wrap { position: relative; }
+.odo-input {
+  width: 100%; padding: 14px 16px; font-size: 24px; font-family: 'Courier New', monospace;
+  font-weight: 700; color: var(--accent); border: 2px solid var(--border);
+  border-radius: 10px; outline: none; text-align: center; letter-spacing: 2px;
+  transition: border-color 0.15s;
+}
+.odo-input:focus { border-color: var(--accent); }
+.odo-input::placeholder { color: var(--border); font-size: 20px; letter-spacing: 1px; }
+.odo-label { font-size: 11px; color: var(--text3); text-align: center; margin-top: 8px; }
+.odo-ai-result {
+  display: none; margin-top: 12px; padding: 10px 14px;
+  background: #EBFBEE; border-radius: 8px; border: 1px solid #8CE99A;
+  font-size: 13px; color: var(--green); font-weight: 700; text-align: center;
+}
+.odo-ai-result.show { display: block; }
+
+/* NOTES */
+.notes-input {
+  width: 100%; padding: 12px 14px; border: 2px solid var(--border);
+  border-radius: 10px; font-family: var(--font); font-size: 13px;
+  color: var(--text); outline: none; resize: none; height: 80px;
+  transition: border-color 0.15s;
+}
+.notes-input:focus { border-color: var(--accent); }
+
+/* SUBMIT */
+.submit-btn {
+  width: 100%; padding: 16px; background: var(--green); color: white;
+  border: none; border-radius: var(--radius); font-family: var(--font);
+  font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+  letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(47,158,68,0.3);
+}
+.submit-btn:hover { background: #27873B; transform: translateY(-1px); }
+.submit-btn:disabled { background: var(--text3); cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* AI READING */
+.ai-status {
+  display: none; padding: 10px 14px; border-radius: 8px;
+  font-size: 12px; font-weight: 700; text-align: center; margin-top: 10px;
+}
+.ai-status.reading { display: block; background: #E7F5FF; color: var(--accent); }
+.ai-status.success { display: block; background: #EBFBEE; color: var(--green); }
+.ai-status.error { display: block; background: #FFF5F5; color: var(--red); }
+
+/* SUCCESS SCREEN */
+.success-screen {
+  display: none; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 60vh; text-align: center; gap: 16px; padding: 24px;
+}
+.success-screen.show { display: flex; }
+.success-icon { font-size: 72px; }
+.success-title { font-size: 24px; font-weight: 700; color: var(--green); }
+.success-sub { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 300px; }
+.success-plate { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; color: var(--accent); background: var(--bg); padding: 8px 20px; border-radius: 8px; border: 2px solid var(--border); margin: 4px 0; }
+.success-odo { font-size: 28px; font-weight: 700; color: var(--text); font-family: 'Courier New', monospace; }
+.another-btn {
+  padding: 12px 28px; background: var(--accent); color: white; border: none;
+  border-radius: var(--radius); font-family: var(--font); font-size: 14px;
+  font-weight: 700; cursor: pointer; margin-top: 8px;
+}
+
+/* ERROR SCREEN */
+.error-screen {
+  display: none; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 60vh; text-align: center; gap: 16px; padding: 24px;
+}
+.error-screen.show { display: flex; }
+.error-icon { font-size: 64px; }
+.error-title { font-size: 22px; font-weight: 700; color: var(--red); }
+.error-sub { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 300px; }
+
+.loading-spinner {
+  width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white; border-radius: 50%;
+  animation: spin 0.7s linear infinite; display: inline-block; margin-right: 8px; vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="errorScreen" class="error-screen">
+  <div class="error-icon">🚫</div>
+  <div class="error-title">Invalid Link</div>
+  <div class="error-sub">This link is not valid. Please ask your fleet manager for your personal link.</div>
+</div>
+
+<div id="mainContent" style="display:none;">
+  <div class="header">
+    <div class="header-logo">Phola Coaches</div>
+    <div class="header-sub">Odometer Submission</div>
+  </div>
+
+  <div class="vehicle-banner">
+    <div>
+      <div class="vehicle-label">Your Vehicle</div>
+      <div class="vehicle-plate-display" id="plateBanner">—</div>
+    </div>
+  </div>
+
+  <div class="main" id="formContent">
+    <!-- PHOTO CARD -->
+    <div class="card">
+      <div class="card-header">📷 Step 1 — Take Odometer Photo</div>
+      <div class="card-body">
+        <div class="photo-area" id="photoArea" onclick="document.getElementById('cameraInput').click()">
+          <div class="photo-area-icon">📷</div>
+          <div class="photo-area-text">Tap here to take a photo<br>of your odometer</div>
+        </div>
+        <div class="ai-status" id="aiStatus"></div>
+        <div class="odo-ai-result" id="aiResult"></div>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(event)">
+        <button class="photo-btn secondary" onclick="document.getElementById('cameraInput').click()" style="display:none" id="retakeBtn">🔄 Retake Photo</button>
+      </div>
+    </div>
+
+    <!-- ODO CARD -->
+    <div class="card">
+      <div class="card-header">🔢 Step 2 — Confirm Odometer Reading</div>
+      <div class="card-body">
+        <div class="odo-input-wrap">
+          <input type="number" class="odo-input" id="odoInput" placeholder="000000" inputmode="numeric">
+        </div>
+        <div class="odo-label">Enter or confirm the km reading shown on the dashboard</div>
+      </div>
+    </div>
+
+    <!-- NOTES CARD -->
+    <div class="card">
+      <div class="card-header">📝 Step 3 — Notes (Optional)</div>
+      <div class="card-body">
+        <textarea class="notes-input" id="notesInput" placeholder="Any issues to report? e.g. warning light on, tyre looks low..."></textarea>
+      </div>
+    </div>
+
+    <!-- SUBMIT -->
+    <button class="submit-btn" id="submitBtn" onclick="submitReading()">
+      ✅ Submit Odometer Reading
+    </button>
+
+    <div style="font-size:11px;color:var(--text3);text-align:center;padding-bottom:24px;">
+      Submission is recorded with date, time and your vehicle plate automatically.
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="success-screen" id="successScreen">
+    <div class="success-icon">✅</div>
+    <div class="success-title">Submitted!</div>
+    <div class="success-plate" id="successPlate">—</div>
+    <div class="success-odo" id="successOdo">—</div>
+    <div class="success-sub">Your odometer reading has been recorded. Thank you!</div>
+    <button class="another-btn" onclick="resetForm()">Submit Another Reading</button>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL='https://wlwwzbyuchsonwugqhww.supabase.co';
+const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
+
+// Valid plates list — add all vehicle plates here
+const VALID_PLATES=[
+  'FP57FTGP','FP57FGGP','FJ28JPGP','FP57GJGP','FB92VMGP','HX04KKGP',
+  'FJ28SVGP','FYZ231MP','LR65KBGP','HP80BFGP','FP57GDGP','LR65MGGP',
+  'JG31ZRGP','LR65HWGP','FJ28JNGP','FB92TBGP','DJ17PTGP','FJ28TDGP',
+  'FH02VLGP','LR65JFGP','DN65ZGGP','FB92TSGP','HN83MSGP','HX04KLGP',
+  'FP57FMGP','LR65JRGP','FP57FKGP','JG31ZFGP','LR65GGGP','FH11SJGP'
+];
+
+let currentPlate='';
+let photoBase64='';
+let photoFile=null;
+
+function init(){
+  const params=new URLSearchParams(window.location.search);
+  const plate=params.get('id');
+  if(!plate||!VALID_PLATES.includes(plate.toUpperCase())){
+    document.getElementById('errorScreen').style.display='flex';
+    return;
+  }
+  currentPlate=plate.toUpperCase();
+  document.getElementById('plateBanner').textContent=currentPlate;
+  document.getElementById('successPlate').textContent=currentPlate;
+  document.getElementById('mainContent').style.display='block';
+}
+
+async function handlePhoto(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  photoFile=file;
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    photoBase64=e.target.result;
+    const photoArea=document.getElementById('photoArea');
+    photoArea.innerHTML=`<img src="${photoBase64}"><div class="photo-overlay">📷 Tap to retake</div>`;
+    photoArea.classList.add('has-photo');
+    document.getElementById('retakeBtn').style.display='block';
+    await readOdometerWithAI(photoBase64.split(',')[1]);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function readOdometerWithAI(base64){
+  const status=document.getElementById('aiStatus');
+  const result=document.getElementById('aiResult');
+  status.className='ai-status reading';
+  status.textContent='🤖 AI is reading your odometer...';
+  result.classList.remove('show');
+  try{
+    const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-5',
+        max_tokens:100,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
+          {type:'text',text:'This is a photo of a vehicle odometer. Read the odometer number and return ONLY the numeric value with no text, no units, no spaces. Just the digits. Example: 145823'}
+        ]}]
+      })
+    });
+    const data=await response.json();
+    const text=data.content.map(i=>i.text||'').join('').trim().replace(/[^0-9]/g,'');
+    if(text&&text.length>3){
+      document.getElementById('odoInput').value=text;
+      status.className='ai-status success';
+      status.textContent='✅ AI read your odometer — please confirm below';
+      result.textContent=`AI detected: ${parseInt(text).toLocaleString('en-ZA')} km`;
+      result.classList.add('show');
+    }else{
+      status.className='ai-status error';
+      status.textContent='⚠ Could not read odometer automatically — please type it in below';
+    }
+  }catch(err){
+    status.className='ai-status error';
+    status.textContent='⚠ Could not read odometer — please type it in manually';
+  }
+}
+
+async function uploadPhoto(){
+  if(!photoFile)return null;
+  try{
+    const filename=`${currentPlate}_${Date.now()}.jpg`;
+    const response=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
+      method:'POST',
+      headers:{
+        'Authorization':`Bearer ${SUPABASE_KEY}`,
+        'Content-Type':photoFile.type,
+        'x-upsert':'true'
+      },
+      body:photoFile
+    });
+    if(response.ok){
+      return`${SUPABASE_URL}/storage/v1/object/public/odometer-photos/${filename}`;
+    }
+  }catch(err){console.error('Photo upload failed:',err);}
+  return null;
+}
+
+async function submitReading(){
+  const odo=parseInt(document.getElementById('odoInput').value);
+  const notes=document.getElementById('notesInput').value.trim();
+  if(!odo||odo<1000){
+    alert('Please enter a valid odometer reading.');
+    return;
+  }
+  const btn=document.getElementById('submitBtn');
+  btn.disabled=true;
+  btn.innerHTML='<span class="loading-spinner"></span> Submitting...';
+  try{
+    let photoUrl=null;
+    if(photoFile)photoUrl=await uploadPhoto();
+    const response=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings`,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'apikey':SUPABASE_KEY,
+        'Authorization':`Bearer ${SUPABASE_KEY}`,
+        'Prefer':'return=minimal'
+      },
+      body:JSON.stringify({
+        plate:currentPlate,
+        odometer:odo,
+        photo_url:photoUrl,
+        notes:notes||null
+      })
+    });
+    if(response.ok||response.status===201){
+      document.getElementById('formContent').style.display='none';
+      document.getElementById('successOdo').textContent=odo.toLocaleString('en-ZA')+' km';
+      document.getElementById('successScreen').classList.add('show');
+    }else{
+      throw new Error('Submission failed');
+    }
+  }catch(err){
+    alert('Something went wrong. Please try again or contact your fleet manager.');
+    btn.disabled=false;
+    btn.innerHTML='✅ Submit Odometer Reading';
+  }
+}
+
+function resetForm(){
+  document.getElementById('odoInput').value='';
+  document.getElementById('notesInput').value='';
+  document.getElementById('photoArea').innerHTML=`<div class="photo-area-icon">📷</div><div class="photo-area-text">Tap here to take a photo<br>of your odometer</div>`;
+  document.getElementById('photoArea').classList.remove('has-photo');
+  document.getElementById('retakeBtn').style.display='none';
+  document.getElementById('aiStatus').className='ai-status';
+  document.getElementById('aiResult').classList.remove('show');
+  document.getElementById('successScreen').classList.remove('show');
+  document.getElementById('formContent').style.display='block';
+  document.getElementById('submitBtn').disabled=false;
+  document.getElementById('submitBtn').innerHTML='✅ Submit Odometer Reading';
+  photoBase64='';
+  photoFile=null;
+}
+
+init();
+</script>
+</body>
+</html>
