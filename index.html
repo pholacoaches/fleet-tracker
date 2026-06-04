@@ -531,53 +531,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .notif-item-notes { font-size:11px; color:var(--amber); margin-top:3px; font-style:italic; }
 .notif-empty { padding:24px; text-align:center; color:var(--text3); font-size:13px; font-style:italic; }
 
-/* TYRES TAB */
-.tyre-summary-strip { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-.tyre-summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px; box-shadow: var(--shadow); flex: 1; min-width: 140px; position: relative; overflow: hidden; }
-.tyre-summary-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--accent); }
-.tyre-summary-card.s-red::before { background: var(--red); }
-.tyre-summary-card.s-amber::before { background: var(--amber); }
-.tyre-summary-card.s-green::before { background: var(--green); }
-.tyre-summary-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); font-weight: 700; margin-bottom: 6px; }
-.tyre-summary-val { font-family: var(--font-mono); font-size: 26px; font-weight: 700; color: var(--accent); }
-.tyre-summary-card.s-red .tyre-summary-val { color: var(--red); }
-.tyre-summary-card.s-amber .tyre-summary-val { color: var(--amber); }
-.tyre-summary-card.s-green .tyre-summary-val { color: var(--green); }
-.tyres-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px,1fr)); gap: 14px; }
-.tyre-card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; animation: fadeUp 0.35s ease both; }
-.tyre-card.tc-red { border-left-color: var(--red); }
-.tyre-card.tc-amber { border-left-color: var(--amber); }
-.tyre-card.tc-green { border-left-color: var(--green); }
-.tyre-card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); }
-.tyre-card-plate { font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
-.tyre-card-status { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
-.tcs-ok { background: var(--green-light); color: var(--green); }
-.tcs-warn { background: var(--amber-light); color: var(--amber); }
-.tcs-urgent { background: var(--red-light); color: var(--red); }
-.tyre-positions { padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; }
-.tyre-position-row { display: flex; align-items: center; gap: 10px; }
-.tyre-pos-label { font-size: 10px; color: var(--text3); font-weight: 700; min-width: 80px; text-transform: uppercase; letter-spacing: 0.5px; }
-.tyre-bar-track { flex: 1; background: var(--surface2); border-radius: 3px; height: 14px; overflow: hidden; }
-.tyre-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
-.tyre-bar-fill.tb-green { background: var(--green); }
-.tyre-bar-fill.tb-amber { background: var(--amber); }
-.tyre-bar-fill.tb-red { background: var(--red); }
-.tyre-pos-km { font-family: var(--font-mono); font-size: 10px; color: var(--text2); min-width: 70px; text-align: right; }
-.tyre-card-footer { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-top: 1px solid var(--border); background: var(--surface2); flex-wrap: wrap; gap: 6px; }
-.tyre-footer-meta { font-size: 11px; color: var(--text3); }
-.tyre-edit-btn { font-size: 11px; padding: 4px 10px; border: 1.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--surface); color: var(--text2); cursor: pointer; font-family: var(--font); font-weight: 700; transition: border-color 0.15s, color 0.15s; }
-.tyre-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
-.tyre-edit-form { padding: 12px 14px; border-top: 1px solid var(--border); background: var(--surface2); display: none; flex-direction: column; gap: 10px; }
-.tyre-edit-form.open { display: flex; }
-.tyre-edit-form label { font-size: 11px; font-weight: 700; color: var(--text2); display: block; margin-bottom: 3px; }
-.tyre-edit-form input, .tyre-edit-form select { width: 100%; padding: 6px 10px; border: 1.5px solid var(--border2); border-radius: var(--radius-sm); font-family: var(--font); font-size: 12px; color: var(--text); background: var(--surface); outline: none; }
-.tyre-edit-form input:focus { border-color: var(--accent); }
-.tef-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.tef-row > div { flex: 1; min-width: 120px; }
-.tef-save { padding: 7px 16px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); font-family: var(--font); font-size: 12px; font-weight: 700; cursor: pointer; align-self: flex-start; transition: background 0.15s; }
-.tef-save:hover { background: var(--accent2); }
-.tyre-threshold-note { font-size: 11px; color: var(--text3); padding: 8px 14px; border-top: 1px solid var(--border); background: var(--surface); font-style: italic; }
-
 /* DISC RENEWAL TAB */
 .disc-summary-strip { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
 .disc-summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 20px; box-shadow:var(--shadow); flex:1; min-width:140px; position:relative; overflow:hidden; }
@@ -741,8 +694,7 @@ input[type=file] { display: none; }
       <button class="dash-tab-btn active" data-tab="overview"    onclick="switchDashTab('overview')">📊 Overview</button>
       <button class="dash-tab-btn"        data-tab="performance" onclick="switchDashTab('performance')">🏆 Performance</button>
       <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')">🚌 Vehicle Blocks</button>
-      <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')">🛞 Tyres</button>
-      <button class="dash-tab-btn" data-tab="discs" onclick="switchDashTab('discs')">📋 Disc Renewal</button>
+<button class="dash-tab-btn" data-tab="discs" onclick="switchDashTab('discs')">📋 Disc Renewal</button>
       <button class="dash-tab-btn"        data-tab="trends"      onclick="switchDashTab('trends')">📈 Trends</button>
       <button class="dash-tab-btn"        data-tab="history"     onclick="switchDashTab('history')">📁 History</button>
     </div>
@@ -797,15 +749,6 @@ input[type=file] { display: none; }
       <div id="vehiclesTableWrap" class="vehicles-table-wrap hidden"></div>
     </div>
 
-    <!-- TAB 4: TYRES -->
-<div class="tab-panel" id="tab-tyres">
-  <div class="section-header">
-    <div class="section-title">🛞 Tyre Management</div>
-    <div style="font-size:12px;color:var(--text3);margin-left:8px;">(Demo data — update per vehicle using the Edit buttons)</div>
-  </div>
-  <div class="tyre-summary-strip" id="tyreSummaryStrip"></div>
-  <div class="tyres-grid" id="tyresGrid"></div>
-</div>
 
 <!-- TAB 5: DISC RENEWAL -->
 <div class="tab-panel" id="tab-discs">
@@ -912,7 +855,6 @@ function switchDashTab(tab){
   currentDashTab=tab;
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
   document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-  if(tab==='tyres')renderTyresTab();
   if(tab==='discs')renderDiscsTab();
 }
 
@@ -1472,70 +1414,6 @@ document.addEventListener('drop',function(e){
 function showLoading(t,s){document.getElementById('loadingText').textContent=t;document.getElementById('loadingSub').textContent=s;document.getElementById('loadingOverlay').classList.remove('hidden');}
 function updateLoading(t,s){document.getElementById('loadingText').textContent=t;document.getElementById('loadingSub').textContent=s;}
 function hideLoading(){document.getElementById('loadingOverlay').classList.add('hidden');}
-
-// ── TYRES ─────────────────────────────────────────────────────────────────────
-const TYRES_KEY='fleet_tyres_v1';
-const TYRE_THRESHOLD=80000;
-const TYRE_WARN=15000;
-const TYRE_URGENT=5000;
-const TYRE_POSITIONS=['Front Left','Front Right','Rear Left','Rear Right','Rear Mid-Left','Rear Mid-Right'];
-function loadTyreData(){try{return JSON.parse(localStorage.getItem(TYRES_KEY))||{};}catch{return{};}}
-function saveTyreData(d){localStorage.setItem(TYRES_KEY,JSON.stringify(d));}
-function getTyreStatus(kmUsed){const remaining=TYRE_THRESHOLD-kmUsed;if(remaining<=TYRE_URGENT)return'urgent';if(remaining<=TYRE_WARN)return'warn';return'ok';}
-function getTyreBarClass(status){return status==='urgent'?'tb-red':status==='warn'?'tb-amber':'tb-green';}
-function seedDemoTyreData(plates){
-  const existing=loadTyreData();let changed=false;
-  const brands=['Bridgestone','Michelin','Goodyear','Continental','Pirelli'];
-  const size='315/80R22.5';
-  plates.forEach((plate,pi)=>{
-    if(!existing[plate]){
-      changed=true;
-      const baseKm=[72000,68000,55000,81000,45000,60000];
-      existing[plate]={tyres:TYRE_POSITIONS.map((pos,i)=>({position:pos,brand:brands[(pi+i)%brands.length],size,fittedOdo:120000+((pi*3+i)*2000),fittedDate:`${String((i%28)+1).padStart(2,'0')}.0${(i%9)+1}.2024`,kmUsed:baseKm[i]+(pi*1500)}))};
-    }
-  });
-  if(changed)saveTyreData(existing);
-}
-function toggleTyreEdit(plate){const id=plate.replace(/\s+/g,'_');const form=document.getElementById('tef-'+id);if(form)form.classList.toggle('open');}
-function saveTyreEdit(plate){
-  const id=plate.replace(/\s+/g,'_');
-  const data=loadTyreData();
-  if(!data[plate])data[plate]={tyres:TYRE_POSITIONS.map(pos=>({position:pos,brand:'',size:'',fittedOdo:0,fittedDate:'',kmUsed:0}))};
-  TYRE_POSITIONS.forEach((pos,i)=>{
-    const kmEl=document.getElementById(`tk-${id}-${i}`);
-    const brandEl=document.getElementById(`tb-${id}-${i}`);
-    const sizeEl=document.getElementById(`ts-${id}-${i}`);
-    if(kmEl)data[plate].tyres[i].kmUsed=parseInt(kmEl.value)||0;
-    if(brandEl)data[plate].tyres[i].brand=brandEl.value;
-    if(sizeEl)data[plate].tyres[i].size=sizeEl.value;
-  });
-  saveTyreData(data);renderTyresTab();
-}
-function renderTyresTab(){
-  const vehicles=currentReport?[...currentReport.vehicles].sort((a,b)=>a.plate.localeCompare(b.plate)):[];
-  if(vehicles.length===0){document.getElementById('tyresGrid').innerHTML='<p style="color:var(--text3);font-size:13px;font-style:italic;">Upload a fuel report first to populate vehicle list.</p>';document.getElementById('tyreSummaryStrip').innerHTML='';return;}
-  seedDemoTyreData(vehicles.map(v=>v.plate));
-  const tyreData=loadTyreData();
-  let totalOk=0,totalWarn=0,totalUrgent=0;
-  vehicles.forEach(v=>{const vd=tyreData[v.plate];if(!vd)return;vd.tyres.forEach(t=>{const s=getTyreStatus(t.kmUsed);if(s==='ok')totalOk++;else if(s==='warn')totalWarn++;else totalUrgent++;});});
-  document.getElementById('tyreSummaryStrip').innerHTML=`
-    <div class="tyre-summary-card s-green"><div class="tyre-summary-label">✅ Tyres OK</div><div class="tyre-summary-val">${totalOk}</div></div>
-    <div class="tyre-summary-card s-amber"><div class="tyre-summary-label">⚠ Due Soon</div><div class="tyre-summary-val">${totalWarn}</div></div>
-    <div class="tyre-summary-card s-red"><div class="tyre-summary-label">🔴 Overdue / Urgent</div><div class="tyre-summary-val">${totalUrgent}</div></div>
-    <div class="tyre-summary-card"><div class="tyre-summary-label">🛞 Total Tyres Tracked</div><div class="tyre-summary-val">${vehicles.length*6}</div></div>
-    <div class="tyre-summary-card"><div class="tyre-summary-label">📏 Replacement Threshold</div><div class="tyre-summary-val" style="font-size:18px;">${(TYRE_THRESHOLD/1000).toFixed(0)}k km</div></div>`;
-  document.getElementById('tyresGrid').innerHTML=vehicles.map((v,vi)=>{
-    const plate=v.plate;const id=plate.replace(/\s+/g,'_');
-    const vd=tyreData[plate]||{tyres:[]};const tyres=vd.tyres||[];
-    const statuses=tyres.map(t=>getTyreStatus(t.kmUsed));
-    const cardStatus=statuses.includes('urgent')?'urgent':statuses.includes('warn')?'warn':'ok';
-    const cardClass=cardStatus==='urgent'?'tc-red':cardStatus==='warn'?'tc-amber':'tc-green';
-    const statusBadge=cardStatus==='urgent'?'<span class="tyre-card-status tcs-urgent">🔴 Urgent</span>':cardStatus==='warn'?'<span class="tyre-card-status tcs-warn">⚠ Due Soon</span>':'<span class="tyre-card-status tcs-ok">✓ OK</span>';
-    const posRows=tyres.map(t=>{const pct=Math.min(100,(t.kmUsed/TYRE_THRESHOLD)*100).toFixed(1);const st=getTyreStatus(t.kmUsed);const barClass=getTyreBarClass(st);return`<div class="tyre-position-row"><div class="tyre-pos-label">${t.position}</div><div class="tyre-bar-track"><div class="tyre-bar-fill ${barClass}" style="width:${pct}%"></div></div><div class="tyre-pos-km">${(t.kmUsed/1000).toFixed(0)}k / ${(TYRE_THRESHOLD/1000).toFixed(0)}k km</div></div>`;}).join('');
-    const editRows=tyres.map((t,i)=>`<div style="border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:4px;"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px;">${t.position}</div><div class="tef-row"><div><label>km Used</label><input type="number" id="tk-${id}-${i}" value="${t.kmUsed}" placeholder="e.g. 55000"></div><div><label>Brand</label><input type="text" id="tb-${id}-${i}" value="${t.brand}" placeholder="e.g. Bridgestone"></div><div><label>Size</label><input type="text" id="ts-${id}-${i}" value="${t.size}" placeholder="e.g. 315/80R22.5"></div></div></div>`).join('');
-    return`<div class="tyre-card ${cardClass}" style="animation-delay:${vi*0.04}s"><div class="tyre-card-header"><span class="tyre-card-plate">${plate}</span>${statusBadge}</div><div class="tyre-positions">${posRows}</div><div class="tyre-threshold-note">Bar = km used of ${(TYRE_THRESHOLD/1000).toFixed(0)},000 km threshold &nbsp;·&nbsp; Warn at ${(TYRE_WARN/1000).toFixed(0)},000 km remaining</div><div class="tyre-card-footer"><span class="tyre-footer-meta">${tyres.length} positions · ${tyres.filter(t=>t.brand).map(t=>t.brand).filter((b,i,a)=>a.indexOf(b)===i).join(', ')||'Brand not set'}</span><button class="tyre-edit-btn" onclick="toggleTyreEdit('${plate}')">✎ Edit Tyres</button></div><div class="tyre-edit-form" id="tef-${id}">${editRows}<button class="tef-save" onclick="saveTyreEdit('${plate}')">💾 Save Changes</button></div></div>`;
-  }).join('');
-}
 
 function recomputeAllStats(){
   state.reports.forEach(report=>{
