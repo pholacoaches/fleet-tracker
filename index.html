@@ -799,16 +799,27 @@ const AUTH_TOKEN_KEY='fleet_auth_token';
 const AUTH_TIME_KEY='fleet_auth_time';
 const AUTH_TTL=24*60*60*1000;
 
-const CREDENTIALS=[
-  {email:'tracy.tucker@luxliner.co.za',password:'Greg1981'},
-  {email:'gjtucker83@gmail.com',password:'Greg1981'},
-];
 
-function checkAuth(){
-  const token=localStorage.getItem(AUTH_TOKEN_KEY);
-  const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
-  return !!(token&&Date.now()-time<AUTH_TTL);
+async function checkAuth(){
+  try{
+    const token=localStorage.getItem(AUTH_TOKEN_KEY);
+    const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
+    if(!token||Date.now()-time>AUTH_TTL)return false;
+    const response=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
+      headers:{
+        'apikey':SUPABASE_KEY,
+        'Authorization':`Bearer ${token}`
+      }
+    });
+    return response.ok;
+  }catch{return false;}
 }
+
+async function initApp(){
+  const authed=await checkAuth();
+  if(authed){showDashboard();}else{showLogin();}
+}
+
 function showDashboard(){
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
@@ -816,6 +827,7 @@ function showDashboard(){
   fetchSubmissions();
   renderDashboard();
 }
+
 function showLogin(){
   document.getElementById('appContent').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
@@ -823,12 +835,13 @@ function showLogin(){
   document.getElementById('loginPassword').value='';
   document.getElementById('loginErr').textContent='';
 }
-function initApp(){ if(checkAuth()){showDashboard();}else{showLogin();} }
+
 function logout(){
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_TIME_KEY);
   showLogin();
 }
+
 function togglePasswordVisibility(){
   const inp=document.getElementById('loginPassword');
   const icon=document.getElementById('eyeIcon');
@@ -838,16 +851,39 @@ function togglePasswordVisibility(){
     ?'<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>'
     :'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
 }
-function login(){
+
+async function login(){
   const email=document.getElementById('loginEmail').value.trim().toLowerCase();
   const password=document.getElementById('loginPassword').value;
   const errEl=document.getElementById('loginErr');
+  const btn=document.getElementById('loginBtn');
   errEl.textContent='';
-  const match=CREDENTIALS.find(c=>c.email===email&&c.password===password);
-  if(!match){errEl.textContent='Incorrect email or password.';return;}
-  localStorage.setItem(AUTH_TOKEN_KEY,'authenticated');
-  localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
-  showDashboard();
+  btn.disabled=true;
+  btn.textContent='Signing in...';
+  try{
+    const response=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'apikey':SUPABASE_KEY
+      },
+      body:JSON.stringify({email,password})
+    });
+    const data=await response.json();
+    if(!response.ok||!data.access_token){
+      errEl.textContent='Incorrect email or password.';
+      btn.disabled=false;
+      btn.textContent='Log in';
+      return;
+    }
+    localStorage.setItem(AUTH_TOKEN_KEY,data.access_token);
+    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
+    showDashboard();
+  }catch(err){
+    errEl.textContent='Connection error. Please try again.';
+    btn.disabled=false;
+    btn.textContent='Log in';
+  }
 }
 
 let currentDashTab='overview';
