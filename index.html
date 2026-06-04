@@ -893,7 +893,7 @@ function computeVehicleStats(v,fleetAvg){
   v.avgKmPerLitre=cons.length>0?parseFloat((cons.reduce((a,b)=>a+b,0)/cons.length).toFixed(2)):null;
   v.hasOdometerIssue=txs.some(t=>t.odometerFlag);
   v.hasCompetitor=txs.some(t=>t.isCompetitor);
-  if(fleetAvg!=null)v.isHighSpend=v.totalAmount>fleetAvg*1.5;
+  if(fleetAvg!=null)v.isHighSpend=v.totalAmount>fleetAvg*2;
   return v;
 }
 
@@ -1180,7 +1180,7 @@ function renderDashboard(){
     <div class="stat-card">
       <div class="stat-label">High Spend Vehicles</div>
       <div class="stat-value">${highSpend.length}</div>
-      <div class="stat-sub">Above 150% fleet avg</div>
+      <div class="stat-sub">Above 200% fleet avg</div>
     </div>
   `;
 
