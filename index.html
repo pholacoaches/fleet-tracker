@@ -1514,14 +1514,53 @@ let notifData=[];
 
 async function fetchSubmissions(){
   try{
+    const token=localStorage.getItem(AUTH_TOKEN_KEY);
     const response=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=*&order=created_at.desc&limit=50`,{
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`}
     });
     if(response.ok){
       notifData=await response.json();
       updateNotifBadge();
+      autoApplyOdometerReadings();
     }
   }catch(err){console.error('Notif fetch failed:',err);}
+}
+
+function autoApplyOdometerReadings(){
+  if(!currentReport||!notifData||notifData.length===0)return;
+  let updated=false;
+  notifData.forEach(submission=>{
+    if(!submission.plate||!submission.odometer)return;
+    const vehicle=currentReport.vehicles.find(v=>v.plate===submission.plate);
+    if(!vehicle)return;
+    const lastTx=vehicle.transactions[vehicle.transactions.length-1];
+    const currentOdo=lastTx?lastTx.odometer:0;
+    if(submission.odometer>currentOdo){
+      // Add a synthetic transaction with the driver submitted odometer
+      const existing=vehicle.transactions.find(t=>t.driverSubmission&&t.odometer===submission.odometer);
+      if(!existing){
+        vehicle.transactions.push({
+          date:new Date(submission.created_at).toLocaleDateString('en-ZA').split('/').join('.'),
+          merchant:'Driver Submission',
+          odometer:submission.odometer,
+          litres:0,
+          amount:0,
+          isCompetitor:false,
+          source:'Driver',
+          driverSubmission:true,
+          notes:submission.notes||''
+        });
+        vehicle.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
+        updated=true;
+      }
+    }
+  });
+  if(updated){
+    const fa=currentReport.vehicles.reduce((s,v)=>s+v.totalAmount,0)/currentReport.vehicles.length;
+    currentReport.vehicles=currentReport.vehicles.map(v=>computeVehicleStats(v,fa));
+    saveStorage(state);
+    filterVehicles();
+  }
 }
 
 function updateNotifBadge(){
