@@ -350,7 +350,11 @@ async function submitReading(){
   const odo=parseInt(document.getElementById('odoInput').value);
   const notes=document.getElementById('notesInput').value.trim();
   if(!odo||odo<1000){
-    alert('Please enter a valid odometer reading.');
+    showDriverError('Please enter a valid odometer reading — must be at least 1,000 km.');
+    return;
+  }
+  if(odo>2000000){
+    showDriverError('That reading seems too high. Please check the odometer and try again.');
     return;
   }
   const btn=document.getElementById('submitBtn');
@@ -388,6 +392,22 @@ async function submitReading(){
   }
 }
 
+function showDriverError(msg){
+  const existing=document.getElementById('driverErrBanner');
+  if(existing)existing.remove();
+  const banner=document.createElement('div');
+  banner.id='driverErrBanner';
+  banner.style.cssText='background:#FFF5F5;border:1.5px solid #FFA8A8;border-radius:10px;padding:14px 16px;margin-bottom:16px;font-family:var(--font);';
+  banner.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="font-size:20px;">⚠️</div>
+      <div style="font-size:13px;color:#C92A2A;font-weight:700;flex:1;">${msg}</div>
+      <button onclick="document.getElementById('driverErrBanner').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#C92A2A;">×</button>
+    </div>`;
+  const form=document.getElementById('formContent');
+  if(form)form.insertBefore(banner,form.firstChild);
+  setTimeout(()=>{if(document.getElementById('driverErrBanner'))document.getElementById('driverErrBanner').remove();},6000);
+}
 function resetForm(){
   document.getElementById('odoInput').value='';
   document.getElementById('notesInput').value='';
