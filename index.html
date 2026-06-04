@@ -508,6 +508,28 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   cursor:pointer; font-family:var(--font); font-weight:700; transition:background 0.15s; white-space:nowrap;
 }
 .logout-btn:hover { background:rgba(255,255,255,0.15); color:#fff; }
+.notif-panel {
+  display:none; position:fixed; top:60px; right:20px; width:360px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow-lg); z-index:999; max-height:500px; overflow-y:auto;
+}
+.notif-panel.open { display:block; }
+.notif-panel-header {
+  padding:12px 16px; font-size:12px; font-weight:700; color:var(--text2);
+  border-bottom:1px solid var(--border); display:flex; align-items:center;
+  justify-content:space-between; background:var(--surface2);
+}
+.notif-item {
+  padding:12px 16px; border-bottom:1px solid var(--border);
+  font-size:12px; color:var(--text2); transition:background 0.15s;
+}
+.notif-item:hover { background:var(--accent-light); }
+.notif-item:last-child { border-bottom:none; }
+.notif-item-plate { font-family:var(--font-mono); font-weight:700; color:var(--accent); font-size:13px; }
+.notif-item-odo { font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--text); }
+.notif-item-time { font-size:10px; color:var(--text3); margin-top:3px; }
+.notif-item-notes { font-size:11px; color:var(--amber); margin-top:3px; font-style:italic; }
+.notif-empty { padding:24px; text-align:center; color:var(--text3); font-size:13px; font-style:italic; }
 
 /* TYRES TAB */
 .tyre-summary-strip { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -640,7 +662,10 @@ input[type=file] { display: none; }
     </div>
     </div>
 <div style="display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
-      <button class="logout-btn" onclick="logout()">⎋ Log out</button>
+      <button class="notif-btn" id="notifBtn" onclick="toggleNotifPanel()" style="position:relative;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.4);border-radius:8px;padding:6px 14px;cursor:pointer;color:white;font-family:var(--font);font-weight:700;font-size:13px;margin-right:8px;">
+  🔔 <span id="notifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#C92A2A;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;" id="notifBadge">0</span>
+</button>
+<button class="logout-btn" onclick="logout()">⎋ Log out</button>
     </div>
   </div>
 </div>
@@ -787,6 +812,8 @@ function checkAuth(){
 function showDashboard(){
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
+  recomputeAllStats();
+  fetchSubmissions();
   renderDashboard();
 }
 function showLogin(){
@@ -1459,9 +1486,96 @@ function recomputeAllStats(){
   });
   saveStorage(state);
 }
+// ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
+const SUPABASE_URL='https://wlwwzbyuchsonwugqhww.supabase.co';
+const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
+let notifOpen=false;
+let lastNotifCheck=0;
+let notifData=[];
+
+async function fetchSubmissions(){
+  try{
+    const response=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=*&order=created_at.desc&limit=50`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+    });
+    if(response.ok){
+      notifData=await response.json();
+      updateNotifBadge();
+    }
+  }catch(err){console.error('Notif fetch failed:',err);}
+}
+
+function updateNotifBadge(){
+  const badge=document.getElementById('notifBadge');
+  const btn=document.getElementById('notifBtn');
+  if(!badge||!btn)return;
+  const count=notifData.length;
+  if(count>0){
+    badge.textContent=count>99?'99+':count;
+    badge.style.display='flex';
+  }else{
+    badge.style.display='none';
+  }
+}
+
+function toggleNotifPanel(){
+  notifOpen=!notifOpen;
+  const panel=document.getElementById('notifPanel');
+  if(notifOpen){
+    panel.classList.add('open');
+    renderNotifPanel();
+  }else{
+    panel.classList.remove('open');
+  }
+}
+
+function renderNotifPanel(){
+  const list=document.getElementById('notifList');
+  const countEl=document.getElementById('notifCount');
+  if(notifData.length===0){
+    list.innerHTML='<div class="notif-empty">No driver submissions yet</div>';
+    if(countEl)countEl.textContent='0 submissions';
+    return;
+  }
+  if(countEl)countEl.textContent=`${notifData.length} submission${notifData.length!==1?'s':''}`;
+  list.innerHTML=notifData.map(n=>{
+    const date=new Date(n.created_at);
+    const timeStr=date.toLocaleDateString('en-ZA')+' '+date.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
+    return`<div class="notif-item">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="notif-item-plate">${n.plate}</span>
+        <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-ZA')+' km':'—'}</span>
+      </div>
+      <div class="notif-item-time">📅 ${timeStr}</div>
+      ${n.notes?`<div class="notif-item-notes">📝 ${n.notes}</div>`:''}
+      ${n.photo_url?`<div style="margin-top:6px;"><a href="${n.photo_url}" target="_blank" style="font-size:11px;color:var(--accent);font-weight:700;">📷 View Photo</a></div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// Close panel when clicking outside
+document.addEventListener('click',function(e){
+  const panel=document.getElementById('notifPanel');
+  const btn=document.getElementById('notifBtn');
+  if(notifOpen&&panel&&btn&&!panel.contains(e.target)&&!btn.contains(e.target)){
+    notifOpen=false;
+    panel.classList.remove('open');
+  }
+});
+
+// Auto refresh every 2 minutes
+setInterval(fetchSubmissions,120000);
+
 initApp();
 </script>
 
+<div class="notif-panel" id="notifPanel">
+  <div class="notif-panel-header">
+    <span>🔔 Driver Submissions</span>
+    <span id="notifCount" style="font-size:11px;color:var(--text3);">Loading...</span>
+  </div>
+  <div id="notifList"><div class="notif-empty">No submissions yet</div></div>
+</div>
 </div><!-- /appContent -->
 </body>
 </html>
