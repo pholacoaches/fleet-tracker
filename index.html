@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fleet Fuel Tracker — Phola Coaches</title>
+<title>FleetDesk — Phola Coaches</title>
 <style>
 @font-face {
   font-family: 'Century Gothic';
@@ -602,7 +602,7 @@ input[type=file] { display: none; }
 <div class="hero-overlay"></div>
   <div class="login-card">
     <div class="login-logo">Phola Coaches</div>
-    <div class="login-sub">Fleet Fuel Dashboard</div>
+    <div class="login-sub">FleetDesk</div>
     <label class="login-label" for="loginEmail">Email address</label>
     <input class="login-input" type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
     <label class="login-label" for="loginPassword">Password</label>
@@ -825,6 +825,7 @@ function showDashboard(){
   document.getElementById('appContent').classList.remove('hidden');
   recomputeAllStats();
   fetchSubmissions();
+  startRealtimeListener();
   renderDashboard();
 }
 
@@ -1599,14 +1600,26 @@ function renderNotifPanel(){
   list.innerHTML=notifData.map(n=>{
     const date=new Date(n.created_at);
     const timeStr=date.toLocaleDateString('en-ZA')+' '+date.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
+    const statusBadge=n.status==='approved'
+      ?'<span style="font-size:10px;font-weight:700;background:#EBFBEE;color:#2F9E44;border-radius:20px;padding:2px 8px;">✅ Approved</span>'
+      :n.status==='flagged'
+      ?'<span style="font-size:10px;font-weight:700;background:#FFF5F5;color:#C92A2A;border-radius:20px;padding:2px 8px;">🚩 Flagged</span>'
+      :'<span style="font-size:10px;font-weight:700;background:#E7F5FF;color:#1971C2;border-radius:20px;padding:2px 8px;">New</span>';
+    const actionBtns=(!n.status||n.status==='pending')
+      ?`<div style="display:flex;gap:6px;margin-top:8px;">
+          <button onclick="approveNotifItem(${JSON.stringify(n.id)})" style="flex:1;padding:5px 0;background:#2F9E44;color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">✅ Approve</button>
+          <button onclick="rejectNotifItem(${JSON.stringify(n.id)})" style="flex:1;padding:5px 0;background:#C92A2A;color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">🚩 Flag</button>
+        </div>`:'';
     return`<div class="notif-item">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
         <span class="notif-item-plate">${n.plate}</span>
         <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-ZA')+' km':'—'}</span>
+        ${statusBadge}
       </div>
       <div class="notif-item-time">📅 ${timeStr}</div>
       ${n.notes?`<div class="notif-item-notes">📝 ${n.notes}</div>`:''}
-      ${n.photo_url?`<div style="margin-top:6px;"><a href="${n.photo_url}" target="_blank" style="font-size:11px;color:var(--accent);font-weight:700;">📷 View Photo</a></div>`:''}
+      ${n.photo_url?`<div style="margin-top:8px;"><img src="${n.photo_url}" alt="Odometer" style="width:100%;border-radius:6px;border:1px solid var(--border);max-height:140px;object-fit:cover;display:block;"></div>`:''}
+      ${actionBtns}
     </div>`;
   }).join('');
 }
@@ -1621,8 +1634,53 @@ document.addEventListener('click',function(e){
   }
 });
 
-// Auto refresh every 2 minutes
-setInterval(fetchSubmissions,120000);
+// ── REALTIME WEBSOCKET ────────────────────────────────────────────────────────
+let _wsRef=0;
+let _wsHeartbeat=null;
+let _wsSocket=null;
+
+function startRealtimeListener(){
+  const token=localStorage.getItem(AUTH_TOKEN_KEY);
+  if(!token)return;
+  _wsSocket=new WebSocket(`wss://wlwwzbyuchsonwugqhww.supabase.co/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`);
+  _wsSocket.onopen=()=>{
+    _wsSocket.send(JSON.stringify({
+      topic:'realtime:public:odometer_readings',
+      event:'phx_join',
+      payload:{
+        config:{
+          broadcast:{self:false},
+          presence:{key:''},
+          postgres_changes:[{event:'INSERT',schema:'public',table:'odometer_readings'}]
+        },
+        access_token:token
+      },
+      ref:String(++_wsRef)
+    }));
+    _wsHeartbeat=setInterval(()=>{
+      if(_wsSocket&&_wsSocket.readyState===WebSocket.OPEN)
+        _wsSocket.send(JSON.stringify({topic:'phoenix',event:'heartbeat',payload:{},ref:String(++_wsRef)}));
+    },25000);
+  };
+  _wsSocket.onmessage=(e)=>{
+    try{
+      const msg=JSON.parse(e.data);
+      if(msg.event==='postgres_changes'&&msg.payload?.data?.type==='INSERT'){
+        const rec=msg.payload.data.record;
+        notifData.unshift(rec);
+        updateNotifBadge();
+        autoApplyOdometerReadings();
+        if(notifOpen)renderNotifPanel();
+        showSubmissionPopup(rec);
+      }
+    }catch(err){console.error('WS parse error',err);}
+  };
+  _wsSocket.onclose=()=>{
+    clearInterval(_wsHeartbeat);
+    setTimeout(startRealtimeListener,5000);
+  };
+  _wsSocket.onerror=()=>_wsSocket.close();
+}
 
 // ── DISC RENEWAL ──────────────────────────────────────────────────────────────
 const DISCS_KEY='fleet_discs_v1';
@@ -1773,6 +1831,147 @@ initApp();
   </div>
   <div id="notifList"><div class="notif-empty">No submissions yet</div></div>
 </div>
+
+<!-- SUBMISSION POPUP MODAL -->
+<div id="submissionModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10000;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:16px;padding:0;max-width:460px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,0.45);overflow:hidden;animation:fadeUp 0.25s ease both;">
+    <div style="background:#1971C2;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;">🔔 New Driver Submission</div>
+      <button onclick="closeSubmissionModal()" style="background:rgba(255,255,255,0.2);border:none;border-radius:6px;color:white;font-size:18px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
+    </div>
+    <div style="padding:22px;">
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:18px;">
+        <div style="font-family:var(--font-mono);font-size:26px;font-weight:700;color:var(--accent);background:var(--accent-light);border:2px solid var(--accent);border-radius:8px;padding:8px 18px;" id="popupPlate">—</div>
+        <div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">Odometer Reading</div>
+          <div style="font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--text);" id="popupOdo">—</div>
+        </div>
+      </div>
+      <div id="popupPhotoWrap" style="display:none;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Odometer Photo</div>
+        <img id="popupPhoto" src="" alt="Odometer photo" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:220px;object-fit:cover;">
+      </div>
+      <div id="popupNotes" style="display:none;background:var(--amber-light);border:1px solid #FFE066;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:16px;"></div>
+      <div id="popupTime" style="font-size:11px;color:var(--text3);margin-bottom:18px;"></div>
+      <div style="display:flex;gap:10px;">
+        <button id="popupApproveBtn" onclick="approveSubmission()" style="flex:1;padding:12px;background:var(--green);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">✅ Approve</button>
+        <button id="popupFlagBtn" onclick="flagSubmission()" style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">🚩 Flag</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FLAG ALERT OVERLAY -->
+<div id="flagAlert" style="display:none;position:fixed;inset:0;background:#C92A2A;z-index:10001;align-items:center;justify-content:center;flex-direction:column;gap:20px;padding:32px;text-align:center;">
+  <div style="font-size:72px;animation:spin 1s linear 3;">🚨</div>
+  <div style="font-size:36px;font-weight:700;color:white;letter-spacing:1px;">SUBMISSION FLAGGED</div>
+  <div style="background:rgba(0,0,0,0.25);border-radius:12px;padding:20px 32px;max-width:480px;">
+    <div style="font-family:var(--font-mono);font-size:30px;font-weight:700;color:white;margin-bottom:8px;" id="flagAlertPlate">—</div>
+    <div style="font-family:var(--font-mono);font-size:44px;font-weight:700;color:#FFD700;" id="flagAlertOdo">—</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:8px;" id="flagAlertTime"></div>
+  </div>
+  <div id="flagAlertPhoto" style="display:none;width:100%;max-width:360px;">
+    <img id="flagAlertPhotoImg" src="" style="width:100%;border-radius:10px;border:3px solid rgba(255,255,255,0.5);">
+  </div>
+  <div style="font-size:16px;color:rgba(255,255,255,0.9);max-width:400px;line-height:1.6;">This submission has been marked as suspicious. Please investigate immediately.</div>
+  <button onclick="closeFlagAlert()" style="padding:14px 40px;background:white;color:var(--red);border:none;border-radius:10px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;">Acknowledged — Dismiss</button>
+</div>
+
+<script>
+let _currentPopupRecord=null;
+
+function showSubmissionPopup(rec){
+  _currentPopupRecord=rec;
+  document.getElementById('popupPlate').textContent=rec.plate||'—';
+  document.getElementById('popupOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-ZA')+' km':'—';
+  const d=new Date(rec.created_at);
+  document.getElementById('popupTime').textContent='Submitted: '+d.toLocaleDateString('en-ZA')+' at '+d.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
+  const photoWrap=document.getElementById('popupPhotoWrap');
+  const photoImg=document.getElementById('popupPhoto');
+  if(rec.photo_url){photoImg.src=rec.photo_url;photoWrap.style.display='block';}
+  else{photoWrap.style.display='none';}
+  const notesEl=document.getElementById('popupNotes');
+  if(rec.notes){notesEl.textContent='📝 '+rec.notes;notesEl.style.display='block';}
+  else{notesEl.style.display='none';}
+  const modal=document.getElementById('submissionModal');
+  modal.style.display='flex';
+}
+
+function closeSubmissionModal(){
+  document.getElementById('submissionModal').style.display='none';
+  _currentPopupRecord=null;
+}
+
+async function approveSubmission(){
+  if(!_currentPopupRecord)return;
+  const token=localStorage.getItem(AUTH_TOKEN_KEY);
+  try{
+    await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${_currentPopupRecord.id}`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({status:'approved'})
+    });
+  }catch(e){}
+  closeSubmissionModal();
+}
+
+async function flagSubmission(){
+  if(!_currentPopupRecord)return;
+  const rec=_currentPopupRecord;
+  const token=localStorage.getItem(AUTH_TOKEN_KEY);
+  try{
+    await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${rec.id}`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({status:'flagged'})
+    });
+  }catch(e){}
+  closeSubmissionModal();
+  document.getElementById('flagAlertPlate').textContent=rec.plate||'—';
+  document.getElementById('flagAlertOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-ZA')+' km':'—';
+  const d=new Date(rec.created_at);
+  document.getElementById('flagAlertTime').textContent=d.toLocaleDateString('en-ZA')+' at '+d.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
+  const fp=document.getElementById('flagAlertPhoto');
+  const fpi=document.getElementById('flagAlertPhotoImg');
+  if(rec.photo_url){fpi.src=rec.photo_url;fp.style.display='block';}
+  else{fp.style.display='none';}
+  const alert=document.getElementById('flagAlert');
+  alert.style.display='flex';
+}
+
+function closeFlagAlert(){
+  document.getElementById('flagAlert').style.display='none';
+}
+
+async function approveNotifItem(id){
+  const token=localStorage.getItem(AUTH_TOKEN_KEY);
+  try{
+    await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({status:'approved'})
+    });
+    const item=notifData.find(n=>n.id===id);
+    if(item)item.status='approved';
+    renderNotifPanel();
+  }catch(e){}
+}
+
+async function rejectNotifItem(id){
+  const token=localStorage.getItem(AUTH_TOKEN_KEY);
+  const rec=notifData.find(n=>n.id===id);
+  try{
+    await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({status:'flagged'})
+    });
+    if(rec){rec.status='flagged';}
+    renderNotifPanel();
+  }catch(e){}
+  if(rec){_currentPopupRecord=rec;flagSubmission();}
+}
+</script>
 </div><!-- /appContent -->
 </body>
 </html>
