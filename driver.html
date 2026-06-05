@@ -107,11 +107,22 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .submit-btn {
   width: 100%; padding: 16px; background: var(--green); color: white;
   border: none; border-radius: var(--radius); font-family: var(--font);
-  font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+  font-size: 16px; font-weight: 700; cursor: pointer;
   letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(47,158,68,0.3);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
-.submit-btn:hover { background: #27873B; transform: translateY(-1px); }
-.submit-btn:disabled { background: var(--text3); cursor: not-allowed; transform: none; box-shadow: none; }
+.submit-btn:hover:not(.btn-disabled) { background: #27873B; transform: translateY(-1px); }
+.submit-btn:disabled,
+.submit-btn.btn-disabled {
+  background-color: #9ca3af !important;
+  background: #9ca3af !important;
+  color: #f3f4f6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+  opacity: 0.65 !important;
+  pointer-events: none;
+}
 
 /* AI READING */
 .ai-status {
@@ -214,7 +225,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
     </div>
 
     <!-- SUBMIT -->
-    <button class="submit-btn" id="submitBtn" onclick="submitReading()">
+    <div id="photoRequiredBanner" style="background:#FFF5F5;border:2px solid #C92A2A;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:10px;">
+      <div style="font-size:20px;">📷</div>
+      <div style="font-size:13px;color:#C92A2A;font-weight:700;flex:1;">A photo of the odometer is required before you can submit.</div>
+    </div>
+    <button class="submit-btn btn-disabled" id="submitBtn" disabled>
       ✅ Submit Odometer Reading
     </button>
 
@@ -284,6 +299,10 @@ async function handlePhoto(event){
     photoArea.innerHTML=`<img src="${photoBase64}"><div class="photo-overlay">📷 Tap to retake</div>`;
     photoArea.classList.add('has-photo');
     document.getElementById('retakeBtn').style.display='block';
+    document.getElementById('photoRequiredBanner').style.display='none';
+    const btn=document.getElementById('submitBtn');
+    btn.disabled=false;
+    btn.classList.remove('btn-disabled');
     await readOdometerWithAI(photoBase64.split(',')[1]);
   };
   reader.readAsDataURL(file);
@@ -347,6 +366,7 @@ async function uploadPhoto(){
 }
 
 async function submitReading(){
+  if(!photoFile){ showDriverError('Please take a photo of your odometer first.'); return; }
   const odo=parseInt(document.getElementById('odoInput').value);
   const notes=document.getElementById('notesInput').value.trim();
   if(!odo||odo<1000){
@@ -418,13 +438,20 @@ function resetForm(){
   document.getElementById('aiResult').classList.remove('show');
   document.getElementById('successScreen').classList.remove('show');
   document.getElementById('formContent').style.display='block';
-  document.getElementById('submitBtn').disabled=false;
-  document.getElementById('submitBtn').innerHTML='✅ Submit Odometer Reading';
+  const rsb=document.getElementById('submitBtn');
+  rsb.disabled=true;rsb.classList.add('btn-disabled');
+  rsb.innerHTML='✅ Submit Odometer Reading';
+  document.getElementById('photoRequiredBanner').style.display='flex';
   photoBase64='';
   photoFile=null;
 }
 
 init();
+
+document.getElementById('submitBtn').addEventListener('click', function(e){
+  if(!photoFile){ showDriverError('Please take a photo of your odometer first.'); return; }
+  submitReading();
+});
 </script>
 </body>
 </html>
