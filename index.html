@@ -596,6 +596,7 @@ input[type=file] { display: none; }
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 
@@ -1653,68 +1654,39 @@ document.addEventListener('click',function(e){
   }
 });
 
-// ── REALTIME WEBSOCKET ────────────────────────────────────────────────────────
-let _wsRef=0;
-let _wsHeartbeat=null;
-let _wsSocket=null;
+// ── REALTIME (Supabase JS client) ─────────────────────────────────────────────
+let _realtimeChannel=null;
 
 function startRealtimeListener(){
-  // Prevent duplicate connections
-  if(_wsSocket&&(_wsSocket.readyState===WebSocket.OPEN||_wsSocket.readyState===WebSocket.CONNECTING))return;
+  if(_realtimeChannel)return;
   const token=localStorage.getItem(AUTH_TOKEN_KEY);
   console.log('[FleetDesk] Realtime connecting...');
-  _wsSocket=new WebSocket(`wss://wlwwzbyuchsonwugqhww.supabase.co/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`);
-  _wsSocket.onopen=()=>{
-    console.log('[FleetDesk] Realtime WebSocket connected');
-    _wsSocket.send(JSON.stringify({
-      topic:'realtime:public:odometer_readings',
-      event:'phx_join',
-      payload:{
-        config:{
-          broadcast:{self:false},
-          presence:{key:''},
-          postgres_changes:[{event:'INSERT',schema:'public',table:'odometer_readings'}]
-        },
-        access_token:token||SUPABASE_KEY
-      },
-      ref:String(++_wsRef)
-    }));
-    _wsHeartbeat=setInterval(()=>{
-      if(_wsSocket&&_wsSocket.readyState===WebSocket.OPEN)
-        _wsSocket.send(JSON.stringify({topic:'phoenix',event:'heartbeat',payload:{},ref:String(++_wsRef)}));
-    },25000);
-  };
-  _wsSocket.onmessage=(e)=>{
-    try{
-      const msg=JSON.parse(e.data);
-      if(msg.event==='phx_reply'){
-        if(msg.payload?.status==='ok'){
-          console.log('[FleetDesk] Realtime channel joined — listening for new submissions');
-        }else{
-          console.warn('[FleetDesk] Realtime channel join failed:',msg.payload?.response);
-        }
+  const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
+    global:{headers:{Authorization:token?`Bearer ${token}`:''}},
+    realtime:{params:{apikey:SUPABASE_KEY}}
+  });
+  _realtimeChannel=supabaseClient
+    .channel('odometer-inserts')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'odometer_readings'},payload=>{
+      console.log('[FleetDesk] New submission received:',payload.new);
+      const rec=payload.new;
+      notifData.unshift(rec);
+      updateNotifBadge();
+      autoApplyOdometerReadings();
+      if(notifOpen)renderNotifPanel();
+      showSubmissionPopup(rec);
+    })
+    .subscribe(status=>{
+      if(status==='SUBSCRIBED'){
+        console.log('[FleetDesk] Realtime channel joined — listening for new submissions');
+      }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){
+        console.warn('[FleetDesk] Realtime channel error:',status,'— retrying in 5s');
+        _realtimeChannel=null;
+        setTimeout(startRealtimeListener,5000);
+      }else{
+        console.log('[FleetDesk] Realtime status:',status);
       }
-      if(msg.event==='postgres_changes'&&msg.payload?.data?.type==='INSERT'){
-        const rec=msg.payload.data.record;
-        notifData.unshift(rec);
-        updateNotifBadge();
-        autoApplyOdometerReadings();
-        if(notifOpen)renderNotifPanel();
-        showSubmissionPopup(rec);
-      }
-    }catch(err){console.error('[FleetDesk] WS parse error',err);}
-  };
-  _wsSocket.onclose=()=>{
-    clearInterval(_wsHeartbeat);
-    _wsHeartbeat=null;
-    _wsSocket=null;
-    console.log('[FleetDesk] Realtime disconnected — reconnecting in 5s');
-    setTimeout(startRealtimeListener,5000);
-  };
-  _wsSocket.onerror=(err)=>{
-    console.error('[FleetDesk] Realtime WebSocket error',err);
-    _wsSocket.close();
-  };
+    });
 }
 
 // ── DISC RENEWAL ──────────────────────────────────────────────────────────────
