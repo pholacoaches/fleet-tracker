@@ -274,6 +274,7 @@ const VALID_PLATES=[
 let currentPlate='';
 let photoBase64='';
 let photoFile=null;
+let aiDetectedOdometer=null;
 
 function init(){
   const params=new URLSearchParams(window.location.search);
@@ -330,16 +331,20 @@ async function readOdometerWithAI(base64){
     const data=await response.json();
     const text=data.content.map(i=>i.text||'').join('').trim().replace(/[^0-9]/g,'');
     if(text&&text.length>3){
+      aiDetectedOdometer=parseInt(text);
+      console.log('[FleetDesk] AI odometer set to:', aiDetectedOdometer);
       document.getElementById('odoInput').value=text;
       status.className='ai-status success';
       status.textContent='✅ AI read your odometer — please confirm below';
-      result.textContent=`AI detected: ${parseInt(text).toLocaleString('en-ZA')} km`;
+      result.textContent=`AI detected: ${aiDetectedOdometer.toLocaleString('en-ZA')} km`;
       result.classList.add('show');
     }else{
+      aiDetectedOdometer=null;
       status.className='ai-status error';
       status.textContent='⚠ Could not read odometer automatically — please type it in below';
     }
   }catch(err){
+    aiDetectedOdometer=null;
     status.className='ai-status error';
     status.textContent='⚠ Could not read odometer — please type it in manually';
   }
@@ -369,6 +374,12 @@ async function submitReading(){
   if(!photoFile){ showDriverError('Please take a photo of your odometer first.'); return; }
   const odo=parseInt(document.getElementById('odoInput').value);
   const notes=document.getElementById('notesInput').value.trim();
+  console.log('[FleetDesk] Submit check — odo:', odo, 'aiDetectedOdometer:', aiDetectedOdometer);
+  if(aiDetectedOdometer!==null&&Math.abs(odo-aiDetectedOdometer)>25){
+    console.log('[FleetDesk] Mismatch blocked — diff:', Math.abs(odo-aiDetectedOdometer));
+    showDriverError('The number you entered does not match the photo. Please retake the photo or correct the reading.');
+    return;
+  }
   if(!odo||odo<1000){
     showDriverError('Please enter a valid odometer reading — must be at least 1,000 km.');
     return;
@@ -395,7 +406,8 @@ async function submitReading(){
         plate:currentPlate,
         odometer:odo,
         photo_url:photoUrl,
-        notes:notes||null
+        notes:notes||null,
+        ai_odometer:aiDetectedOdometer
       })
     });
     if(response.ok||response.status===201){
@@ -444,6 +456,7 @@ function resetForm(){
   document.getElementById('photoRequiredBanner').style.display='flex';
   photoBase64='';
   photoFile=null;
+  aiDetectedOdometer=null;
 }
 
 init();

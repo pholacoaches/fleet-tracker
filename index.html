@@ -1605,6 +1605,9 @@ function renderNotifPanel(){
       :n.status==='flagged'
       ?'<span style="font-size:10px;font-weight:700;background:#FFF5F5;color:#C92A2A;border-radius:20px;padding:2px 8px;">🚩 Flagged</span>'
       :'<span style="font-size:10px;font-weight:700;background:#E7F5FF;color:#1971C2;border-radius:20px;padding:2px 8px;">New</span>';
+    const mismatchBadge=n.ai_odometer!=null&&Math.abs(n.odometer-n.ai_odometer)>25
+      ?'<span style="font-size:10px;font-weight:700;background:#C92A2A;color:white;border-radius:20px;padding:2px 8px;">⚠ Odo Mismatch</span>'
+      :'';
     const actionBtns=(!n.status||n.status==='pending')
       ?`<div style="display:flex;gap:6px;margin-top:8px;">
           <button onclick="approveNotifItem(${JSON.stringify(n.id)})" style="flex:1;padding:5px 0;background:#2F9E44;color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">✅ Approve</button>
@@ -1614,7 +1617,7 @@ function renderNotifPanel(){
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
         <span class="notif-item-plate">${n.plate}</span>
         <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-ZA')+' km':'—'}</span>
-        ${statusBadge}
+        ${statusBadge}${mismatchBadge}
       </div>
       <div class="notif-item-time">📅 ${timeStr}</div>
       ${n.notes?`<div class="notif-item-notes">📝 ${n.notes}</div>`:''}
@@ -1851,6 +1854,7 @@ initApp();
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Odometer Photo</div>
         <img id="popupPhoto" src="" alt="Odometer photo" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:220px;object-fit:cover;">
       </div>
+      <div id="popupMismatch" style="display:none;background:#E7F5FF;border:2px solid #1971C2;border-radius:8px;padding:10px 12px;font-size:12px;color:#1971C2;font-weight:700;margin-bottom:16px;line-height:1.6;"></div>
       <div id="popupNotes" style="display:none;background:var(--amber-light);border:1px solid #FFE066;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:16px;"></div>
       <div id="popupTime" style="font-size:11px;color:var(--text3);margin-bottom:18px;"></div>
       <div style="display:flex;gap:10px;">
@@ -1893,6 +1897,14 @@ function showSubmissionPopup(rec){
   const notesEl=document.getElementById('popupNotes');
   if(rec.notes){notesEl.textContent='📝 '+rec.notes;notesEl.style.display='block';}
   else{notesEl.style.display='none';}
+  const mismatchEl=document.getElementById('popupMismatch');
+  const hasMismatch=rec.ai_odometer!=null&&Math.abs(rec.odometer-rec.ai_odometer)>25;
+  if(hasMismatch){
+    mismatchEl.style.display='block';
+    mismatchEl.innerHTML=`⚠️ <strong>Odometer Mismatch Detected</strong> — ${rec.plate}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-ZA')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-ZA')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
+  }else{
+    mismatchEl.style.display='none';
+  }
   const modal=document.getElementById('submissionModal');
   modal.style.display='flex';
 }
