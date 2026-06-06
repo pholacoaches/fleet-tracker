@@ -1690,8 +1690,7 @@ async function pollForNewSubmissions(){
     updateNotifBadge();
     autoApplyOdometerReadings();
     if(notifOpen)renderNotifPanel();
-    // Show popup for the most recent new submission
-    showSubmissionPopup(rows[rows.length-1]);
+    showBatchPopup(rows);
   }catch(err){
     console.error('[FleetDesk] Poll error:',err);
   }
@@ -1851,10 +1850,11 @@ initApp();
 <div id="submissionModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10000;align-items:center;justify-content:center;padding:20px;">
   <div style="background:#fff;border-radius:16px;padding:0;max-width:460px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,0.45);overflow:hidden;animation:fadeUp 0.25s ease both;">
     <div style="background:#1971C2;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;">
-      <div style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;">🔔 New Driver Submission</div>
+      <div id="popupHeaderTitle" style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;">🔔 New Driver Submission</div>
       <button onclick="closeSubmissionModal()" style="background:rgba(255,255,255,0.2);border:none;border-radius:6px;color:white;font-size:18px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
     </div>
-    <div style="padding:22px;">
+    <!-- SINGLE SUBMISSION VIEW -->
+    <div id="popupSingleView" style="padding:22px;">
       <div style="display:flex;gap:16px;align-items:center;margin-bottom:18px;">
         <div style="font-family:var(--font-mono);font-size:26px;font-weight:700;color:var(--accent);background:var(--accent-light);border:2px solid var(--accent);border-radius:8px;padding:8px 18px;" id="popupPlate">—</div>
         <div>
@@ -1873,6 +1873,12 @@ initApp();
         <button id="popupApproveBtn" onclick="approveSubmission()" style="flex:1;padding:12px;background:var(--green);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">✅ Approve</button>
         <button id="popupFlagBtn" onclick="flagSubmission()" style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">🚩 Flag</button>
       </div>
+    </div>
+    <!-- BATCH SUBMISSIONS VIEW -->
+    <div id="popupBatchView" style="display:none;padding:22px;">
+      <div id="popupBatchCount" style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:14px;"></div>
+      <div id="popupBatchList" style="margin-bottom:18px;"></div>
+      <button onclick="closeSubmissionModal();toggleNotifPanel();" style="width:100%;padding:12px;background:var(--accent);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">🔔 Open Submissions</button>
     </div>
   </div>
 </div>
@@ -1896,8 +1902,31 @@ initApp();
 <script>
 let _currentPopupRecord=null;
 
+function showBatchPopup(rows){
+  if(rows.length===1){
+    showSubmissionPopup(rows[0]);
+    return;
+  }
+  // Multiple submissions — show summary view
+  _currentPopupRecord=null;
+  document.getElementById('popupSingleView').style.display='none';
+  const bv=document.getElementById('popupBatchView');
+  bv.style.display='block';
+  document.getElementById('popupBatchTitle').textContent=`🔔 New Driver Submissions`;
+  document.getElementById('popupBatchCount').textContent=`${rows.length} new odometer submissions received`;
+  document.getElementById('popupBatchList').innerHTML=rows.map(r=>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #F1F3F5;">
+      <span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);font-size:13px;">${r.plate}</span>
+      <span style="font-family:var(--font-mono);font-size:13px;color:var(--text);">${r.odometer?r.odometer.toLocaleString('en-ZA')+' km':'—'}</span>
+    </div>`
+  ).join('');
+  document.getElementById('submissionModal').style.display='flex';
+}
+
 function showSubmissionPopup(rec){
   _currentPopupRecord=rec;
+  document.getElementById('popupSingleView').style.display='block';
+  document.getElementById('popupBatchView').style.display='none';
   document.getElementById('popupPlate').textContent=rec.plate||'—';
   document.getElementById('popupOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-ZA')+' km':'—';
   const d=new Date(rec.created_at);
@@ -1923,6 +1952,8 @@ function showSubmissionPopup(rec){
 
 function closeSubmissionModal(){
   document.getElementById('submissionModal').style.display='none';
+  document.getElementById('popupSingleView').style.display='block';
+  document.getElementById('popupBatchView').style.display='none';
   _currentPopupRecord=null;
 }
 
