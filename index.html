@@ -596,7 +596,6 @@ input[type=file] { display: none; }
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 
@@ -1653,39 +1652,49 @@ document.addEventListener('click',function(e){
   }
 });
 
-// ── REALTIME (Supabase JS client) ─────────────────────────────────────────────
-let _realtimeChannel=null;
+// ── POLLING FOR NEW SUBMISSIONS ───────────────────────────────────────────────
+let _pollInterval=null;
+let _lastSeenTimestamp=null;
 
 function startRealtimeListener(){
-  if(_realtimeChannel)return;
-  const token=localStorage.getItem(AUTH_TOKEN_KEY);
-  console.log('[FleetDesk] Realtime connecting...');
-  const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
-    global:{headers:{Authorization:token?`Bearer ${token}`:''}},
-    realtime:{params:{apikey:SUPABASE_KEY}}
-  });
-  _realtimeChannel=supabaseClient
-    .channel('odometer-inserts')
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'odometer_readings'},payload=>{
-      console.log('[FleetDesk] New submission received:',payload.new);
-      const rec=payload.new;
-      notifData.unshift(rec);
-      updateNotifBadge();
-      autoApplyOdometerReadings();
-      if(notifOpen)renderNotifPanel();
-      showSubmissionPopup(rec);
-    })
-    .subscribe(status=>{
-      if(status==='SUBSCRIBED'){
-        console.log('[FleetDesk] Realtime channel joined — listening for new submissions');
-      }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){
-        console.warn('[FleetDesk] Realtime channel error:',status,'— retrying in 5s');
-        _realtimeChannel=null;
-        setTimeout(startRealtimeListener,5000);
-      }else{
-        console.log('[FleetDesk] Realtime status:',status);
-      }
+  if(_pollInterval)return;
+  // Seed the timestamp from the most recent record already loaded
+  if(notifData.length>0){
+    _lastSeenTimestamp=notifData[0].created_at;
+  }
+  console.log('[FleetDesk] Polling for new submissions every 10s');
+  _pollInterval=setInterval(pollForNewSubmissions,10000);
+}
+
+async function pollForNewSubmissions(){
+  try{
+    const url=_lastSeenTimestamp
+      ?`${SUPABASE_URL}/rest/v1/odometer_readings?select=*&created_at=gt.${encodeURIComponent(_lastSeenTimestamp)}&order=created_at.asc`
+      :`${SUPABASE_URL}/rest/v1/odometer_readings?select=*&order=created_at.desc&limit=1`;
+    const response=await fetch(url,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
     });
+    if(!response.ok)return;
+    const rows=await response.json();
+    if(!rows.length)return;
+    // On first poll with no timestamp, just seed and don't alert
+    if(!_lastSeenTimestamp){
+      _lastSeenTimestamp=rows[0].created_at;
+      return;
+    }
+    rows.forEach(rec=>{
+      console.log('[FleetDesk] New submission received:',rec.plate,rec.odometer);
+      notifData.unshift(rec);
+      _lastSeenTimestamp=rec.created_at;
+    });
+    updateNotifBadge();
+    autoApplyOdometerReadings();
+    if(notifOpen)renderNotifPanel();
+    // Show popup for the most recent new submission
+    showSubmissionPopup(rows[rows.length-1]);
+  }catch(err){
+    console.error('[FleetDesk] Poll error:',err);
+  }
 }
 
 // ── DISC RENEWAL ──────────────────────────────────────────────────────────────
