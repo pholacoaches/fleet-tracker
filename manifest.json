@@ -1,0 +1,23 @@
+{
+  "name": "FleetDesk",
+  "short_name": "FleetDesk",
+  "description": "Fleet management dashboard for Phola Coaches",
+  "start_url": "/fleet-tracker/",
+  "display": "standalone",
+  "theme_color": "#1971C2",
+  "background_color": "#74C0FC",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

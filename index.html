@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FleetDesk — Phola Coaches</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1971C2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="FleetDesk">
 <style>
 @font-face {
   font-family: 'Century Gothic';
@@ -1985,5 +1990,14 @@ async function rejectNotifItem(id){
 }
 </script>
 </div><!-- /appContent -->
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('/fleet-tracker/sw.js')
+      .then(r=>console.log('[FleetDesk] SW registered, scope:',r.scope))
+      .catch(e=>console.warn('[FleetDesk] SW registration failed:',e));
+  });
+}
+</script>
 </body>
 </html>
