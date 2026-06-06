@@ -6,8 +6,6 @@
 <title>FleetDesk — Phola Coaches</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1971C2">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="FleetDesk">
 <style>
 @font-face {
@@ -1661,10 +1659,13 @@ let _wsHeartbeat=null;
 let _wsSocket=null;
 
 function startRealtimeListener(){
+  // Prevent duplicate connections
+  if(_wsSocket&&(_wsSocket.readyState===WebSocket.OPEN||_wsSocket.readyState===WebSocket.CONNECTING))return;
   const token=localStorage.getItem(AUTH_TOKEN_KEY);
-  if(!token)return;
+  console.log('[FleetDesk] Realtime connecting...');
   _wsSocket=new WebSocket(`wss://wlwwzbyuchsonwugqhww.supabase.co/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`);
   _wsSocket.onopen=()=>{
+    console.log('[FleetDesk] Realtime WebSocket connected');
     _wsSocket.send(JSON.stringify({
       topic:'realtime:public:odometer_readings',
       event:'phx_join',
@@ -1674,7 +1675,7 @@ function startRealtimeListener(){
           presence:{key:''},
           postgres_changes:[{event:'INSERT',schema:'public',table:'odometer_readings'}]
         },
-        access_token:token
+        access_token:token||SUPABASE_KEY
       },
       ref:String(++_wsRef)
     }));
@@ -1686,6 +1687,13 @@ function startRealtimeListener(){
   _wsSocket.onmessage=(e)=>{
     try{
       const msg=JSON.parse(e.data);
+      if(msg.event==='phx_reply'){
+        if(msg.payload?.status==='ok'){
+          console.log('[FleetDesk] Realtime channel joined — listening for new submissions');
+        }else{
+          console.warn('[FleetDesk] Realtime channel join failed:',msg.payload?.response);
+        }
+      }
       if(msg.event==='postgres_changes'&&msg.payload?.data?.type==='INSERT'){
         const rec=msg.payload.data.record;
         notifData.unshift(rec);
@@ -1694,13 +1702,19 @@ function startRealtimeListener(){
         if(notifOpen)renderNotifPanel();
         showSubmissionPopup(rec);
       }
-    }catch(err){console.error('WS parse error',err);}
+    }catch(err){console.error('[FleetDesk] WS parse error',err);}
   };
   _wsSocket.onclose=()=>{
     clearInterval(_wsHeartbeat);
+    _wsHeartbeat=null;
+    _wsSocket=null;
+    console.log('[FleetDesk] Realtime disconnected — reconnecting in 5s');
     setTimeout(startRealtimeListener,5000);
   };
-  _wsSocket.onerror=()=>_wsSocket.close();
+  _wsSocket.onerror=(err)=>{
+    console.error('[FleetDesk] Realtime WebSocket error',err);
+    _wsSocket.close();
+  };
 }
 
 // ── DISC RENEWAL ──────────────────────────────────────────────────────────────
