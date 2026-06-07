@@ -1652,40 +1652,37 @@ document.addEventListener('click',function(e){
 });
 
 // ── POLLING FOR NEW SUBMISSIONS ───────────────────────────────────────────────
-let _pollInterval=null;
-let _lastSeenTimestamp=null;
-// Accumulates all new rows since the popup was last closed.
-// Grows across poll cycles — only cleared when the manager dismisses the popup.
-let _pendingPopupRows=[];
+let lastSeenTimestamp=null;
 
 function startRealtimeListener(){
-  if(_pollInterval)return;
-  _lastSeenTimestamp=notifData.length>0?notifData[0].created_at:new Date().toISOString();
-  console.log('[FleetDesk] Polling for new submissions every 10s. Seeded at:',_lastSeenTimestamp);
-  _pollInterval=setInterval(pollForNewSubmissions,10000);
+  // Seed from the most recently loaded submission so we only alert on truly new ones
+  lastSeenTimestamp=notifData.length>0?notifData[0].created_at:new Date().toISOString();
+  console.log('[FleetDesk] Polling every 10s. Seeded at:',lastSeenTimestamp);
+  setInterval(pollForNewSubmissions,10000);
 }
 
 async function pollForNewSubmissions(){
   try{
-    const url=`${SUPABASE_URL}/rest/v1/odometer_readings?select=*&created_at=gt.${encodeURIComponent(_lastSeenTimestamp)}&order=created_at.asc`;
-    const response=await fetch(url,{
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-    });
-    if(!response.ok)return;
-    const rows=await response.json();
-    if(!rows.length)return;
-    rows.forEach(rec=>{
-      console.log('[FleetDesk] New submission received:',rec.plate,rec.odometer);
+    const res=await fetch(
+      `${SUPABASE_URL}/rest/v1/odometer_readings?select=*&created_at=gt.${encodeURIComponent(lastSeenTimestamp)}&order=created_at.asc`,
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}}
+    );
+    if(!res.ok)return;
+    const newRows=await res.json();
+    if(!newRows.length)return;
+
+    // Update state
+    newRows.forEach(rec=>{
       notifData.unshift(rec);
-      _lastSeenTimestamp=rec.created_at;
-      _pendingPopupRows.push(rec);
+      lastSeenTimestamp=rec.created_at;
     });
     updateNotifBadge();
     autoApplyOdometerReadings();
     if(notifOpen)renderNotifPanel();
-    // Always call showBatchPopup with the full accumulated list.
-    // If the modal is already open it updates in place; if closed it opens.
-    showBatchPopup(_pendingPopupRows);
+
+    // Show popup
+    console.log('[FleetDesk]',newRows.length,'new submission(s):',newRows.map(r=>r.plate));
+    showNotifPopup(newRows);
   }catch(err){
     console.error('[FleetDesk] Poll error:',err);
   }
@@ -1897,52 +1894,46 @@ initApp();
 <script>
 let _currentPopupRecord=null;
 
-function showBatchPopup(rows){
+// Show popup for 1 or more new submissions
+function showNotifPopup(rows){
+  const modal=document.getElementById('submissionModal');
   if(rows.length===1){
-    showSubmissionPopup(rows[0]);
-    return;
+    const rec=rows[0];
+    _currentPopupRecord=rec;
+    // Single view
+    document.getElementById('popupSingleView').style.display='block';
+    document.getElementById('popupBatchView').style.display='none';
+    document.getElementById('popupPlate').textContent=rec.plate||'—';
+    document.getElementById('popupOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-ZA')+' km':'—';
+    const d=new Date(rec.created_at);
+    document.getElementById('popupTime').textContent='Submitted: '+d.toLocaleDateString('en-ZA')+' at '+d.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
+    const photoWrap=document.getElementById('popupPhotoWrap');
+    if(rec.photo_url){document.getElementById('popupPhoto').src=rec.photo_url;photoWrap.style.display='block';}
+    else{photoWrap.style.display='none';}
+    const notesEl=document.getElementById('popupNotes');
+    if(rec.notes){notesEl.textContent='📝 '+rec.notes;notesEl.style.display='block';}
+    else{notesEl.style.display='none';}
+    const mismatchEl=document.getElementById('popupMismatch');
+    const hasMismatch=rec.ai_odometer!=null&&Math.abs(rec.odometer-rec.ai_odometer)>25;
+    if(hasMismatch){
+      mismatchEl.style.display='block';
+      mismatchEl.innerHTML=`⚠️ <strong>Odometer Mismatch Detected</strong> — ${rec.plate}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-ZA')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-ZA')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
+    }else{
+      mismatchEl.style.display='none';
+    }
+  }else{
+    // Batch view
+    _currentPopupRecord=null;
+    document.getElementById('popupSingleView').style.display='none';
+    document.getElementById('popupBatchView').style.display='block';
+    document.getElementById('popupBatchCount').textContent=`${rows.length} new submissions — click to view`;
   }
-  // Multiple submissions — show summary view
-  _currentPopupRecord=null;
-  document.getElementById('popupSingleView').style.display='none';
-  const bv=document.getElementById('popupBatchView');
-  bv.style.display='block';
-  document.getElementById('popupBatchTitle').textContent=`🔔 New Driver Submissions`;
-  document.getElementById('popupBatchCount').textContent=`${rows.length} new odometer submissions received`;
-  document.getElementById('popupBatchList').innerHTML=rows.map(r=>
-    `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #F1F3F5;">
-      <span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);font-size:13px;">${r.plate}</span>
-      <span style="font-family:var(--font-mono);font-size:13px;color:var(--text);">${r.odometer?r.odometer.toLocaleString('en-ZA')+' km':'—'}</span>
-    </div>`
-  ).join('');
-  document.getElementById('submissionModal').style.display='flex';
+  modal.style.display='flex';
 }
 
+// Keep showSubmissionPopup for approve/flag flows that open it directly
 function showSubmissionPopup(rec){
-  _currentPopupRecord=rec;
-  document.getElementById('popupSingleView').style.display='block';
-  document.getElementById('popupBatchView').style.display='none';
-  document.getElementById('popupPlate').textContent=rec.plate||'—';
-  document.getElementById('popupOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-ZA')+' km':'—';
-  const d=new Date(rec.created_at);
-  document.getElementById('popupTime').textContent='Submitted: '+d.toLocaleDateString('en-ZA')+' at '+d.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
-  const photoWrap=document.getElementById('popupPhotoWrap');
-  const photoImg=document.getElementById('popupPhoto');
-  if(rec.photo_url){photoImg.src=rec.photo_url;photoWrap.style.display='block';}
-  else{photoWrap.style.display='none';}
-  const notesEl=document.getElementById('popupNotes');
-  if(rec.notes){notesEl.textContent='📝 '+rec.notes;notesEl.style.display='block';}
-  else{notesEl.style.display='none';}
-  const mismatchEl=document.getElementById('popupMismatch');
-  const hasMismatch=rec.ai_odometer!=null&&Math.abs(rec.odometer-rec.ai_odometer)>25;
-  if(hasMismatch){
-    mismatchEl.style.display='block';
-    mismatchEl.innerHTML=`⚠️ <strong>Odometer Mismatch Detected</strong> — ${rec.plate}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-ZA')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-ZA')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
-  }else{
-    mismatchEl.style.display='none';
-  }
-  const modal=document.getElementById('submissionModal');
-  modal.style.display='flex';
+  showNotifPopup([rec]);
 }
 
 function closeSubmissionModal(){
@@ -1950,7 +1941,6 @@ function closeSubmissionModal(){
   document.getElementById('popupSingleView').style.display='block';
   document.getElementById('popupBatchView').style.display='none';
   _currentPopupRecord=null;
-  _pendingPopupRows=[];
 }
 
 async function approveSubmission(){
