@@ -1654,12 +1654,12 @@ document.addEventListener('click',function(e){
 // ── POLLING FOR NEW SUBMISSIONS ───────────────────────────────────────────────
 let _pollInterval=null;
 let _lastSeenTimestamp=null;
+// Accumulates all new rows since the popup was last closed.
+// Grows across poll cycles — only cleared when the manager dismisses the popup.
 let _pendingPopupRows=[];
-let _popupDebounceTimer=null;
 
 function startRealtimeListener(){
   if(_pollInterval)return;
-  // notifData is now guaranteed populated (fetchSubmissions was awaited)
   _lastSeenTimestamp=notifData.length>0?notifData[0].created_at:new Date().toISOString();
   console.log('[FleetDesk] Polling for new submissions every 10s. Seeded at:',_lastSeenTimestamp);
   _pollInterval=setInterval(pollForNewSubmissions,10000);
@@ -1683,14 +1683,9 @@ async function pollForNewSubmissions(){
     updateNotifBadge();
     autoApplyOdometerReadings();
     if(notifOpen)renderNotifPanel();
-    // Debounce: wait 3s for any further polls before showing one combined popup
-    clearTimeout(_popupDebounceTimer);
-    _popupDebounceTimer=setTimeout(()=>{
-      if(_pendingPopupRows.length>0){
-        showBatchPopup(_pendingPopupRows);
-        _pendingPopupRows=[];
-      }
-    },3000);
+    // Always call showBatchPopup with the full accumulated list.
+    // If the modal is already open it updates in place; if closed it opens.
+    showBatchPopup(_pendingPopupRows);
   }catch(err){
     console.error('[FleetDesk] Poll error:',err);
   }
@@ -1955,6 +1950,7 @@ function closeSubmissionModal(){
   document.getElementById('popupSingleView').style.display='block';
   document.getElementById('popupBatchView').style.display='none';
   _currentPopupRecord=null;
+  _pendingPopupRows=[];
 }
 
 async function approveSubmission(){
