@@ -1652,11 +1652,18 @@ document.addEventListener('click',function(e){
 });
 
 // ── POLLING FOR NEW SUBMISSIONS ───────────────────────────────────────────────
+// lastSeenTimestamp — only advances when a batch window closes (used to query DB)
+// pollTimestamp     — advances every poll to avoid re-fetching the same rows
+// batchRows         — accumulates all rows found during the open window
+// batchTimer        — 30s window timer; fires once to show the combined popup
 let lastSeenTimestamp=null;
+let pollTimestamp=null;
+let batchRows=[];
+let batchTimer=null;
 
 function startRealtimeListener(){
-  // Seed from the most recently loaded submission so we only alert on truly new ones
   lastSeenTimestamp=notifData.length>0?notifData[0].created_at:new Date().toISOString();
+  pollTimestamp=lastSeenTimestamp;
   console.log('[FleetDesk] Polling every 10s. Seeded at:',lastSeenTimestamp);
   setInterval(pollForNewSubmissions,10000);
 }
@@ -1664,25 +1671,36 @@ function startRealtimeListener(){
 async function pollForNewSubmissions(){
   try{
     const res=await fetch(
-      `${SUPABASE_URL}/rest/v1/odometer_readings?select=*&created_at=gt.${encodeURIComponent(lastSeenTimestamp)}&order=created_at.asc`,
+      `${SUPABASE_URL}/rest/v1/odometer_readings?select=*&created_at=gt.${encodeURIComponent(pollTimestamp)}&order=created_at.asc`,
       {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}}
     );
     if(!res.ok)return;
-    const newRows=await res.json();
-    if(!newRows.length)return;
+    const rows=await res.json();
+    if(!rows.length)return;
 
-    // Update state
-    newRows.forEach(rec=>{
+    // Add to batch and advance pollTimestamp so next poll doesn't re-fetch these rows
+    rows.forEach(rec=>{
+      batchRows.push(rec);
       notifData.unshift(rec);
-      lastSeenTimestamp=rec.created_at;
+      pollTimestamp=rec.created_at;
     });
     updateNotifBadge();
     autoApplyOdometerReadings();
     if(notifOpen)renderNotifPanel();
+    console.log('[FleetDesk]',rows.length,'row(s) added to batch. Total in window:',batchRows.length);
 
-    // Show popup
-    console.log('[FleetDesk]',newRows.length,'new submission(s):',newRows.map(r=>r.plate));
-    showNotifPopup(newRows);
+    // Open a 30s window on the first new row — more rows keep accumulating until it fires
+    if(!batchTimer){
+      console.log('[FleetDesk] 30s batch window opened');
+      batchTimer=setTimeout(()=>{
+        const toShow=[...batchRows];
+        lastSeenTimestamp=pollTimestamp;
+        batchRows=[];
+        batchTimer=null;
+        console.log('[FleetDesk] Batch window closed — showing',toShow.length,'submission(s)');
+        showNotifPopup(toShow);
+      },30000);
+    }
   }catch(err){
     console.error('[FleetDesk] Poll error:',err);
   }
