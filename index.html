@@ -1602,6 +1602,13 @@ function toggleNotifPanel(){
   }
 }
 
+function openNotifPanel(){
+  notifOpen=true;
+  const panel=document.getElementById('notifPanel');
+  panel.classList.add('open');
+  renderNotifPanel();
+}
+
 function renderNotifPanel(){
   const list=document.getElementById('notifList');
   const countEl=document.getElementById('notifCount');
@@ -1888,7 +1895,7 @@ initApp();
     <div id="popupBatchView" style="display:none;padding:22px;">
       <div id="popupBatchCount" style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:14px;"></div>
       <div id="popupBatchList" style="margin-bottom:18px;"></div>
-      <button onclick="closeSubmissionModal();toggleNotifPanel();" style="width:100%;padding:12px;background:var(--accent);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">🔔 Open Submissions</button>
+      <button onclick="event.stopPropagation();closeSubmissionModal();openNotifPanel();" style="width:100%;padding:12px;background:var(--accent);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">🔔 Open Submissions</button>
     </div>
   </div>
 </div>
