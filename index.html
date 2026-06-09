@@ -1459,6 +1459,7 @@ function switchReport(i){ activeReportIndex=i; recomputeAllStats(); renderDashbo
 function clearAllData(){
   if(!confirm('Clear all uploaded reports and data? This cannot be undone.'))return;
   state={reports:[]};saveStorage(state);activeReportIndex=-1;currentReport=null;
+  localStorage.removeItem(UPLOAD_IDS_KEY);
   document.getElementById('emptyState').classList.remove('hidden');
   document.getElementById('dashboard').classList.add('hidden');
 }
