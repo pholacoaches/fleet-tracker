@@ -580,6 +580,39 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .def-row > div { flex:1; min-width:120px; }
 .def-save { padding:7px 16px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; font-weight:700; cursor:pointer; align-self:flex-start; transition:background 0.15s; }
 .def-save:hover { background:var(--accent2); }
+
+/* TYRES TAB */
+.tyre-plate-strip { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+.tyre-plate-chip { padding:8px 16px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--text2); cursor:pointer; transition:all 0.15s; display:flex; align-items:center; gap:8px; }
+.tyre-plate-chip:hover { border-color:var(--accent); color:var(--accent); }
+.tyre-plate-chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.tyre-chip-count { font-family:var(--font); font-size:10px; font-weight:700; background:var(--accent-light); color:var(--accent); border-radius:10px; padding:2px 8px; }
+.tyre-plate-chip.active .tyre-chip-count { background:rgba(255,255,255,0.25); color:#fff; }
+.tyres-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:14px; margin-top:14px; }
+.tyre-card { background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; animation:fadeUp 0.35s ease both; }
+.tyre-card.tc-retread { border-left-color:var(--amber); }
+.tyre-card-header { display:flex; align-items:center; justify-content:space-between; padding:11px 14px; background:var(--surface2); border-bottom:1px solid var(--border); }
+.tyre-pos-badge { font-family:var(--font-mono); font-size:14px; font-weight:700; color:var(--accent); background:var(--accent-light); border:1.5px solid var(--accent); border-radius:var(--radius-sm); padding:3px 12px; }
+.tyre-retread-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--amber); background:var(--amber-light); border-radius:10px; padding:3px 10px; }
+.tyre-card-body { padding:12px 14px; display:flex; flex-direction:column; gap:7px; }
+.tyre-info-row { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+.tyre-info-label { font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--text3); font-weight:700; white-space:nowrap; }
+.tyre-info-val { font-size:12px; font-weight:600; color:var(--text); text-align:right; }
+.tyre-info-val.mono { font-family:var(--font-mono); }
+.tyre-invoice-link { font-size:11px; font-weight:700; color:var(--accent); text-decoration:none; }
+.tyre-invoice-link:hover { text-decoration:underline; }
+.tyre-add-form { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px; margin-top:14px; display:none; }
+.tyre-add-form.open { display:block; }
+.tyre-form-title { font-size:14px; font-weight:700; color:var(--accent); margin-bottom:14px; }
+.tf-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:12px; margin-bottom:14px; }
+.tf-field label { font-size:11px; font-weight:700; color:var(--text2); display:block; margin-bottom:4px; }
+.tf-field input, .tf-field select { width:100%; padding:8px 10px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; color:var(--text); background:var(--surface); outline:none; }
+.tf-field input:focus, .tf-field select:focus { border-color:var(--accent); }
+.tf-file-btn { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border:1.5px dashed var(--border2); border-radius:var(--radius-sm); font-size:12px; font-weight:600; color:var(--text2); cursor:pointer; background:var(--surface2); transition:all 0.15s; }
+.tf-file-btn:hover { border-color:var(--accent); color:var(--accent); }
+.tyre-form-err { font-size:12px; font-weight:700; color:var(--red); margin-bottom:10px; display:none; }
+.tyre-form-err.show { display:block; }
+.tyre-empty { color:var(--text3); font-size:13px; font-style:italic; padding:20px 0; }
 .hidden { display: none !important; }
 input[type=file] { display: none; }
 @media (max-width: 600px) {
@@ -700,6 +733,7 @@ input[type=file] { display: none; }
 <button class="dash-tab-btn" data-tab="discs" onclick="switchDashTab('discs')">📋 Disc Renewal</button>
       <button class="dash-tab-btn"        data-tab="trends"      onclick="switchDashTab('trends')">📈 Trends</button>
       <button class="dash-tab-btn"        data-tab="history"     onclick="switchDashTab('history')">📁 History</button>
+      <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')">🔧 Tyres</button>
     </div>
 
     <!-- TAB 1: OVERVIEW -->
@@ -791,6 +825,16 @@ input[type=file] { display: none; }
         </div>
         <div class="history-grid" id="historyGrid"></div>
       </div>
+    </div>
+
+    <!-- TAB 7: TYRES -->
+    <div class="tab-panel" id="tab-tyres">
+      <div class="section-header">
+        <div class="section-title">🔧 Tyre Management</div>
+        <div style="font-size:12px;color:var(--text3);margin-left:8px;">Select a vehicle to view and manage its tyres</div>
+      </div>
+      <div class="tyre-plate-strip" id="tyrePlateStrip"></div>
+      <div id="tyreVehiclePanel"><p class="tyre-empty">Select a vehicle above to view its tyres.</p></div>
     </div>
 
   </div>
@@ -904,6 +948,7 @@ function switchDashTab(tab){
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
   document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   if(tab==='discs')renderDiscsTab();
+  if(tab==='tyres')renderTyresTab();
 }
 
 const STORAGE_KEY='fleet_tracker_v2';
@@ -1856,6 +1901,246 @@ function renderDiscsTab(){
       </div>
     </div>`;
   }).join('');
+}
+
+// ── TYRES TAB ─────────────────────────────────────────────────────────────────
+const TYRE_POSITIONS=['FL','FR','RL-outer','RL-inner','RR-outer','RR-inner','Spare'];
+let tyresData=[];
+let selectedTyrePlate=null;
+let tyreInvoiceFile=null;
+
+async function fetchTyres(){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/tyres?select=*&status=eq.fitted&order=created_at.desc`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+    });
+    if(res.ok)tyresData=await res.json();
+  }catch(err){console.error('[FleetDesk] fetchTyres failed:',err);}
+}
+
+function getTyrePlates(){
+  const plates=new Set();
+  if(currentReport)currentReport.vehicles.forEach(v=>plates.add(v.plate));
+  tyresData.forEach(t=>plates.add(t.plate));
+  return[...plates].sort();
+}
+
+async function renderTyresTab(){
+  await fetchTyres();
+  const plates=getTyrePlates();
+  const strip=document.getElementById('tyrePlateStrip');
+  if(plates.length===0){
+    strip.innerHTML='';
+    document.getElementById('tyreVehiclePanel').innerHTML='<p class="tyre-empty">Upload a fuel report first to populate the vehicle list.</p>';
+    return;
+  }
+  if(selectedTyrePlate&&!plates.includes(selectedTyrePlate))selectedTyrePlate=null;
+  renderTyrePlateStrip(plates);
+  renderTyreVehiclePanel();
+}
+
+function renderTyrePlateStrip(plates){
+  document.getElementById('tyrePlateStrip').innerHTML=plates.map(p=>{
+    const count=tyresData.filter(t=>t.plate===p).length;
+    return`<button class="tyre-plate-chip ${p===selectedTyrePlate?'active':''}" onclick="selectTyrePlate('${p.replace(/'/g,"\\'")}')">${p}<span class="tyre-chip-count">${count}</span></button>`;
+  }).join('');
+}
+
+function selectTyrePlate(plate){
+  selectedTyrePlate=plate;
+  tyreInvoiceFile=null;
+  renderTyrePlateStrip(getTyrePlates());
+  renderTyreVehiclePanel();
+}
+
+function renderTyreVehiclePanel(){
+  const panel=document.getElementById('tyreVehiclePanel');
+  if(!selectedTyrePlate){
+    panel.innerHTML='<p class="tyre-empty">Select a vehicle above to view its tyres.</p>';
+    return;
+  }
+  const plate=selectedTyrePlate;
+  const tyres=tyresData.filter(t=>t.plate===plate);
+  const posOrder=Object.fromEntries(TYRE_POSITIONS.map((p,i)=>[p,i]));
+  tyres.sort((a,b)=>(posOrder[a.position]??99)-(posOrder[b.position]??99));
+
+  const cards=tyres.length===0
+    ?'<p class="tyre-empty">No tyres recorded for this vehicle yet. Click "Add Tyre" to record the first one.</p>'
+    :`<div class="tyres-grid">${tyres.map((t,i)=>`
+      <div class="tyre-card ${t.is_retread?'tc-retread':''}" style="animation-delay:${i*0.03}s">
+        <div class="tyre-card-header">
+          <span class="tyre-pos-badge">${t.position}</span>
+          ${t.is_retread?'<span class="tyre-retread-badge">Retread</span>':''}
+        </div>
+        <div class="tyre-card-body">
+          <div class="tyre-info-row"><span class="tyre-info-label">Brand</span><span class="tyre-info-val">${t.brand||'—'}${t.model?' '+t.model:''}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Size</span><span class="tyre-info-val mono">${t.size||'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Cost</span><span class="tyre-info-val mono">${t.cost!=null?'R '+Number(t.cost).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Fitted At</span><span class="tyre-info-val mono">${t.odometer_fitted!=null?Number(t.odometer_fitted).toLocaleString('en-US')+' km':'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Date Fitted</span><span class="tyre-info-val mono">${t.date_fitted||'—'}</span></div>
+          ${t.supplier?`<div class="tyre-info-row"><span class="tyre-info-label">Supplier</span><span class="tyre-info-val">${t.supplier}</span></div>`:''}
+          ${t.serial_dot?`<div class="tyre-info-row"><span class="tyre-info-label">Serial / DOT</span><span class="tyre-info-val mono">${t.serial_dot}</span></div>`:''}
+          ${t.invoice_url?`<div class="tyre-info-row"><span class="tyre-info-label">Invoice</span><a class="tyre-invoice-link" href="${t.invoice_url}" target="_blank">📄 View</a></div>`:''}
+          ${t.notes?`<div class="tyre-info-row"><span class="tyre-info-label">Notes</span><span class="tyre-info-val">${t.notes}</span></div>`:''}
+        </div>
+      </div>`).join('')}</div>`;
+
+  panel.innerHTML=`
+    <div class="section-header">
+      <div class="section-title" style="font-size:15px;">🚌 ${plate} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
+      <div class="section-actions">
+        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddTyreForm()">＋ Add Tyre</button>
+      </div>
+    </div>
+    ${cards}
+    <div class="tyre-add-form" id="tyreAddForm">
+      <div class="tyre-form-title">＋ Add Tyre — ${plate}</div>
+      <div class="tyre-form-err" id="tyreFormErr"></div>
+      <div class="tf-grid">
+        <div class="tf-field"><label>Vehicle Plate</label><input type="text" id="tf-plate" value="${plate}" readonly style="background:var(--surface2);"></div>
+        <div class="tf-field"><label>Position *</label><select id="tf-position">${TYRE_POSITIONS.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div>
+        <div class="tf-field"><label>Brand *</label><input type="text" id="tf-brand" placeholder="e.g. Michelin"></div>
+        <div class="tf-field"><label>Model</label><input type="text" id="tf-model" placeholder="e.g. X Multi Energy Z"></div>
+        <div class="tf-field"><label>Size *</label><input type="text" id="tf-size" placeholder="e.g. 315/80R22.5"></div>
+        <div class="tf-field"><label>Supplier</label><input type="text" id="tf-supplier" placeholder="e.g. Supa Quick"></div>
+        <div class="tf-field"><label>Cost (Rands)</label><input type="number" id="tf-cost" min="0" step="0.01" placeholder="e.g. 4500.00"></div>
+        <div class="tf-field"><label>Retread?</label><select id="tf-retread"><option value="no">No — New tyre</option><option value="yes">Yes — Retread</option></select></div>
+        <div class="tf-field"><label>Odometer at Fitment (km) *</label><input type="number" id="tf-odo" min="0" placeholder="Loading latest..."></div>
+        <div class="tf-field"><label>Date Fitted *</label><input type="date" id="tf-date"></div>
+        <div class="tf-field"><label>Serial / DOT Number</label><input type="text" id="tf-serial" placeholder="e.g. DOT XJ4F 12345 2326"></div>
+        <div class="tf-field"><label>Notes</label><input type="text" id="tf-notes" placeholder="Optional"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <label class="tf-file-btn" for="tf-invoice">📄 <span id="tfInvoiceLabel">Attach invoice photo (optional)</span></label>
+        <input type="file" id="tf-invoice" accept="image/*,.pdf" onchange="tyreInvoiceChosen(this)">
+        <button class="def-save" id="tfSaveBtn" onclick="submitTyre()">💾 Save Tyre</button>
+        <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="toggleAddTyreForm()">Cancel</button>
+      </div>
+    </div>`;
+}
+
+async function fetchLatestOdoForPlate(plate){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&select=odometer&order=created_at.desc&limit=1`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+    });
+    if(res.ok){
+      const rows=await res.json();
+      if(rows.length>0&&rows[0].odometer!=null)return rows[0].odometer;
+    }
+  }catch{}
+  // Fall back to the latest fuel-report transaction for this vehicle
+  const v=currentReport?currentReport.vehicles.find(v=>v.plate===plate):null;
+  if(v&&v.transactions&&v.transactions.length>0){
+    const last=v.transactions[v.transactions.length-1];
+    if(last.odometer)return last.odometer;
+  }
+  return null;
+}
+
+async function toggleAddTyreForm(){
+  const form=document.getElementById('tyreAddForm');
+  if(!form)return;
+  const opening=!form.classList.contains('open');
+  form.classList.toggle('open');
+  if(!opening)return;
+  document.getElementById('tf-date').value=new Date().toISOString().slice(0,10);
+  const odoInput=document.getElementById('tf-odo');
+  const latest=await fetchLatestOdoForPlate(selectedTyrePlate);
+  if(latest!=null&&odoInput&&!odoInput.value)odoInput.value=latest;
+  if(odoInput)odoInput.placeholder='e.g. 91308';
+  form.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function tyreInvoiceChosen(input){
+  tyreInvoiceFile=input.files&&input.files[0]?input.files[0]:null;
+  document.getElementById('tfInvoiceLabel').textContent=tyreInvoiceFile?tyreInvoiceFile.name:'Attach invoice photo (optional)';
+}
+
+async function uploadTyreInvoice(plate){
+  if(!tyreInvoiceFile)return null;
+  try{
+    const ext=(tyreInvoiceFile.name.split('.').pop()||'jpg').toLowerCase();
+    const filename=`tyre-invoice_${plate.replace(/\s+/g,'_')}_${Date.now()}.${ext}`;
+    const res=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
+      method:'POST',
+      headers:{'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':tyreInvoiceFile.type,'x-upsert':'true'},
+      body:tyreInvoiceFile
+    });
+    if(res.ok)return`${SUPABASE_URL}/storage/v1/object/public/odometer-photos/${filename}`;
+  }catch(err){console.error('[FleetDesk] Invoice upload failed:',err);}
+  return null;
+}
+
+async function submitTyre(){
+  const errEl=document.getElementById('tyreFormErr');
+  const btn=document.getElementById('tfSaveBtn');
+  errEl.classList.remove('show');
+
+  const plate=selectedTyrePlate;
+  const position=document.getElementById('tf-position').value;
+  const brand=document.getElementById('tf-brand').value.trim();
+  const model=document.getElementById('tf-model').value.trim();
+  const size=document.getElementById('tf-size').value.trim();
+  const supplier=document.getElementById('tf-supplier').value.trim();
+  const costRaw=document.getElementById('tf-cost').value;
+  const isRetread=document.getElementById('tf-retread').value==='yes';
+  const odoRaw=document.getElementById('tf-odo').value;
+  const dateFitted=document.getElementById('tf-date').value;
+  const serial=document.getElementById('tf-serial').value.trim();
+  const notes=document.getElementById('tf-notes').value.trim();
+
+  if(!brand||!size||!odoRaw||!dateFitted){
+    errEl.textContent='Please fill in Brand, Size, Odometer and Date Fitted.';
+    errEl.classList.add('show');
+    return;
+  }
+  const odo=parseInt(odoRaw,10);
+  if(isNaN(odo)||odo<0){
+    errEl.textContent='Please enter a valid odometer reading.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  btn.disabled=true;
+  btn.textContent='Saving...';
+  try{
+    const invoiceUrl=await uploadTyreInvoice(plate);
+    const body={
+      plate,position,brand,size,
+      model:model||null,
+      supplier:supplier||null,
+      cost:costRaw?parseFloat(costRaw):null,
+      is_retread:isRetread,
+      odometer_fitted:odo,
+      date_fitted:dateFitted,
+      invoice_url:invoiceUrl,
+      serial_dot:serial||null,
+      notes:notes||null
+    };
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/tyres`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify(body)
+    });
+    if(!res.ok){
+      const errText=await res.text();
+      console.error('[FleetDesk] Tyre save failed:',res.status,errText);
+      errEl.textContent='Could not save tyre. Please try again.';
+      errEl.classList.add('show');
+      btn.disabled=false;
+      btn.textContent='💾 Save Tyre';
+      return;
+    }
+    tyreInvoiceFile=null;
+    await renderTyresTab();
+  }catch(err){
+    console.error('[FleetDesk] Tyre save error:',err);
+    errEl.textContent='Connection error. Please try again.';
+    errEl.classList.add('show');
+    btn.disabled=false;
+    btn.textContent='💾 Save Tyre';
+  }
 }
 
 initApp();
