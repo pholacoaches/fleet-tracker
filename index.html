@@ -1457,11 +1457,20 @@ function renderComparison(){
 function switchReport(i){ activeReportIndex=i; recomputeAllStats(); renderDashboard(); window.scrollTo({top:0,behavior:'smooth'}); }
 
 function clearAllData(){
-  if(!confirm('Clear all uploaded reports and data? This cannot be undone.'))return;
-  state={reports:[]};saveStorage(state);activeReportIndex=-1;currentReport=null;
-  localStorage.removeItem(UPLOAD_IDS_KEY);
+  if(!confirm('This will clear all reports and data.\n\nA JSON backup will be downloaded to your computer first — keep it safe in case you need it later.'))return;
+  // Download backup first
+  const backup={exportedAt:new Date().toISOString(),data:state,uploadIds:loadUploadIds()};
+  const a=document.createElement('a');
+  a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(backup,null,2));
+  a.download='fleetdesk_backup_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  // Now clear everything
+  state={reports:[]};saveStorage(state);
+  saveUploadIds({engen:[],freight:[]});
+  activeReportIndex=-1;currentReport=null;
   document.getElementById('emptyState').classList.remove('hidden');
   document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('heroStatsStrip').style.display='none';
 }
 
 function exportCSV(){
