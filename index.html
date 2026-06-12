@@ -876,23 +876,19 @@ async function login(){
   btn.disabled=true;
   btn.textContent='Signing in...';
   try{
-    const response=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{
+    const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/login',{
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'apikey':SUPABASE_KEY
-      },
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({email,password})
     });
     const data=await response.json();
-    if(!response.ok||!data.access_token){
+    if(!data.success){
       errEl.textContent='Incorrect email or password.';
       btn.disabled=false;
       btn.textContent='Log in';
       return;
     }
-    localStorage.setItem(AUTH_TOKEN_KEY,data.access_token);
-    if(data.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,data.refresh_token);
+    localStorage.setItem(AUTH_TOKEN_KEY,'local-'+email);
     localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
     showDashboard();
   }catch(err){
