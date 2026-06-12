@@ -613,6 +613,41 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .tyre-form-err { font-size:12px; font-weight:700; color:var(--red); margin-bottom:10px; display:none; }
 .tyre-form-err.show { display:block; }
 .tyre-empty { color:var(--text3); font-size:13px; font-style:italic; padding:20px 0; }
+
+/* MAINTENANCE TAB */
+.maint-flags { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; }
+.maint-flag { display:flex; align-items:flex-start; gap:10px; padding:11px 14px; border-radius:var(--radius-sm); font-size:12px; line-height:1.55; border:1.5px solid; animation:fadeUp 0.3s ease both; }
+.maint-flag.mf-red { background:var(--red-light); border-color:#FFA8A8; color:var(--red); }
+.maint-flag.mf-amber { background:var(--amber-light); border-color:#FFE066; color:var(--amber); }
+.maint-flag-icon { font-size:16px; flex-shrink:0; }
+.maint-flag strong { font-weight:700; }
+.maint-flags-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--red); margin-bottom:8px; }
+.maint-timeline { display:flex; flex-direction:column; gap:12px; margin-top:14px; }
+.maint-job { background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; animation:fadeUp 0.3s ease both; }
+.maint-job.mj-open { border-left-color:var(--amber); }
+.maint-job-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px; background:var(--surface2); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+.maint-job-left { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.maint-cat-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; background:var(--accent-light); color:var(--accent); border-radius:20px; padding:3px 10px; }
+.maint-status-open { font-size:10px; font-weight:700; background:var(--amber-light); color:var(--amber); border-radius:20px; padding:3px 10px; }
+.maint-status-done { font-size:10px; font-weight:700; background:var(--green-light); color:var(--green); border-radius:20px; padding:3px 10px; }
+.maint-job-date { font-family:var(--font-mono); font-size:11px; color:var(--text3); font-weight:700; }
+.maint-job-body { padding:12px 14px; }
+.maint-job-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:4px; }
+.maint-job-desc { font-size:12px; color:var(--text2); line-height:1.5; margin-bottom:8px; }
+.maint-job-meta { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:var(--text3); }
+.maint-job-meta strong { font-family:var(--font-mono); color:var(--text2); }
+.maint-parts-table { width:100%; border-collapse:collapse; margin-top:10px; }
+.maint-parts-table th { font-size:9px; text-transform:uppercase; letter-spacing:0.6px; color:var(--text3); font-weight:700; text-align:left; padding:5px 8px; background:var(--bg); border-bottom:1px solid var(--border); }
+.maint-parts-table td { font-size:11px; padding:6px 8px; border-bottom:1px solid var(--border); color:var(--text2); }
+.maint-parts-table td.r, .maint-parts-table th.r { text-align:right; font-family:var(--font-mono); }
+.maint-job-footer { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 14px; border-top:1px solid var(--border); background:var(--surface2); flex-wrap:wrap; }
+.mf-part-row { display:grid; grid-template-columns:2fr 1fr 1fr 60px 1fr 1fr 1fr 30px; gap:6px; margin-bottom:6px; align-items:center; }
+.mf-part-row input { width:100%; padding:6px 8px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); font-family:var(--font); font-size:11px; color:var(--text); background:var(--surface); outline:none; }
+.mf-part-row input:focus { border-color:var(--accent); }
+.mf-part-del { background:none; border:none; color:var(--red); font-size:15px; cursor:pointer; padding:2px; }
+.mf-parts-head { display:grid; grid-template-columns:2fr 1fr 1fr 60px 1fr 1fr 1fr 30px; gap:6px; margin-bottom:4px; }
+.mf-parts-head span { font-size:9px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); font-weight:700; }
+@media (max-width:700px){ .mf-part-row, .mf-parts-head { grid-template-columns:1fr 1fr 1fr; } .mf-parts-head { display:none; } }
 .hidden { display: none !important; }
 input[type=file] { display: none; }
 @media (max-width: 600px) {
@@ -732,7 +767,8 @@ input[type=file] { display: none; }
 <button class="dash-tab-btn" data-tab="discs" onclick="switchDashTab('discs')">📋 Disc Renewal</button>
       <button class="dash-tab-btn"        data-tab="trends"      onclick="switchDashTab('trends')">📈 Trends</button>
       <button class="dash-tab-btn"        data-tab="history"     onclick="switchDashTab('history')">📁 History</button>
-      <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')">🔧 Tyres</button>
+      <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')">🛞 Tyres</button>
+      <button class="dash-tab-btn"        data-tab="maint"       onclick="switchDashTab('maint')">🔧 Maintenance</button>
     </div>
 
     <!-- TAB 1: OVERVIEW -->
@@ -834,6 +870,18 @@ input[type=file] { display: none; }
       </div>
       <div class="tyre-plate-strip" id="tyrePlateStrip"></div>
       <div id="tyreVehiclePanel"><p class="tyre-empty">Select a vehicle above to view its tyres.</p></div>
+    </div>
+
+    <!-- TAB 8: MAINTENANCE -->
+    <div class="tab-panel" id="tab-maint">
+      <div class="section-header">
+        <div class="section-title">🔧 Maintenance</div>
+        <div style="font-size:12px;color:var(--text3);margin-left:8px;">Job history, warranties and automatic red flags</div>
+      </div>
+      <div class="disc-summary-strip" id="maintSummaryStrip"></div>
+      <div id="maintRedFlags"></div>
+      <div class="tyre-plate-strip" id="maintPlateStrip"></div>
+      <div id="maintVehiclePanel"><p class="tyre-empty">Select a vehicle above to view its maintenance history.</p></div>
     </div>
 
   </div>
@@ -949,6 +997,7 @@ function switchDashTab(tab){
   document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   if(tab==='discs')renderDiscsTab();
   if(tab==='tyres')renderTyresTab();
+  if(tab==='maint')renderMaintTab();
 }
 
 const STORAGE_KEY='fleet_tracker_v2';
@@ -2151,6 +2200,522 @@ async function submitTyre(){
     btn.disabled=false;
     btn.textContent='💾 Save Tyre';
   }
+}
+
+// ── MAINTENANCE TAB ───────────────────────────────────────────────────────────
+const MAINT_CATEGORIES={
+  service:{label:'Service',icon:'🛢',components:['Oil & filter change','Gearbox oil','Diff oil','Fuel filters','Air filter','Full service']},
+  brakes:{label:'Brakes',icon:'🛑',components:['Front brake pads/linings','Rear brake pads/linings','Brake discs/drums','Air compressor','Brake valves','Brake chambers']},
+  clutch:{label:'Clutch & Drivetrain',icon:'⚙️',components:['Clutch kit','Slave cylinder','Master cylinder','Gearbox','Propshaft','Differential']},
+  engine:{label:'Engine',icon:'🔩',components:['Engine overhaul','Turbo','Injectors','Radiator','Water pump','Cooling fan','Cylinder head','Belts & tensioners']},
+  electrical:{label:'Electrical',icon:'🔋',components:['Battery','Alternator','Starter motor','Wiring','Lights']},
+  suspension:{label:'Suspension & Steering',icon:'🪛',components:['Air bags','Shock absorbers','Kingpins','Wheel bearings','Steering box','Tie rod ends']},
+  body:{label:'Body & Interior',icon:'🚌',components:['Door mechanism','Seats','Glass/windscreen','Panel repair','Paint']},
+  aircon:{label:'Aircon',icon:'❄️',components:['Aircon compressor','Aircon regas','Blower/fans','Condenser']},
+  cof:{label:'COF',icon:'📋',components:['COF inspection','COF repairs']},
+  other:{label:'Other',icon:'🔧',components:['Other']}
+};
+// Expected minimum component life — failures earlier than this are premature.
+// Judged by km when odometer data exists, otherwise by months.
+const COMPONENT_LIFE={
+  'Clutch kit':{km:100000,months:18},'Slave cylinder':{km:60000,months:12},'Master cylinder':{km:60000,months:12},
+  'Gearbox':{km:200000,months:24},'Propshaft':{km:150000,months:24},'Differential':{km:200000,months:24},
+  'Front brake pads/linings':{km:20000,months:6},'Rear brake pads/linings':{km:20000,months:6},'Brake discs/drums':{km:60000,months:12},
+  'Air compressor':{km:100000,months:18},'Brake valves':{km:80000,months:12},'Brake chambers':{km:80000,months:12},
+  'Engine overhaul':{km:300000,months:36},'Turbo':{km:80000,months:12},'Injectors':{km:100000,months:12},
+  'Radiator':{km:100000,months:18},'Water pump':{km:80000,months:12},'Cooling fan':{km:80000,months:12},
+  'Cylinder head':{km:150000,months:24},'Belts & tensioners':{km:40000,months:9},
+  'Battery':{months:12},'Alternator':{km:100000,months:18},'Starter motor':{km:100000,months:18},
+  'Air bags':{km:80000,months:12},'Shock absorbers':{km:60000,months:12},'Kingpins':{km:120000,months:24},
+  'Wheel bearings':{km:80000,months:12},'Steering box':{km:150000,months:24},'Tie rod ends':{km:60000,months:12},
+  'Aircon compressor':{km:80000,months:18},'Aircon regas':{months:6},'Blower/fans':{months:12},'Condenser':{months:18}
+};
+const MAINT_DEFAULT_LIFE={km:30000,months:6};
+const MAINT_DEFAULT_SERVICE_INTERVAL=15000;
+const COF_VALID_MONTHS=6;
+
+let maintJobs=[];
+let maintPartsByJob={};
+let maintFlags=[];
+let selectedMaintPlate=null;
+let maintInvoiceFile=null;
+
+function fmtRand(x){return x!=null&&x!==''?'R'+Number(x).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';}
+function monthsBetween(a,b){return(new Date(b)-new Date(a))/(1000*60*60*24*30.44);}
+function daysSince(d){return Math.floor((Date.now()-new Date(d))/(1000*60*60*24));}
+
+async function fetchMaintData(){
+  try{
+    const headers={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`};
+    const[jobsRes,partsRes]=await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?select=*&order=date_in.desc,created_at.desc`,{headers}),
+      fetch(`${SUPABASE_URL}/rest/v1/maintenance_parts?select=*`,{headers})
+    ]);
+    if(jobsRes.ok)maintJobs=await jobsRes.json();
+    maintPartsByJob={};
+    if(partsRes.ok){
+      (await partsRes.json()).forEach(p=>{
+        (maintPartsByJob[p.job_id]=maintPartsByJob[p.job_id]||[]).push(p);
+      });
+    }
+  }catch(err){console.error('[FleetDesk] fetchMaintData failed:',err);}
+}
+
+function latestOdoFromReport(plate){
+  const v=currentReport?currentReport.vehicles.find(v=>v.plate===plate):null;
+  if(v&&v.transactions.length>0){
+    const last=v.transactions[v.transactions.length-1];
+    if(last.odometer)return last.odometer;
+  }
+  return null;
+}
+
+// ── RED FLAG ENGINE — 8 automatic checks ──────────────────────────────────────
+function computeMaintFlags(){
+  const flags=[];
+  const wearJobs=maintJobs.filter(j=>j.component&&!['service','cof','other'].includes(j.category));
+
+  // 1 + 2: premature repeat failure, and failure within warranty
+  const byPlateComp={};
+  wearJobs.forEach(j=>{(byPlateComp[j.plate+'|'+j.component]=byPlateComp[j.plate+'|'+j.component]||[]).push(j);});
+  Object.values(byPlateComp).forEach(group=>{
+    group.sort((a,b)=>new Date(a.date_in)-new Date(b.date_in));
+    for(let i=1;i<group.length;i++){
+      const prev=group[i-1],curr=group[i];
+      const gapKm=(prev.odometer>0&&curr.odometer>0)?curr.odometer-prev.odometer:null;
+      const gapMonths=monthsBetween(prev.date_in,curr.date_in);
+      const life=COMPONENT_LIFE[curr.component]||MAINT_DEFAULT_LIFE;
+      // Warranty check against the previous job's fitted parts
+      const prevParts=maintPartsByJob[prev.id]||[];
+      const maxWM=Math.max(0,...prevParts.map(p=>p.warranty_months||0));
+      const maxWKM=Math.max(0,...prevParts.map(p=>p.warranty_km||0));
+      const inWarranty=(maxWM>0&&gapMonths<=maxWM)||(maxWKM>0&&gapKm!=null&&gapKm>=0&&gapKm<=maxWKM);
+      let premature=false;
+      if(life.km&&gapKm!=null&&gapKm>=0)premature=gapKm<life.km;
+      else if(life.months)premature=gapMonths<life.months;
+      if(inWarranty){
+        flags.push({type:'warranty',severity:'red',plate:curr.plate,icon:'💰',
+          html:`<strong>Warranty claim — don't pay for this!</strong> ${escapeHtml(curr.component)} on <strong>${escapeHtml(curr.plate)}</strong> failed ${gapKm!=null&&gapKm>=0?gapKm.toLocaleString('en-US')+' km':Math.round(gapMonths)+' month(s)'} after the previous one (${fmtDDMMYYYY(prev.date_in)}) — still inside the ${maxWM>0?maxWM+'-month':''}${maxWM>0&&maxWKM>0?' / ':''}${maxWKM>0?maxWKM.toLocaleString('en-US')+' km':''} warranty${prev.supplier?' from '+escapeHtml(prev.supplier):''}.`});
+      }else if(premature){
+        flags.push({type:'repeat',severity:'red',plate:curr.plate,icon:'🔁',
+          html:`<strong>Premature failure:</strong> ${escapeHtml(curr.component)} on <strong>${escapeHtml(curr.plate)}</strong> replaced ${gapKm!=null&&gapKm>=0?gapKm.toLocaleString('en-US')+' km':Math.round(gapMonths)+' month(s)'} after the previous one — expected life ${life.km?life.km.toLocaleString('en-US')+'+ km':life.months+'+ months'}. Check for a defective part, wrong diagnosis or driver behaviour.`});
+      }
+    }
+  });
+
+  // 3: same component failing across 3+ vehicles within 90 days
+  const recent=wearJobs.filter(j=>daysSince(j.date_in)<=90);
+  const byComp={};
+  recent.forEach(j=>{(byComp[j.component]=byComp[j.component]||new Set()).add(j.plate);});
+  Object.entries(byComp).forEach(([comp,plates])=>{
+    if(plates.size>=3){
+      flags.push({type:'cluster',severity:'red',plate:null,icon:'📦',
+        html:`<strong>Possible bad parts batch:</strong> ${escapeHtml(comp)} replaced on <strong>${plates.size} vehicles</strong> in the last 90 days (${escapeHtml([...plates].join(', '))}). Check the supplier / part brand.`});
+    }
+  });
+
+  // 4: service overdue (km-based, vs latest known odometer)
+  const svcData=loadServiceData();
+  const plates=getMaintPlates();
+  plates.forEach(plate=>{
+    const svc=svcData[plate]||{};
+    const svcJobs=maintJobs.filter(j=>j.plate===plate&&j.category==='service'&&j.odometer>0);
+    const lastSvcOdo=Math.max(svc.lastServiceOdo||0,...svcJobs.map(j=>j.odometer),0);
+    if(!lastSvcOdo)return;
+    const interval=svc.interval||MAINT_DEFAULT_SERVICE_INTERVAL;
+    const plateJobs=maintJobs.filter(j=>j.plate===plate&&j.odometer>0);
+    const currentOdo=Math.max(latestOdoFromReport(plate)||0,...plateJobs.map(j=>j.odometer),0);
+    if(!currentOdo)return;
+    const overdueBy=(currentOdo-lastSvcOdo)-interval;
+    if(overdueBy>0){
+      flags.push({type:'service',severity:'red',plate,icon:'🛢',
+        html:`<strong>Service overdue:</strong> <strong>${escapeHtml(plate)}</strong> is ${overdueBy.toLocaleString('en-US')} km past its ${interval.toLocaleString('en-US')} km service interval (last serviced at ${lastSvcOdo.toLocaleString('en-US')} km, now at ~${currentOdo.toLocaleString('en-US')} km).`});
+    }
+  });
+
+  // 5: COF expiring within 30 days (or expired) — 6-month validity from last COF job
+  plates.forEach(plate=>{
+    const cofJobs=maintJobs.filter(j=>j.plate===plate&&j.category==='cof').sort((a,b)=>new Date(b.date_in)-new Date(a.date_in));
+    if(cofJobs.length===0)return;
+    const expiry=new Date(cofJobs[0].date_in);
+    expiry.setMonth(expiry.getMonth()+COF_VALID_MONTHS);
+    const daysLeft=Math.ceil((expiry-Date.now())/(1000*60*60*24));
+    if(daysLeft<0){
+      flags.push({type:'cof',severity:'red',plate,icon:'📋',
+        html:`<strong>COF EXPIRED:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expired ${Math.abs(daysLeft)} day(s) ago (${fmtDDMMYYYY(expiry)}). This vehicle may not legally carry passengers.`});
+    }else if(daysLeft<=30){
+      flags.push({type:'cof',severity:'amber',plate,icon:'📋',
+        html:`<strong>COF due soon:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expires in ${daysLeft} day(s) (${fmtDDMMYYYY(expiry)}). Book the inspection now.`});
+    }
+  });
+
+  // 6: vehicle stuck in workshop (open job, 7+ days)
+  maintJobs.filter(j=>!j.date_out&&daysSince(j.date_in)>=7).forEach(j=>{
+    flags.push({type:'stuck',severity:'amber',plate:j.plate,icon:'🏭',
+      html:`<strong>Still in workshop:</strong> <strong>${escapeHtml(j.plate)}</strong> has been in for "${escapeHtml(j.description)}" for ${daysSince(j.date_in)} days (since ${fmtDDMMYYYY(j.date_in)}).`});
+  });
+
+  // 7: cost outliers — vehicle total vs fleet average, and single job vs category average
+  const costByPlate={};
+  maintJobs.forEach(j=>{if(j.total_cost)costByPlate[j.plate]=(costByPlate[j.plate]||0)+Number(j.total_cost);});
+  const costPlates=Object.keys(costByPlate);
+  if(costPlates.length>=3){
+    const avg=costPlates.reduce((s,p)=>s+costByPlate[p],0)/costPlates.length;
+    costPlates.forEach(p=>{
+      if(costByPlate[p]>avg*2){
+        flags.push({type:'cost',severity:'amber',plate:p,icon:'📈',
+          html:`<strong>High maintenance cost:</strong> <strong>${escapeHtml(p)}</strong> has cost ${fmtRand(costByPlate[p])} in maintenance — more than double the fleet average of ${fmtRand(avg)}.`});
+      }
+    });
+  }
+  const byCat={};
+  maintJobs.forEach(j=>{if(j.total_cost)(byCat[j.category]=byCat[j.category]||[]).push(j);});
+  Object.entries(byCat).forEach(([cat,jobs])=>{
+    if(jobs.length<3)return;
+    const avg=jobs.reduce((s,j)=>s+Number(j.total_cost),0)/jobs.length;
+    jobs.forEach(j=>{
+      if(Number(j.total_cost)>avg*2.5){
+        flags.push({type:'cost',severity:'amber',plate:j.plate,icon:'💸',
+          html:`<strong>Unusually expensive job:</strong> "${escapeHtml(j.description)}" on <strong>${escapeHtml(j.plate)}</strong> cost ${fmtRand(j.total_cost)} — well above the ${fmtRand(avg)} average for ${escapeHtml((MAINT_CATEGORIES[cat]||{}).label||cat)} jobs.`});
+      }
+    });
+  });
+
+  // 8: fuel efficiency drop (early symptom of mechanical problems)
+  if(state.reports.length>=2&&currentReport){
+    currentReport.vehicles.forEach(v=>{
+      if(!v.avgKmPerLitre)return;
+      const prevVals=[];
+      state.reports.forEach((rep,i)=>{
+        if(i===activeReportIndex)return;
+        const pv=rep.vehicles.find(x=>x.plate===v.plate);
+        if(pv&&pv.avgKmPerLitre)prevVals.push(pv.avgKmPerLitre);
+      });
+      if(prevVals.length===0)return;
+      const prevAvg=prevVals.reduce((a,b)=>a+b,0)/prevVals.length;
+      if(v.avgKmPerLitre<prevAvg*0.9){
+        const dropPct=((prevAvg-v.avgKmPerLitre)/prevAvg*100).toFixed(0);
+        flags.push({type:'fuel',severity:'amber',plate:v.plate,icon:'⛽',
+          html:`<strong>Fuel efficiency dropped ${dropPct}%:</strong> <strong>${escapeHtml(v.plate)}</strong> is averaging ${v.avgKmPerLitre} km/L vs its usual ${prevAvg.toFixed(2)} km/L. Often an early sign of injector, filter or turbo problems — worth an inspection.`});
+      }
+    });
+  }
+
+  // Red first, then amber
+  flags.sort((a,b)=>(a.severity==='red'?0:1)-(b.severity==='red'?0:1));
+  return flags;
+}
+
+function getMaintPlates(){
+  const plates=new Set();
+  if(currentReport)currentReport.vehicles.forEach(v=>plates.add(v.plate));
+  maintJobs.forEach(j=>plates.add(j.plate));
+  return[...plates].sort();
+}
+
+async function renderMaintTab(){
+  await fetchMaintData();
+  maintFlags=computeMaintFlags();
+  const plates=getMaintPlates();
+
+  // Summary strip
+  const svcCount=maintFlags.filter(f=>f.type==='service').length;
+  const cofCount=maintFlags.filter(f=>f.type==='cof').length;
+  const inWorkshop=new Set(maintJobs.filter(j=>!j.date_out).map(j=>j.plate)).size;
+  const redCount=maintFlags.filter(f=>f.severity==='red').length;
+  document.getElementById('maintSummaryStrip').innerHTML=`
+    <div class="disc-summary-card ${svcCount>0?'ds-red':'ds-green'}"><div class="disc-summary-label">🛢 Overdue Services</div><div class="disc-summary-val">${svcCount}</div></div>
+    <div class="disc-summary-card ${cofCount>0?'ds-amber':'ds-green'}"><div class="disc-summary-label">📋 COFs Due / Expired</div><div class="disc-summary-val">${cofCount}</div></div>
+    <div class="disc-summary-card ${inWorkshop>0?'ds-amber':'ds-green'}"><div class="disc-summary-label">🏭 In Workshop</div><div class="disc-summary-val">${inWorkshop}</div></div>
+    <div class="disc-summary-card ${redCount>0?'ds-red':'ds-green'}"><div class="disc-summary-label">🚩 Red Flags</div><div class="disc-summary-val">${redCount}</div></div>
+  `;
+
+  // Fleet-wide flags
+  const flagsEl=document.getElementById('maintRedFlags');
+  if(maintFlags.length===0){
+    flagsEl.innerHTML=maintJobs.length>0?'<div class="maint-flag mf-amber" style="background:var(--green-light);border-color:#B2F2BB;color:var(--green);"><span class="maint-flag-icon">✅</span><div>No red flags detected — the fleet looks healthy.</div></div>':'';
+  }else{
+    flagsEl.innerHTML=`<div class="maint-flags-title">🚩 Needs Attention (${maintFlags.length})</div><div class="maint-flags">${
+      maintFlags.map(f=>`<div class="maint-flag mf-${f.severity}"><span class="maint-flag-icon">${f.icon}</span><div>${f.html}</div></div>`).join('')
+    }</div>`;
+  }
+
+  if(plates.length===0){
+    document.getElementById('maintPlateStrip').innerHTML='';
+    document.getElementById('maintVehiclePanel').innerHTML='<p class="tyre-empty">Upload a fuel report first to populate the vehicle list.</p>';
+    return;
+  }
+  if(selectedMaintPlate&&!plates.includes(selectedMaintPlate))selectedMaintPlate=null;
+  renderMaintPlateStrip(plates);
+  renderMaintVehiclePanel();
+}
+
+function renderMaintPlateStrip(plates){
+  document.getElementById('maintPlateStrip').innerHTML=plates.map(p=>{
+    const count=maintJobs.filter(j=>j.plate===p).length;
+    const hasFlag=maintFlags.some(f=>f.plate===p&&f.severity==='red');
+    return`<button class="tyre-plate-chip ${p===selectedMaintPlate?'active':''}" onclick="selectMaintPlate('${p.replace(/'/g,"\\'")}')">${hasFlag?'🚩 ':''}${escapeHtml(p)}<span class="tyre-chip-count">${count}</span></button>`;
+  }).join('');
+}
+
+function selectMaintPlate(plate){
+  selectedMaintPlate=plate;
+  maintInvoiceFile=null;
+  renderMaintPlateStrip(getMaintPlates());
+  renderMaintVehiclePanel();
+}
+
+function renderMaintJobCard(j,i){
+  const cat=MAINT_CATEGORIES[j.category]||MAINT_CATEGORIES.other;
+  const parts=maintPartsByJob[j.id]||[];
+  const open=!j.date_out;
+  const downtime=j.date_out?Math.max(0,Math.round((new Date(j.date_out)-new Date(j.date_in))/(1000*60*60*24))):daysSince(j.date_in);
+  const partsHtml=parts.length>0?`<table class="maint-parts-table"><thead><tr><th>Part</th><th>Brand</th><th>Part No.</th><th class="r">Qty</th><th class="r">Unit Cost</th><th class="r">Warranty</th></tr></thead><tbody>${
+    parts.map(p=>`<tr><td>${escapeHtml(p.part_name)}</td><td>${escapeHtml(p.brand)||'—'}</td><td>${escapeHtml(p.part_number)||'—'}</td><td class="r">${p.quantity||1}</td><td class="r">${fmtRand(p.unit_cost)}</td><td class="r">${p.warranty_months?p.warranty_months+' mo':''}${p.warranty_months&&p.warranty_km?' / ':''}${p.warranty_km?p.warranty_km.toLocaleString('en-US')+' km':''}${!p.warranty_months&&!p.warranty_km?'—':''}</td></tr>`).join('')
+  }</tbody></table>`:'';
+  return`<div class="maint-job ${open?'mj-open':''}" style="animation-delay:${i*0.03}s">
+    <div class="maint-job-header">
+      <div class="maint-job-left">
+        <span class="maint-cat-badge">${cat.icon} ${cat.label}</span>
+        ${open?'<span class="maint-status-open">🏭 In workshop · '+downtime+'d</span>':'<span class="maint-status-done">✓ Done</span>'}
+      </div>
+      <span class="maint-job-date">${fmtDDMMYYYY(j.date_in)}${j.date_out?' → '+fmtDDMMYYYY(j.date_out):''}</span>
+    </div>
+    <div class="maint-job-body">
+      ${j.component?`<div class="maint-job-title">${escapeHtml(j.component)}</div>`:''}
+      <div class="maint-job-desc">${escapeHtml(j.description)}</div>
+      <div class="maint-job-meta">
+        <span>Odometer: <strong>${j.odometer?Number(j.odometer).toLocaleString('en-US')+' km':'—'}</strong></span>
+        <span>Total: <strong>${fmtRand(j.total_cost)}</strong></span>
+        ${j.labour_cost?`<span>Labour: <strong>${fmtRand(j.labour_cost)}</strong></span>`:''}
+        <span>${j.workshop==='internal'?'🏠 In-house':'🔧 '+(escapeHtml(j.supplier)||'Outside workshop')}</span>
+        ${j.date_out?`<span>Downtime: <strong>${downtime} day${downtime!==1?'s':''}</strong></span>`:''}
+      </div>
+      ${partsHtml}
+      ${j.notes?`<div style="font-size:11px;color:var(--amber);font-style:italic;margin-top:8px;">📝 ${escapeHtml(j.notes)}</div>`:''}
+    </div>
+    <div class="maint-job-footer">
+      <span>${j.invoice_url?`<a class="tyre-invoice-link" href="${escapeHtml(j.invoice_url)}" target="_blank">📄 View Invoice</a>`:''}</span>
+      ${open?`<button class="def-save" style="background:var(--green);" onclick="markJobDone('${j.id}')">✓ Back in service</button>`:''}
+    </div>
+  </div>`;
+}
+
+function renderMaintVehiclePanel(){
+  const panel=document.getElementById('maintVehiclePanel');
+  if(!selectedMaintPlate){
+    panel.innerHTML='<p class="tyre-empty">Select a vehicle above to view its maintenance history.</p>';
+    return;
+  }
+  const plate=selectedMaintPlate;
+  const jobs=maintJobs.filter(j=>j.plate===plate);
+  const vFlags=maintFlags.filter(f=>f.plate===plate);
+  const totalSpend=jobs.reduce((s,j)=>s+(Number(j.total_cost)||0),0);
+
+  const flagsHtml=vFlags.length>0?`<div class="maint-flags" style="margin-top:10px;">${vFlags.map(f=>`<div class="maint-flag mf-${f.severity}"><span class="maint-flag-icon">${f.icon}</span><div>${f.html}</div></div>`).join('')}</div>`:'';
+  const timeline=jobs.length===0
+    ?'<p class="tyre-empty">No maintenance recorded for this vehicle yet. Click "Add Job" to record the first one.</p>'
+    :`<div class="maint-timeline">${jobs.map((j,i)=>renderMaintJobCard(j,i)).join('')}</div>`;
+
+  panel.innerHTML=`
+    <div class="section-header" style="margin-top:6px;">
+      <div class="section-title" style="font-size:15px;">🚌 ${escapeHtml(plate)} — ${jobs.length} job${jobs.length!==1?'s':''}${totalSpend>0?' · '+fmtRand(totalSpend)+' total':''}</div>
+      <div class="section-actions">
+        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddJobForm()">＋ Add Job</button>
+      </div>
+    </div>
+    ${flagsHtml}
+    ${timeline}
+    <div class="tyre-add-form" id="maintAddForm">
+      <div class="tyre-form-title">＋ Add Maintenance Job — ${escapeHtml(plate)}</div>
+      <div class="tyre-form-err" id="maintFormErr"></div>
+      <div class="tf-grid">
+        <div class="tf-field"><label>Vehicle Plate</label><input type="text" id="mf-plate" value="${escapeHtml(plate)}" readonly style="background:var(--surface2);"></div>
+        <div class="tf-field"><label>Category *</label><select id="mf-category" onchange="maintCategoryChanged(this)">${Object.entries(MAINT_CATEGORIES).map(([k,c])=>`<option value="${k}">${c.icon} ${c.label}</option>`).join('')}</select></div>
+        <div class="tf-field"><label>Component</label><select id="mf-component">${MAINT_CATEGORIES.service.components.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
+        <div class="tf-field"><label>Odometer (km) *</label><input type="number" id="mf-odo" min="0" placeholder="Loading latest..."></div>
+        <div class="tf-field"><label>Date In *</label><input type="date" id="mf-datein"></div>
+        <div class="tf-field"><label>Date Out (blank = still in workshop)</label><input type="date" id="mf-dateout"></div>
+        <div class="tf-field"><label>Workshop</label><select id="mf-workshop"><option value="external">Outside supplier</option><option value="internal">In-house</option></select></div>
+        <div class="tf-field"><label>Supplier</label><input type="text" id="mf-supplier" placeholder="e.g. Bus Truck & Coach"></div>
+        <div class="tf-field"><label>Labour Cost (R)</label><input type="number" id="mf-labour" min="0" step="0.01" placeholder="e.g. 3500.00"></div>
+        <div class="tf-field"><label>Total Cost (R)</label><input type="number" id="mf-total" min="0" step="0.01" placeholder="e.g. 18500.00"></div>
+      </div>
+      <div class="tf-field" style="margin-bottom:14px;"><label>Description *</label><input type="text" id="mf-desc" placeholder="e.g. Replaced clutch kit and resurfaced flywheel"></div>
+      <div class="tf-field" style="margin-bottom:14px;"><label>Notes</label><input type="text" id="mf-notes" placeholder="Optional"></div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px;">Parts Fitted (optional — needed for warranty tracking)</label>
+        <div class="mf-parts-head"><span>Part name</span><span>Brand</span><span>Part no.</span><span>Qty</span><span>Unit cost R</span><span>Warranty mo</span><span>Warranty km</span><span></span></div>
+        <div id="mfPartsRows"></div>
+        <button class="btn btn-outline" style="font-size:11px;padding:5px 12px;margin-top:4px;" onclick="addMaintPartRow()">＋ Add Part</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <label class="tf-file-btn" for="mf-invoice">📄 <span id="mfInvoiceLabel">Attach invoice photo (optional)</span></label>
+        <input type="file" id="mf-invoice" accept="image/*,.pdf" onchange="maintInvoiceChosen(this)">
+        <button class="def-save" id="mfSaveBtn" onclick="submitMaintJob()">💾 Save Job</button>
+        <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="toggleAddJobForm()">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function maintCategoryChanged(sel){
+  const comps=(MAINT_CATEGORIES[sel.value]||MAINT_CATEGORIES.other).components;
+  document.getElementById('mf-component').innerHTML=comps.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+function addMaintPartRow(){
+  document.getElementById('mfPartsRows').insertAdjacentHTML('beforeend',`
+    <div class="mf-part-row">
+      <input type="text" class="mp-name" placeholder="Part name">
+      <input type="text" class="mp-brand" placeholder="Brand">
+      <input type="text" class="mp-pn" placeholder="Part no.">
+      <input type="number" class="mp-qty" value="1" min="1">
+      <input type="number" class="mp-cost" min="0" step="0.01" placeholder="0.00">
+      <input type="number" class="mp-wm" min="0" placeholder="mo">
+      <input type="number" class="mp-wkm" min="0" placeholder="km">
+      <button class="mf-part-del" title="Remove part" onclick="this.closest('.mf-part-row').remove()">✕</button>
+    </div>`);
+}
+
+async function toggleAddJobForm(){
+  const form=document.getElementById('maintAddForm');
+  if(!form)return;
+  const opening=!form.classList.contains('open');
+  form.classList.toggle('open');
+  if(!opening)return;
+  document.getElementById('mf-datein').value=new Date().toISOString().slice(0,10);
+  if(document.getElementById('mfPartsRows').children.length===0)addMaintPartRow();
+  const odoInput=document.getElementById('mf-odo');
+  const latest=await fetchLatestOdoForPlate(selectedMaintPlate);
+  if(latest!=null&&odoInput&&!odoInput.value)odoInput.value=latest;
+  if(odoInput)odoInput.placeholder='e.g. 91308';
+  form.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function maintInvoiceChosen(input){
+  maintInvoiceFile=input.files&&input.files[0]?input.files[0]:null;
+  document.getElementById('mfInvoiceLabel').textContent=maintInvoiceFile?maintInvoiceFile.name:'Attach invoice photo (optional)';
+}
+
+async function uploadMaintInvoice(plate){
+  if(!maintInvoiceFile)return null;
+  try{
+    const ext=(maintInvoiceFile.name.split('.').pop()||'jpg').toLowerCase();
+    const filename=`maint-invoice_${plate.replace(/\s+/g,'_')}_${Date.now()}.${ext}`;
+    const res=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
+      method:'POST',
+      headers:{'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':maintInvoiceFile.type,'x-upsert':'true'},
+      body:maintInvoiceFile
+    });
+    if(res.ok)return`${SUPABASE_URL}/storage/v1/object/public/odometer-photos/${filename}`;
+  }catch(err){console.error('[FleetDesk] Maint invoice upload failed:',err);}
+  return null;
+}
+
+async function submitMaintJob(){
+  const errEl=document.getElementById('maintFormErr');
+  const btn=document.getElementById('mfSaveBtn');
+  errEl.classList.remove('show');
+
+  const plate=selectedMaintPlate;
+  const category=document.getElementById('mf-category').value;
+  const component=document.getElementById('mf-component').value||null;
+  const description=document.getElementById('mf-desc').value.trim();
+  const odoRaw=document.getElementById('mf-odo').value;
+  const dateIn=document.getElementById('mf-datein').value;
+  const dateOut=document.getElementById('mf-dateout').value||null;
+  const workshop=document.getElementById('mf-workshop').value;
+  const supplier=document.getElementById('mf-supplier').value.trim();
+  const labourRaw=document.getElementById('mf-labour').value;
+  const totalRaw=document.getElementById('mf-total').value;
+  const notes=document.getElementById('mf-notes').value.trim();
+
+  if(!description||!odoRaw||!dateIn){
+    errEl.textContent='Please fill in Description, Odometer and Date In.';
+    errEl.classList.add('show');
+    return;
+  }
+  const odo=parseInt(odoRaw,10);
+  if(isNaN(odo)||odo<0){
+    errEl.textContent='Please enter a valid odometer reading.';
+    errEl.classList.add('show');
+    return;
+  }
+  if(dateOut&&dateOut<dateIn){
+    errEl.textContent='Date Out cannot be before Date In.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  // Collect parts rows that have a name
+  const parts=[...document.querySelectorAll('#mfPartsRows .mf-part-row')].map(row=>({
+    part_name:row.querySelector('.mp-name').value.trim(),
+    brand:row.querySelector('.mp-brand').value.trim()||null,
+    part_number:row.querySelector('.mp-pn').value.trim()||null,
+    quantity:parseInt(row.querySelector('.mp-qty').value,10)||1,
+    unit_cost:row.querySelector('.mp-cost').value?parseFloat(row.querySelector('.mp-cost').value):null,
+    warranty_months:row.querySelector('.mp-wm').value?parseInt(row.querySelector('.mp-wm').value,10):null,
+    warranty_km:row.querySelector('.mp-wkm').value?parseInt(row.querySelector('.mp-wkm').value,10):null
+  })).filter(p=>p.part_name);
+
+  btn.disabled=true;
+  btn.textContent='Saving...';
+  try{
+    const invoiceUrl=await uploadMaintInvoice(plate);
+    const jobBody={
+      plate,category,component,description,
+      odometer:odo,date_in:dateIn,date_out:dateOut,
+      workshop,supplier:supplier||null,
+      labour_cost:labourRaw?parseFloat(labourRaw):null,
+      total_cost:totalRaw?parseFloat(totalRaw):null,
+      status:dateOut?'done':'open',
+      invoice_url:invoiceUrl,notes:notes||null
+    };
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify(jobBody)
+    });
+    if(!res.ok){
+      console.error('[FleetDesk] Job save failed:',res.status,await res.text());
+      errEl.textContent='Could not save the job. Please try again.';
+      errEl.classList.add('show');
+      btn.disabled=false;btn.textContent='💾 Save Job';
+      return;
+    }
+    const saved=await res.json();
+    const jobId=saved[0]&&saved[0].id;
+    if(jobId&&parts.length>0){
+      const pRes=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_parts`,{
+        method:'POST',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify(parts.map(p=>({...p,job_id:jobId})))
+      });
+      if(!pRes.ok)console.error('[FleetDesk] Parts save failed:',pRes.status,await pRes.text());
+    }
+    maintInvoiceFile=null;
+    await renderMaintTab();
+  }catch(err){
+    console.error('[FleetDesk] Job save error:',err);
+    errEl.textContent='Connection error. Please try again.';
+    errEl.classList.add('show');
+    btn.disabled=false;btn.textContent='💾 Save Job';
+  }
+}
+
+async function markJobDone(id){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({date_out:new Date().toISOString().slice(0,10),status:'done'})
+    });
+    if(!res.ok){
+      alert('Could not update the job. Please try again.');
+      return;
+    }
+    await renderMaintTab();
+  }catch{alert('Could not update the job. Please check your connection and try again.');}
 }
 
 initApp();
