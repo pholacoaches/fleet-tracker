@@ -1905,6 +1905,7 @@ function renderDiscsTab(){
 
 // ── TYRES TAB ─────────────────────────────────────────────────────────────────
 const TYRE_POSITIONS=['FL','FR','RL-outer','RL-inner','RR-outer','RR-inner','Spare'];
+const TYRE_BRANDS=['Michelin','Bridgestone','Goodyear','Continental','Dunlop','Pirelli','Hankook','Triangle','Linglong','Advance','Other'];
 let tyresData=[];
 let selectedTyrePlate=null;
 let tyreInvoiceFile=null;
@@ -1975,7 +1976,7 @@ function renderTyreVehiclePanel(){
         <div class="tyre-card-body">
           <div class="tyre-info-row"><span class="tyre-info-label">Brand</span><span class="tyre-info-val">${t.brand||'—'}${t.model?' '+t.model:''}</span></div>
           <div class="tyre-info-row"><span class="tyre-info-label">Size</span><span class="tyre-info-val mono">${t.size||'—'}</span></div>
-          <div class="tyre-info-row"><span class="tyre-info-label">Cost</span><span class="tyre-info-val mono">${t.cost!=null?'R '+Number(t.cost).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Cost</span><span class="tyre-info-val mono">${t.cost!=null?'R'+Number(t.cost).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</span></div>
           <div class="tyre-info-row"><span class="tyre-info-label">Fitted At</span><span class="tyre-info-val mono">${t.odometer_fitted!=null?Number(t.odometer_fitted).toLocaleString('en-US')+' km':'—'}</span></div>
           <div class="tyre-info-row"><span class="tyre-info-label">Date Fitted</span><span class="tyre-info-val mono">${t.date_fitted||'—'}</span></div>
           ${t.supplier?`<div class="tyre-info-row"><span class="tyre-info-label">Supplier</span><span class="tyre-info-val">${t.supplier}</span></div>`:''}
@@ -1999,7 +2000,10 @@ function renderTyreVehiclePanel(){
       <div class="tf-grid">
         <div class="tf-field"><label>Vehicle Plate</label><input type="text" id="tf-plate" value="${plate}" readonly style="background:var(--surface2);"></div>
         <div class="tf-field"><label>Position *</label><select id="tf-position">${TYRE_POSITIONS.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div>
-        <div class="tf-field"><label>Brand *</label><input type="text" id="tf-brand" placeholder="e.g. Michelin"></div>
+        <div class="tf-field"><label>Brand *</label>
+          <select id="tf-brand" onchange="tyreBrandChanged(this)">${TYRE_BRANDS.map(b=>`<option value="${b}">${b}</option>`).join('')}</select>
+          <input type="text" id="tf-brand-other" placeholder="Type brand name" style="display:none;margin-top:6px;">
+        </div>
         <div class="tf-field"><label>Model</label><input type="text" id="tf-model" placeholder="e.g. X Multi Energy Z"></div>
         <div class="tf-field"><label>Size *</label><input type="text" id="tf-size" placeholder="e.g. 315/80R22.5"></div>
         <div class="tf-field"><label>Supplier</label><input type="text" id="tf-supplier" placeholder="e.g. Supa Quick"></div>
@@ -2052,6 +2056,12 @@ async function toggleAddTyreForm(){
   form.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
+function tyreBrandChanged(sel){
+  const other=document.getElementById('tf-brand-other');
+  other.style.display=sel.value==='Other'?'block':'none';
+  if(sel.value==='Other')other.focus();
+}
+
 function tyreInvoiceChosen(input){
   tyreInvoiceFile=input.files&&input.files[0]?input.files[0]:null;
   document.getElementById('tfInvoiceLabel').textContent=tyreInvoiceFile?tyreInvoiceFile.name:'Attach invoice photo (optional)';
@@ -2079,7 +2089,8 @@ async function submitTyre(){
 
   const plate=selectedTyrePlate;
   const position=document.getElementById('tf-position').value;
-  const brand=document.getElementById('tf-brand').value.trim();
+  const brandSel=document.getElementById('tf-brand').value;
+  const brand=brandSel==='Other'?document.getElementById('tf-brand-other').value.trim():brandSel;
   const model=document.getElementById('tf-model').value.trim();
   const size=document.getElementById('tf-size').value.trim();
   const supplier=document.getElementById('tf-supplier').value.trim();
