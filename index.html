@@ -580,6 +580,35 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .def-row > div { flex:1; min-width:120px; }
 .def-save { padding:7px 16px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; font-weight:700; cursor:pointer; align-self:flex-start; transition:background 0.15s; }
 .def-save:hover { background:var(--accent2); }
+.disc-edit-form input[type=date] { font-family:var(--font-mono); }
+
+/* COMPLIANCE ROWS (3 items per vehicle) */
+.comp-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); }
+.comp-row:last-child { border-bottom:none; }
+.comp-item-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); flex:0 0 118px; }
+.comp-date { font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--text2); flex:1; }
+.comp-chip { font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+.cc-expired { background:var(--red); color:#fff; }
+.cc-urgent { background:var(--red-light); color:var(--red); }
+.cc-warn { background:var(--amber-light); color:var(--amber); }
+.cc-ok { background:var(--green-light); color:var(--green); }
+.cc-unknown { background:var(--surface2); color:var(--text3); }
+.comp-renew-btn { font-size:10px; padding:2px 9px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); color:var(--text2); cursor:pointer; font-family:var(--font); font-weight:700; white-space:nowrap; transition:border-color 0.15s,color 0.15s; }
+.comp-renew-btn:hover { border-color:var(--green); color:var(--green); }
+
+/* BULK EDIT TABLE */
+.disc-bulk-wrap { overflow-x:auto; }
+.disc-bulk-table { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); }
+.disc-bulk-table th { padding:8px 8px; font-size:9px; text-transform:uppercase; letter-spacing:0.6px; color:var(--text3); font-weight:700; text-align:left; background:var(--surface2); border-bottom:1px solid var(--border); white-space:nowrap; }
+.disc-bulk-table td { padding:4px 6px; border-bottom:1px solid var(--border); }
+.disc-bulk-table td.bp { font-family:var(--font-mono); font-size:11px; font-weight:700; white-space:nowrap; }
+.disc-bulk-table input { width:100%; min-width:90px; padding:5px 8px; border:1px solid var(--border2); border-radius:4px; font-family:var(--font); font-size:11px; color:var(--text); background:var(--surface); outline:none; }
+.disc-bulk-table input:focus { border-color:var(--accent); }
+.disc-bulk-table input[type=date] { font-family:var(--font-mono); }
+
+/* TAB COUNT BADGE */
+.dash-tab-btn { position:relative; }
+.dash-tab-badge { position:absolute; top:2px; right:2px; background:var(--red); color:#fff; border-radius:20px; min-width:16px; height:16px; font-size:9px; font-weight:700; display:none; align-items:center; justify-content:center; padding:0 4px; line-height:1; }
 
 /* TYRES TAB */
 .tyre-plate-strip { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
@@ -764,7 +793,7 @@ input[type=file] { display: none; }
       <button class="dash-tab-btn active" data-tab="overview"    onclick="switchDashTab('overview')">📊 Overview</button>
       <button class="dash-tab-btn"        data-tab="performance" onclick="switchDashTab('performance')">🏆 Performance</button>
       <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')">🚌 Vehicle Blocks</button>
-<button class="dash-tab-btn" data-tab="discs" onclick="switchDashTab('discs')">📋 Disc Renewal</button>
+<button class="dash-tab-btn" data-tab="discs" onclick="switchDashTab('discs')">📋 Disc Renewal<span class="dash-tab-badge" id="discTabBadge">0</span></button>
       <button class="dash-tab-btn"        data-tab="trends"      onclick="switchDashTab('trends')">📈 Trends</button>
       <button class="dash-tab-btn"        data-tab="history"     onclick="switchDashTab('history')">📁 History</button>
       <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')">🛞 Tyres</button>
@@ -822,14 +851,29 @@ input[type=file] { display: none; }
     </div>
 
 
-<!-- TAB 4: DISC RENEWAL -->
+<!-- TAB 4: DISC RENEWAL / COMPLIANCE -->
 <div class="tab-panel" id="tab-discs">
   <div class="section-header">
-    <div class="section-title">📋 Disc Renewal</div>
-    <div style="font-size:12px;color:var(--text3);margin-left:8px;">Sorted by urgency — expired first</div>
+    <div class="section-title">📋 Disc & Compliance Renewal</div>
+    <div class="section-actions">
+      <input type="text" id="discSearch" placeholder="🔍  Search plate..." oninput="renderDiscView()"
+        style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-family:var(--font);font-size:12px;outline:none;width:150px;color:var(--text);background:var(--surface2);">
+      <select id="discFilter" onchange="renderDiscView()" class="sort-select">
+        <option value="all">All statuses</option>
+        <option value="expired">🔴 Expired</option>
+        <option value="urgent">🚨 Urgent (≤14 days)</option>
+        <option value="warn">⚠ Due soon (≤60 days)</option>
+        <option value="ok">✅ Valid</option>
+        <option value="unknown">📋 Not set</option>
+      </select>
+      <button class="btn btn-outline" onclick="toggleDiscBulk()" id="discBulkBtn" style="font-size:11px;padding:6px 12px;">≡ Bulk Edit</button>
+      <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;">📥 60-Day CSV</button>
+      <button class="btn btn-outline" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;">＋ Add Vehicle</button>
+    </div>
   </div>
   <div class="disc-summary-strip" id="discSummaryStrip"></div>
   <div class="discs-grid" id="discsGrid"></div>
+  <div class="disc-bulk-wrap hidden" id="discBulkWrap"></div>
 </div>
 
     <!-- TAB 5: TRENDS -->
@@ -931,6 +975,7 @@ function showDashboard(){
   recomputeAllStats();
   renderDashboard();
   fetchSubmissions().then(()=>startRealtimeListener());
+  fetchCompliance().then(()=>{updateDiscTabBadge();renderAlertBanner();});
 }
 
 function showLogin(){
@@ -1334,17 +1379,7 @@ function renderDashboard(){
 
   const odomAlerts=r.vehicles.filter(v=>v.hasOdometerIssue);
   const highSpend=r.vehicles.filter(v=>v.isHighSpend);
-  const competitor=r.vehicles.filter(v=>v.hasCompetitor);
-  const alerts=[];
-  if(odomAlerts.length>0)alerts.push(`⚠ ${odomAlerts.length} vehicle(s) have odometer anomalies`);
-  if(highSpend.length>0)alerts.push(`🔴 ${highSpend.length} vehicle(s) are significantly above fleet average spend`);
-  if(competitor.length>0)alerts.push(`⛽ ${competitor.length} vehicle(s) used competitor fuel stations`);
-  const ab=document.getElementById('alertBanner');
-  if(alerts.length>0){
-    ab.classList.remove('hidden');
-    ab.innerHTML=`<div style="font-size:16px">⚠</div><div><strong>Attention Required</strong><br>${alerts.join(' &nbsp;·&nbsp; ')}</div>`;
-    ab.className='alert-banner';
-  }else{ab.classList.add('hidden');}
+  renderAlertBanner();
 
   const totalSpend=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
   const totalLitres=r.vehicles.reduce((s,v)=>s+v.totalLitres,0);
@@ -1831,124 +1866,405 @@ async function pollForNewSubmissions(){
   }
 }
 
-// ── DISC RENEWAL ──────────────────────────────────────────────────────────────
-// v2: v1 contained auto-seeded demo data (fake expiry dates and licence numbers) — discard it
-const DISCS_KEY='fleet_discs_v2';
-localStorage.removeItem('fleet_discs_v1');
-const DISC_WARN_DAYS=30;
-const DISC_URGENT_DAYS=7;
+// ── DISC RENEWAL / COMPLIANCE (Supabase-backed) ──────────────────────────────
+const COMP_WARN_DAYS=60;
+const COMP_URGENT_DAYS=14;
+const COMP_ITEMS=[
+  {key:'licence_disc',label:'Licence Disc',icon:'💿',expiryField:'licence_disc_expiry',noField:'licence_disc_no',costField:'licence_disc_cost',renewMonths:12},
+  {key:'cof',label:'COF (6-monthly)',icon:'🛠',expiryField:'cof_expiry',noField:null,costField:'cof_cost',renewMonths:6},
+  {key:'operating_licence',label:'Operating Licence',icon:'🚏',expiryField:'operating_licence_expiry',noField:'operating_licence_no',costField:'operating_licence_cost',renewMonths:null}
+];
+let complianceData={};   // by plate
+let discBulkMode=false;
 
-function loadDiscData(){try{return JSON.parse(localStorage.getItem(DISCS_KEY))||{};}catch{return{};}}
-function saveDiscData(d){localStorage.setItem(DISCS_KEY,JSON.stringify(d));}
-
-function getDiscStatus(expiryDateStr){
-  if(!expiryDateStr)return{status:'unknown',days:null};
-  const parts=expiryDateStr.split('.');
-  if(parts.length!==3)return{status:'unknown',days:null};
-  const expiry=new Date(+parts[2],+parts[1]-1,+parts[0]);
+function complianceStatus(expiry){  // expiry: 'YYYY-MM-DD' or null
+  if(!expiry)return{status:'unknown',days:null};
+  const d=new Date(expiry+'T00:00:00');
+  if(isNaN(d))return{status:'unknown',days:null};
   const today=new Date();today.setHours(0,0,0,0);
-  const diffMs=expiry-today;
-  const diffDays=Math.ceil(diffMs/(1000*60*60*24));
-  if(diffDays<0)return{status:'expired',days:diffDays};
-  if(diffDays<=DISC_URGENT_DAYS)return{status:'urgent',days:diffDays};
-  if(diffDays<=DISC_WARN_DAYS)return{status:'warn',days:diffDays};
-  return{status:'ok',days:diffDays};
+  const days=Math.round((d-today)/(1000*60*60*24));
+  if(days<0)return{status:'expired',days};
+  if(days<=COMP_URGENT_DAYS)return{status:'urgent',days};
+  if(days<=COMP_WARN_DAYS)return{status:'warn',days};
+  return{status:'ok',days};
 }
 
-function toggleDiscEdit(plate){
+function worstComplianceStatus(rec){
+  const order={expired:0,urgent:1,warn:2,ok:3,unknown:4};
+  let worst='unknown';
+  COMP_ITEMS.forEach(it=>{
+    const s=complianceStatus(rec?rec[it.expiryField]:null).status;
+    if(order[s]<order[worst])worst=s;
+  });
+  return worst;
+}
+
+async function fetchCompliance(){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_compliance?select=*`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+    });
+    if(!res.ok)return;
+    const rows=await res.json();
+    complianceData={};
+    rows.forEach(r=>complianceData[r.plate]=r);
+    if(rows.length===0)await migrateLocalDiscData();
+  }catch(err){console.error('[FleetDesk] fetchCompliance failed:',err);}
+}
+
+// One-time: carry old localStorage disc entries (DD.MM.YYYY) into Supabase
+async function migrateLocalDiscData(){
+  let old={};
+  try{old=JSON.parse(localStorage.getItem('fleet_discs_v2'))||{};}catch{old={};}
+  const toIso=s=>{const p=String(s||'').split('.');return p.length===3?`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`:null;};
+  const rows=Object.entries(old)
+    .filter(([,d])=>d&&(d.expiryDate||d.licenceNo||d.makeModel))
+    .map(([plate,d])=>({plate,make_model:d.makeModel||null,licence_disc_expiry:toIso(d.expiryDate),licence_disc_no:d.licenceNo||null}));
+  if(rows.length===0)return;
+  if(await upsertCompliance(rows)){
+    rows.forEach(r=>complianceData[r.plate]=r);
+    console.log('[FleetDesk] Migrated',rows.length,'disc record(s) from localStorage to Supabase');
+  }
+}
+
+async function upsertCompliance(rows){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_compliance?on_conflict=plate`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+      body:JSON.stringify(rows)
+    });
+    if(!res.ok)console.error('[FleetDesk] Compliance save failed:',res.status,await res.text());
+    return res.ok;
+  }catch(err){console.error('[FleetDesk] Compliance save error:',err);return false;}
+}
+
+// ALL vehicles ever seen across every report + compliance rows (not just current period)
+function getCompliancePlates(){
+  const plates=new Set();
+  state.reports.forEach(r=>r.vehicles.forEach(v=>plates.add(v.plate)));
+  Object.keys(complianceData).forEach(p=>plates.add(p));
+  return[...plates].sort();
+}
+
+function getComplianceAlertCounts(){
+  let expired=0,urgent=0,warn=0;
+  Object.values(complianceData).forEach(rec=>{
+    COMP_ITEMS.forEach(it=>{
+      const s=complianceStatus(rec[it.expiryField]).status;
+      if(s==='expired')expired++;
+      else if(s==='urgent')urgent++;
+      else if(s==='warn')warn++;
+    });
+  });
+  return{expired,urgent,warn};
+}
+
+function updateDiscTabBadge(){
+  const badge=document.getElementById('discTabBadge');
+  if(!badge)return;
+  const c=getComplianceAlertCounts();
+  const total=c.expired+c.urgent+c.warn;
+  if(total>0){badge.textContent=total>99?'99+':total;badge.style.display='flex';}
+  else{badge.style.display='none';}
+}
+
+// Overview alert banner — fuel anomalies + compliance, rebuilt whenever either changes
+function renderAlertBanner(){
+  const ab=document.getElementById('alertBanner');
+  if(!ab||!currentReport)return;
+  const r=currentReport;
+  const alerts=[];
+  const odomAlerts=r.vehicles.filter(v=>v.hasOdometerIssue);
+  const highSpend=r.vehicles.filter(v=>v.isHighSpend);
+  const competitor=r.vehicles.filter(v=>v.hasCompetitor);
+  if(odomAlerts.length>0)alerts.push(`⚠ ${odomAlerts.length} vehicle(s) have odometer anomalies`);
+  if(highSpend.length>0)alerts.push(`🔴 ${highSpend.length} vehicle(s) are significantly above fleet average spend`);
+  if(competitor.length>0)alerts.push(`⛽ ${competitor.length} vehicle(s) used competitor fuel stations`);
+  const cc=getComplianceAlertCounts();
+  if(cc.expired>0)alerts.push(`📋 ${cc.expired} compliance item(s) EXPIRED — disc, COF or operating licence`);
+  if(cc.urgent>0)alerts.push(`🚨 ${cc.urgent} compliance item(s) expire within 14 days`);
+  if(cc.warn>0)alerts.push(`📋 ${cc.warn} compliance item(s) due within 60 days`);
+  if(alerts.length>0){
+    ab.classList.remove('hidden');
+    ab.innerHTML=`<div style="font-size:16px">⚠</div><div><strong>Attention Required</strong><br>${alerts.join(' &nbsp;·&nbsp; ')}</div>`;
+    ab.className='alert-banner';
+  }else{ab.classList.add('hidden');}
+}
+
+function toggleComplianceEdit(plate){
   const id=plate.replace(/\s+/g,'_');
-  const form=document.getElementById('def-'+id);
+  const form=document.getElementById('cef-'+id);
   if(form)form.classList.toggle('open');
 }
 
-function saveDiscEdit(plate){
+async function saveComplianceEdit(plate){
   const id=plate.replace(/\s+/g,'_');
-  const data=loadDiscData();
-  if(!data[plate])data[plate]={};
-  const expEl=document.getElementById('de-exp-'+id);
-  const licEl=document.getElementById('de-lic-'+id);
-  const makeEl=document.getElementById('de-make-'+id);
-  if(expEl)data[plate].expiryDate=expEl.value;
-  if(licEl)data[plate].licenceNo=licEl.value;
-  if(makeEl)data[plate].makeModel=makeEl.value;
-  saveDiscData(data);
-  renderDiscsTab();
+  const g=f=>{const el=document.getElementById('ce-'+f+'-'+id);return el?el.value.trim():'';};
+  const num=v=>v&&!isNaN(parseFloat(v))?parseFloat(v):null;
+  const row={
+    plate,
+    make_model:g('make')||null,
+    licence_disc_expiry:g('dexp')||null,
+    licence_disc_no:g('dno')||null,
+    licence_disc_cost:num(g('dcost')),
+    cof_expiry:g('cexp')||null,
+    cof_cost:num(g('ccost')),
+    operating_licence_expiry:g('oexp')||null,
+    operating_licence_no:g('ono')||null,
+    operating_licence_cost:num(g('ocost')),
+    notes:g('notes')||null
+  };
+  if(await upsertCompliance([row])){
+    complianceData[plate]={...(complianceData[plate]||{}),...row};
+    renderDiscView();updateDiscTabBadge();renderAlertBanner();
+  }else{
+    alert('Could not save. Please check your connection and try again.');
+  }
 }
 
-function renderDiscsTab(){
-  const vehicles=currentReport?[...currentReport.vehicles]:[];
-  if(vehicles.length===0){
-    document.getElementById('discsGrid').innerHTML='<p style="color:var(--text3);font-size:13px;font-style:italic;">Upload a fuel report first to populate vehicle list.</p>';
-    document.getElementById('discSummaryStrip').innerHTML='';
+async function renewComplianceItem(plate,key){
+  const item=COMP_ITEMS.find(i=>i.key===key);
+  if(!item||!item.renewMonths)return;
+  const rec=complianceData[plate]||{plate};
+  const cur=rec[item.expiryField]||null;
+  // Roll forward from the current expiry if still valid, otherwise from today
+  const base=cur&&new Date(cur+'T00:00:00')>new Date()?new Date(cur+'T00:00:00'):new Date();
+  base.setMonth(base.getMonth()+item.renewMonths);
+  const newIso=base.toISOString().slice(0,10);
+  if(!confirm(`Mark ${item.label} for ${plate} as renewed?\n\nNew expiry: ${fmtDDMMYYYY(newIso)}`))return;
+  const costRaw=prompt('Renewal cost in Rands (optional — leave blank to skip):','');
+  const cost=costRaw&&!isNaN(parseFloat(costRaw))?parseFloat(costRaw):null;
+  const row={plate,[item.expiryField]:newIso};
+  if(cost!=null)row[item.costField]=cost;
+  if(!await upsertCompliance([row])){
+    alert('Could not save the renewal. Please try again.');
     return;
   }
-  const discData=loadDiscData();
+  complianceData[plate]={...(complianceData[plate]||{}),...row};
+  // Audit trail
+  try{
+    await fetch(`${SUPABASE_URL}/rest/v1/compliance_history`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({plate,item:key,old_expiry:cur,new_expiry:newIso,cost})
+    });
+  }catch(err){console.error('[FleetDesk] History save failed:',err);}
+  renderDiscView();updateDiscTabBadge();renderAlertBanner();
+}
 
-  // Sort by urgency
-  const sorted=vehicles.map(v=>{
-    const d=discData[v.plate]||{};
-    const result=getDiscStatus(d.expiryDate||'');
-    return{...v,discInfo:d,statusResult:result};
-  }).sort((a,b)=>{
-    const order={expired:0,urgent:1,warn:2,ok:3,unknown:4};
-    const as=a.statusResult.status||'unknown';
-    const bs=b.statusResult.status||'unknown';
-    if(order[as]!==order[bs])return order[as]-order[bs];
-    return(a.statusResult.days||0)-(b.statusResult.days||0);
+async function addComplianceVehicle(){
+  const plate=(prompt('Vehicle registration / plate:')||'').trim().toUpperCase();
+  if(!plate)return;
+  if(complianceData[plate]){alert('That vehicle is already in the list.');return;}
+  if(await upsertCompliance([{plate}])){
+    complianceData[plate]={plate};
+    renderDiscView();
+  }else{
+    alert('Could not add the vehicle. Please try again.');
+  }
+}
+
+function exportComplianceCSV(){
+  const rows=[['Plate','Item','Expiry Date','Days Left','Status','Licence No']];
+  getCompliancePlates().forEach(plate=>{
+    const rec=complianceData[plate]||{};
+    COMP_ITEMS.forEach(it=>{
+      const st=complianceStatus(rec[it.expiryField]);
+      if(st.days==null||st.days>COMP_WARN_DAYS)return;
+      const label=st.status==='expired'?'EXPIRED':st.status==='urgent'?'Urgent':'Due soon';
+      rows.push([plate,it.label,fmtDDMMYYYY(rec[it.expiryField]),st.days,label,it.noField?(rec[it.noField]||''):'']);
+    });
   });
+  if(rows.length===1){alert('Nothing expires in the next 60 days — no CSV to export.');return;}
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='compliance_expiring_60days_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
 
-  // Summary counts
-  let expired=0,warn=0,ok=0,notSet=0;
-  sorted.forEach(v=>{
-    const s=v.statusResult.status;
-    if(s==='expired'||s==='urgent')expired++;
-    else if(s==='warn')warn++;
-    else if(s==='ok')ok++;
-    else notSet++;
+async function renderDiscsTab(){
+  await fetchCompliance();
+  renderDiscView();
+  updateDiscTabBadge();
+  renderAlertBanner();
+}
+
+function renderDiscView(){
+  const plates=getCompliancePlates();
+  const grid=document.getElementById('discsGrid');
+  const bulkWrap=document.getElementById('discBulkWrap');
+  const bulkBtn=document.getElementById('discBulkBtn');
+
+  if(plates.length===0){
+    document.getElementById('discSummaryStrip').innerHTML='';
+    grid.innerHTML='<p class="tyre-empty">Upload a fuel report or click "＋ Add Vehicle" to start tracking compliance.</p>';
+    bulkWrap.classList.add('hidden');
+    return;
+  }
+
+  // Summary counts across all 3 items per vehicle
+  let expired=0,urgent=0,warn=0,ok=0,notSet=0;
+  plates.forEach(p=>{
+    const rec=complianceData[p]||{};
+    COMP_ITEMS.forEach(it=>{
+      const s=complianceStatus(rec[it.expiryField]).status;
+      if(s==='expired')expired++;
+      else if(s==='urgent')urgent++;
+      else if(s==='warn')warn++;
+      else if(s==='ok')ok++;
+      else notSet++;
+    });
   });
-
   document.getElementById('discSummaryStrip').innerHTML=`
-    <div class="disc-summary-card ds-red"><div class="disc-summary-label">🔴 Expired / Urgent</div><div class="disc-summary-val">${expired}</div></div>
-    <div class="disc-summary-card ds-amber"><div class="disc-summary-label">⚠ Due Within 30 Days</div><div class="disc-summary-val">${warn}</div></div>
+    <div class="disc-summary-card ds-red"><div class="disc-summary-label">🔴 Expired</div><div class="disc-summary-val">${expired}</div></div>
+    <div class="disc-summary-card ds-red"><div class="disc-summary-label">🚨 Urgent (≤14 Days)</div><div class="disc-summary-val">${urgent}</div></div>
+    <div class="disc-summary-card ds-amber"><div class="disc-summary-label">⚠ Due Within 60 Days</div><div class="disc-summary-val">${warn}</div></div>
     <div class="disc-summary-card ds-green"><div class="disc-summary-label">✅ Valid</div><div class="disc-summary-val">${ok}</div></div>
     <div class="disc-summary-card"><div class="disc-summary-label">📋 Not Set</div><div class="disc-summary-val" style="color:var(--text3);">${notSet}</div></div>
-    <div class="disc-summary-card"><div class="disc-summary-label">🚌 Total Vehicles</div><div class="disc-summary-val">${vehicles.length}</div></div>
+    <div class="disc-summary-card"><div class="disc-summary-label">🚌 Vehicles</div><div class="disc-summary-val">${plates.length}</div></div>
   `;
 
-  document.getElementById('discsGrid').innerHTML=sorted.map((v,vi)=>{
-    const plate=v.plate;
+  if(discBulkMode){
+    grid.classList.add('hidden');
+    bulkWrap.classList.remove('hidden');
+    if(bulkBtn)bulkBtn.textContent='⊞ Card View';
+    renderDiscBulk(plates);
+    return;
+  }
+  grid.classList.remove('hidden');
+  bulkWrap.classList.add('hidden');
+  if(bulkBtn)bulkBtn.textContent='≡ Bulk Edit';
+  renderDiscCards(plates);
+}
+
+function renderDiscCards(plates){
+  const search=(document.getElementById('discSearch')?.value||'').toLowerCase();
+  const filter=document.getElementById('discFilter')?.value||'all';
+  const order={expired:0,urgent:1,warn:2,ok:3,unknown:4};
+
+  let list=plates.map(p=>({plate:p,rec:complianceData[p]||{plate:p},worst:worstComplianceStatus(complianceData[p])}));
+  if(search)list=list.filter(v=>v.plate.toLowerCase().includes(search));
+  if(filter!=='all')list=list.filter(v=>COMP_ITEMS.some(it=>complianceStatus(v.rec[it.expiryField]).status===filter));
+  list.sort((a,b)=>order[a.worst]-order[b.worst]||a.plate.localeCompare(b.plate));
+
+  if(list.length===0){
+    document.getElementById('discsGrid').innerHTML='<p class="tyre-empty">No vehicles match this search / filter.</p>';
+    return;
+  }
+
+  document.getElementById('discsGrid').innerHTML=list.map((v,vi)=>{
+    const{plate,rec,worst}=v;
     const id=plate.replace(/\s+/g,'_');
-    const d=v.discInfo;
-    const sr=v.statusResult;
-    const s=sr.status||'unknown';
-    const cardClass=s==='expired'||s==='urgent'?'dc-red':s==='warn'?'dc-amber':s==='ok'?'dc-green':'';
-    const badgeClass=s==='expired'?'dcb-expired':s==='urgent'?'dcb-expired':s==='warn'?'dcb-warn':s==='ok'?'dcb-ok':'';
-    const badgeText=s==='expired'?'Expired':s==='urgent'?'Urgent':s==='warn'?'Due Soon':s==='ok'?'Valid':'Not Set';
-    const dateClass=s==='expired'||s==='urgent'?'dv-red':s==='warn'?'dv-amber':s==='ok'?'dv-green':'';
-    const daysClass=s==='expired'||s==='urgent'?'dd-red':s==='warn'?'dd-amber':s==='ok'?'dd-green':'';
-    const daysText=s==='expired'?`Expired ${Math.abs(sr.days)} day${Math.abs(sr.days)!==1?'s':''} ago`:s==='unknown'?'Expiry date not set':`${sr.days} day${sr.days!==1?'s':''} remaining`;
-    return`<div class="disc-card ${cardClass}" style="animation-delay:${vi*0.03}s">
+    const cardClass=worst==='expired'||worst==='urgent'?'dc-red':worst==='warn'?'dc-amber':worst==='ok'?'dc-green':'';
+    const badgeClass=worst==='expired'||worst==='urgent'?'dcb-expired':worst==='warn'?'dcb-warn':worst==='ok'?'dcb-ok':'';
+    const badgeText=worst==='expired'?'Expired':worst==='urgent'?'Urgent':worst==='warn'?'Due Soon':worst==='ok'?'All Valid':'Not Set';
+
+    const rowsHtml=COMP_ITEMS.map(it=>{
+      const exp=rec[it.expiryField];
+      const st=complianceStatus(exp);
+      const chipClass='cc-'+st.status;
+      const chipText=st.status==='expired'?`${Math.abs(st.days)}d over`:st.status==='unknown'?'Not set':st.status==='ok'?`${st.days}d`:`${st.days}d left`;
+      const renewBtn=it.renewMonths?`<button class="comp-renew-btn" onclick="renewComplianceItem('${plate.replace(/'/g,"\\'")}','${it.key}')">✓ Renewed</button>`:'';
+      return`<div class="comp-row">
+        <span class="comp-item-label">${it.icon} ${it.label}</span>
+        <span class="comp-date">${exp?fmtDDMMYYYY(exp):'—'}</span>
+        <span class="comp-chip ${chipClass}">${chipText}</span>
+        ${renewBtn}
+      </div>`;
+    }).join('');
+
+    return`<div class="disc-card ${cardClass}" style="animation-delay:${Math.min(vi,20)*0.03}s">
       <div class="disc-card-header">
-        <span class="disc-card-plate">${plate}</span>
+        <span class="disc-card-plate">${escapeHtml(plate)}</span>
         <span class="disc-card-badge ${badgeClass}">${badgeText}</span>
       </div>
       <div class="disc-card-body">
-        <div class="disc-info-row"><span class="disc-info-label">Expiry Date</span><span class="disc-info-val ${dateClass}">${d.expiryDate||'Not set'}</span></div>
-        <div class="disc-info-row"><span class="disc-info-label">Licence No.</span><span class="disc-info-val">${d.licenceNo||'Not set'}</span></div>
-        <div class="disc-info-row"><span class="disc-info-label">Make / Model</span><span class="disc-info-val">${d.makeModel||'Not set'}</span></div>
-        <div class="disc-days ${daysClass}">${daysText}</div>
+        ${rowsHtml}
+        ${rec.make_model?`<div class="disc-info-row" style="margin-top:4px;"><span class="disc-info-label">Make / Model</span><span class="disc-info-val">${escapeHtml(rec.make_model)}</span></div>`:''}
+        ${rec.notes?`<div style="font-size:11px;color:var(--amber);font-style:italic;margin-top:4px;">📝 ${escapeHtml(rec.notes)}</div>`:''}
       </div>
-      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleDiscEdit('${plate}')">✎ Update Disc</button></div>
-      <div class="disc-edit-form" id="def-${id}">
+      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleComplianceEdit('${plate.replace(/'/g,"\\'")}')">✎ Edit Details</button></div>
+      <div class="disc-edit-form" id="cef-${id}">
         <div class="def-row">
-          <div><label>Expiry Date (DD.MM.YYYY)</label><input type="text" id="de-exp-${id}" value="${d.expiryDate||''}" placeholder="e.g. 31.12.2026"></div>
-          <div><label>Licence Number</label><input type="text" id="de-lic-${id}" value="${d.licenceNo||''}" placeholder="e.g. GP-2021-447"></div>
+          <div><label>Make / Model</label><input type="text" id="ce-make-${id}" value="${escapeHtml(rec.make_model||'')}" placeholder="e.g. Yutong ZK6122H"></div>
+          <div><label>Licence Disc No.</label><input type="text" id="ce-dno-${id}" value="${escapeHtml(rec.licence_disc_no||'')}" placeholder="e.g. GP-2021-447"></div>
         </div>
-        <div><label>Make / Model</label><input type="text" id="de-make-${id}" value="${d.makeModel||''}" placeholder="e.g. Yutong ZK6122H"></div>
-        <button class="def-save" onclick="saveDiscEdit('${plate}')">💾 Save</button>
+        <div class="def-row">
+          <div><label>💿 Disc Expiry</label><input type="date" id="ce-dexp-${id}" value="${rec.licence_disc_expiry||''}"></div>
+          <div><label>Disc Cost (R)</label><input type="number" id="ce-dcost-${id}" min="0" step="0.01" value="${rec.licence_disc_cost||''}"></div>
+        </div>
+        <div class="def-row">
+          <div><label>🛠 COF Expiry</label><input type="date" id="ce-cexp-${id}" value="${rec.cof_expiry||''}"></div>
+          <div><label>COF Cost (R)</label><input type="number" id="ce-ccost-${id}" min="0" step="0.01" value="${rec.cof_cost||''}"></div>
+        </div>
+        <div class="def-row">
+          <div><label>🚏 Operating Licence Expiry</label><input type="date" id="ce-oexp-${id}" value="${rec.operating_licence_expiry||''}"></div>
+          <div><label>Op. Licence No.</label><input type="text" id="ce-ono-${id}" value="${escapeHtml(rec.operating_licence_no||'')}"></div>
+          <div><label>Op. Licence Cost (R)</label><input type="number" id="ce-ocost-${id}" min="0" step="0.01" value="${rec.operating_licence_cost||''}"></div>
+        </div>
+        <div><label>Notes</label><input type="text" id="ce-notes-${id}" value="${escapeHtml(rec.notes||'')}" placeholder="Optional"></div>
+        <button class="def-save" onclick="saveComplianceEdit('${plate.replace(/'/g,"\\'")}')">💾 Save</button>
       </div>
     </div>`;
   }).join('');
+}
+
+function toggleDiscBulk(){
+  discBulkMode=!discBulkMode;
+  renderDiscView();
+}
+
+function renderDiscBulk(plates){
+  const search=(document.getElementById('discSearch')?.value||'').toLowerCase();
+  const list=search?plates.filter(p=>p.toLowerCase().includes(search)):plates;
+  document.getElementById('discBulkWrap').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:12px;color:var(--text3);">Tab through the fields and click Save All when done. Blank fields are left unchanged for existing vehicles.</div>
+      <button class="def-save" onclick="saveDiscBulk()" id="discBulkSaveBtn">💾 Save All</button>
+    </div>
+    <table class="disc-bulk-table">
+      <thead><tr><th>Plate</th><th>Make / Model</th><th>💿 Disc Expiry</th><th>Disc No.</th><th>🛠 COF Expiry</th><th>🚏 Op. Lic. Expiry</th><th>Op. Lic. No.</th></tr></thead>
+      <tbody>${list.map(p=>{
+        const r=complianceData[p]||{};
+        const id=p.replace(/\s+/g,'_');
+        return`<tr data-plate="${escapeHtml(p)}">
+          <td class="bp">${escapeHtml(p)}</td>
+          <td><input type="text" id="bk-make-${id}" value="${escapeHtml(r.make_model||'')}"></td>
+          <td><input type="date" id="bk-dexp-${id}" value="${r.licence_disc_expiry||''}"></td>
+          <td><input type="text" id="bk-dno-${id}" value="${escapeHtml(r.licence_disc_no||'')}"></td>
+          <td><input type="date" id="bk-cexp-${id}" value="${r.cof_expiry||''}"></td>
+          <td><input type="date" id="bk-oexp-${id}" value="${r.operating_licence_expiry||''}"></td>
+          <td><input type="text" id="bk-ono-${id}" value="${escapeHtml(r.operating_licence_no||'')}"></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+}
+
+async function saveDiscBulk(){
+  const btn=document.getElementById('discBulkSaveBtn');
+  btn.disabled=true;btn.textContent='Saving...';
+  const rows=[...document.querySelectorAll('#discBulkWrap tbody tr')].map(tr=>{
+    const plate=tr.dataset.plate;
+    const id=plate.replace(/\s+/g,'_');
+    const g=f=>{const el=document.getElementById('bk-'+f+'-'+id);return el?el.value.trim():'';};
+    return{
+      plate,
+      make_model:g('make')||null,
+      licence_disc_expiry:g('dexp')||null,
+      licence_disc_no:g('dno')||null,
+      cof_expiry:g('cexp')||null,
+      operating_licence_expiry:g('oexp')||null,
+      operating_licence_no:g('ono')||null
+    };
+  });
+  const ok=await upsertCompliance(rows);
+  btn.disabled=false;btn.textContent='💾 Save All';
+  if(!ok){alert('Could not save. Please check your connection and try again.');return;}
+  rows.forEach(r=>complianceData[r.plate]={...(complianceData[r.plate]||{}),...r});
+  discBulkMode=false;
+  renderDiscView();updateDiscTabBadge();renderAlertBanner();
 }
 
 // ── TYRES TAB ─────────────────────────────────────────────────────────────────
