@@ -223,13 +223,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: #111;
+  color: var(--text);
   margin-bottom: 10px;
   font-weight: 700;
   font-family: var(--font);
 }
 .stat-value { font-family: var(--font-mono); font-size: 24px; font-weight: 700; color: var(--accent); line-height: 1; margin-bottom: 4px; }
-.stat-sub { font-size: 11px; color: #999; }
+.stat-sub { font-size: 11px; color: var(--text3); }
 .stat-delta { font-size: 11px; margin-top: 6px; font-weight: 600; }
 .stat-delta.up { color: var(--red); }
 .stat-delta.down { color: var(--green); }
@@ -479,7 +479,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   position:relative; z-index:10;
 }
 .login-logo { font-family:var(--font); font-size:28px; font-weight:700; color:var(--accent); margin-bottom:4px; }
-.login-sub { font-size: 13px; color: #111; margin-bottom: 32px; letter-spacing: 1.2px; text-transform: uppercase; font-weight: 700; display: block; }
+.login-sub { font-size: 13px; color: var(--text); margin-bottom: 32px; letter-spacing: 1.2px; text-transform: uppercase; font-weight: 700; display: block; }
 .login-label { font-size:11px; font-weight:700; color:var(--text2); text-align:left; display:block; margin-bottom:6px; }
 .login-input {
   width:100%; padding:10px 14px; border:1.5px solid var(--border2); border-radius:var(--radius-sm);
@@ -635,7 +635,6 @@ input[type=file] { display: none; }
 <!-- LOGIN SCREEN -->
 <div id="loginScreen">
 <div class="hero-bg"></div>
-<div class="hero-overlay"></div>
   <div class="login-card">
     <div class="login-logo">Phola Coaches</div>
     <div class="login-sub">FleetDesk</div>
@@ -698,7 +697,7 @@ input[type=file] { display: none; }
     </div>
 <div style="display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
       <button class="notif-btn" id="notifBtn" onclick="toggleNotifPanel()" style="position:relative;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.4);border-radius:8px;padding:6px 14px;cursor:pointer;color:white;font-family:var(--font);font-weight:700;font-size:13px;margin-right:8px;">
-  🔔 <span id="notifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#C92A2A;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;" id="notifBadge">0</span>
+  🔔 <span id="notifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#C92A2A;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;align-items:center;justify-content:center;">0</span>
 </button>
 <button class="logout-btn" onclick="logout()">⎋ Log out</button>
     </div>
@@ -787,7 +786,7 @@ input[type=file] { display: none; }
     </div>
 
 
-<!-- TAB 5: DISC RENEWAL -->
+<!-- TAB 4: DISC RENEWAL -->
 <div class="tab-panel" id="tab-discs">
   <div class="section-header">
     <div class="section-title">📋 Disc Renewal</div>
@@ -817,7 +816,7 @@ input[type=file] { display: none; }
       </div>
     </div>
 
-    <!-- TAB 5: HISTORY -->
+    <!-- TAB 6: HISTORY -->
     <div class="tab-panel" id="tab-history">
       <div class="history-section">
         <div class="section-header">
@@ -898,6 +897,7 @@ function logout(){
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_REFRESH_KEY);
   localStorage.removeItem(AUTH_TIME_KEY);
+  if(typeof stopRealtimeListener==='function')stopRealtimeListener();
   showLogin();
 }
 
@@ -995,6 +995,18 @@ function getPeriod(scheduleDate){
 function parseDateStr(s){
   const[d,m,y]=(s||'01.01.1970').split('.');
   return new Date(+y,+m-1,+d);
+}
+// App-wide date convention: DD.MM.YYYY
+function fmtDDMMYYYY(d){
+  d=new Date(d);
+  return`${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+}
+function fmtTimeHM(d){
+  d=new Date(d);
+  return`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function escapeHtml(s){
+  return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 function computeVehicleStats(v,fleetAvg){
@@ -1134,7 +1146,7 @@ async function parseFreightExcel(file){
       const fd=Object.values(vehicleMap)[0]?.transactions[0]?.date;
       if(fd&&fd!=='—'){const[,m,y]=fd.split('.');scheduleDate=`01.${m}.${y}`;}
     }
-    if(!scheduleDate)scheduleDate=new Date().toLocaleDateString('en-ZA');
+    if(!scheduleDate)scheduleDate=fmtDDMMYYYY(new Date());
 
     finaliseAndSave({scheduleDate,customer:'Phola Coaches',accountNo:'—',fleetNo:'—',filename:file.name,sources:['Freight'],vehicles:Object.values(vehicleMap)},[],orderNums);
 
@@ -1300,12 +1312,12 @@ function renderDashboard(){
   document.getElementById('statsGrid').innerHTML=`
     <div class="stat-card">
       <div class="stat-label">Total Fuel Spend</div>
-      <div class="stat-value">R${totalSpend.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="stat-value">R${totalSpend.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
       <div class="stat-sub">This period</div>${deltaSpend}
     </div>
     <div class="stat-card">
       <div class="stat-label">Total Litres</div>
-      <div class="stat-value">${totalLitres.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="stat-value">${totalLitres.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
       <div class="stat-sub">Litres purchased</div>
     </div>
     <div class="stat-card">
@@ -1335,7 +1347,7 @@ function renderDashboard(){
     <div class="top-vehicle-card rank-${i+1}">
       <div class="top-rank">${['🥇 1st','🥈 2nd','🥉 3rd'][i]} Highest Spend</div>
       <div class="top-plate">${v.plate}</div>
-      <div class="top-amount">R${v.totalAmount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="top-amount">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
       <div class="top-meta">${v.totalLitres.toFixed(2)} L · ${v.transactions.length} fill(s) · avg ${v.avgLitresPerFill} L/fill</div>
       <span class="top-badge ${v.isHighSpend?'high':'ok'}">${v.isHighSpend?'⚠ High Spend':'✓ Normal'}</span>
     </div>
@@ -1347,7 +1359,7 @@ function renderDashboard(){
     <div class="bar-row">
       <div class="bar-label">${v.plate}</div>
       <div class="bar-track"><div class="bar-fill ${v.isHighSpend?'red':'blue'}" style="width:${(v.totalAmount/(bySpend[0]?.totalAmount||1)*100).toFixed(1)}%"></div></div>
-      <div class="bar-val">R${v.totalAmount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="bar-val">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
     </div>`);
   renderBarChart('litresChart',byLitres,byLitres[0]?.totalLitres||1,v=>`
     <div class="bar-row">
@@ -1427,18 +1439,18 @@ function renderVehicleBlock(v,vi){
   const multiSource=(currentReport?.sources||[]).length>1;
   const rows=v.transactions.map(tx=>{
     const srcTag=multiSource?(tx.source==='Engen'?'<span style="font-size:9px;color:#1971C2;font-weight:600;margin-left:4px;">[ENGEN]</span>':tx.source==='Freight'?'<span style="font-size:9px;color:#2F9E44;font-weight:600;margin-left:4px;">[FREIGHT]</span>':''):'';
-    return`<tr><td class="td-date">${tx.date}</td><td class="td-merchant">${tx.merchant}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
+    return`<tr><td class="td-date">${tx.date}</td><td class="td-merchant">${tx.merchant}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
   }).join('');
 
   const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn"><span>⚠</span><span>Odometer query: one or more readings are lower than the previous entry. Please verify with Engen or the driver — may be a data capture error.</span></div>`:'';
   const highNote=v.isHighSpend?`<div class="vc-note note-high"><span>🔴</span><span>High spend alert: this vehicle's fuel cost is significantly above the fleet average for this period. Please review.</span></div>`:'';
   const chevron=`<svg class="vc-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 8 10 13 15 8"/></svg>`;
 
-  return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${plate}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary"><span class="vc-stat">Last odo: <strong>${lastOdo}</strong></span><span class="vc-stat">Avg km/L: <strong>${v.avgKmPerLitre||'—'}</strong></span><span class="vc-stat">Fills: <strong>${v.transactions.length}</strong></span></div></button><div class="vc-body"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table><div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${v.totalLitres.toFixed(2)} L</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">R${v.totalAmount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>${odoNote}${highNote}${svcRowHtml}</div></div>`;
+  return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${plate}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary"><span class="vc-stat">Last odo: <strong>${lastOdo}</strong></span><span class="vc-stat">Avg km/L: <strong>${v.avgKmPerLitre||'—'}</strong></span><span class="vc-stat">Fills: <strong>${v.transactions.length}</strong></span></div></button><div class="vc-body"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table><div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${v.totalLitres.toFixed(2)} L</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>${odoNote}${highNote}${svcRowHtml}</div></div>`;
 }
 
 function renderVehicleTable(vehicles){
-  const rows=vehicles.map(v=>`<tr><td class="vtd-plate">${v.plate}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${v.totalLitres.toFixed(2)} L</td><td class="vtd-num r">R${v.totalAmount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
+  const rows=vehicles.map(v=>`<tr><td class="vtd-plate">${v.plate}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${v.totalLitres.toFixed(2)} L</td><td class="vtd-num r">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
   return`<table class="vehicles-table"><thead><tr><th>Plate</th><th>Fills</th><th>Total Litres</th><th>Total Spend</th><th>Avg Litres/Fill</th><th>Avg km/L</th><th>Flags</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -1474,7 +1486,7 @@ function renderTrendChart(elId,points,unit,color){
 function renderHistory(){
   document.getElementById('historyGrid').innerHTML=state.reports.map((r,i)=>{
     const total=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
-    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><div class="history-period">${r.scheduleDate||'Report '+(i+1)}</div><div class="history-meta">${r.vehicles.length} vehicles · ${new Date(r.uploadedAt).toLocaleDateString('en-ZA')}</div><div class="history-amount">R${total.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`;
+    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><div class="history-period">${r.scheduleDate||'Report '+(i+1)}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">R${total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`;
   }).join('');
 }
 
@@ -1492,7 +1504,7 @@ function renderComparison(){
   const prevPlates=new Set(prev.vehicles.map(v=>v.plate));
   const newVehicles=[...currPlates].filter(p=>!prevPlates.has(p));
   const missingVehicles=[...prevPlates].filter(p=>!currPlates.has(p));
-  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">📅 ${prev.scheduleDate||'Previous'}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2);">R${prevTotal.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${prevLitres.toFixed(2)} L · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">📅 ${curr.scheduleDate||'Current'}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent);">R${currTotal.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${currLitres.toFixed(2)} L · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} R${Math.abs(currTotal-prevTotal).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">✅ New vehicles this period: <strong>${newVehicles.join(', ')}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">⚠ Vehicles not seen this period: <strong>${missingVehicles.join(', ')}</strong></div>`:''}`;
+  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">📅 ${prev.scheduleDate||'Previous'}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2);">R${prevTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${prevLitres.toFixed(2)} L · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">📅 ${curr.scheduleDate||'Current'}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent);">R${currTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${currLitres.toFixed(2)} L · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} R${Math.abs(currTotal-prevTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">✅ New vehicles this period: <strong>${newVehicles.join(', ')}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">⚠ Vehicles not seen this period: <strong>${missingVehicles.join(', ')}</strong></div>`:''}`;
 }
 
 function switchReport(i){ activeReportIndex=i; recomputeAllStats(); renderDashboard(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -1518,7 +1530,7 @@ function exportCSV(){
   if(!currentReport){alert('No report loaded.');return;}
   const rows=[['Plate','Date','Merchant','Odometer','Litres','Amount','km/L','R/km','Competitor','Odometer Flag']];
   currentReport.vehicles.forEach(v=>{v.transactions.forEach(tx=>{rows.push([v.plate,tx.date,tx.merchant,tx.odometer||'',tx.litres,tx.amount,tx.kmPerLitre||'',tx.costPerKm||'',tx.isCompetitor?'Yes':'No',tx.odometerFlag?'Yes':'No']);});});
-  const csv=rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download=`fleet_fuel_${currentReport.scheduleDate||'export'}.csv`;
@@ -1606,7 +1618,7 @@ function autoApplyOdometerReadings(){
       const existing=vehicle.transactions.find(t=>t.driverSubmission&&t.odometer===submission.odometer);
       if(!existing){
         vehicle.transactions.push({
-          date:new Date(submission.created_at).toLocaleDateString('en-ZA').split('/').join('.'),
+          date:fmtDDMMYYYY(submission.created_at),
           merchant:'Driver Submission',
           odometer:submission.odometer,
           litres:0,
@@ -1670,8 +1682,7 @@ function renderNotifPanel(){
   }
   if(countEl)countEl.textContent=`${notifData.length} submission${notifData.length!==1?'s':''}`;
   list.innerHTML=notifData.map(n=>{
-    const date=new Date(n.created_at);
-    const timeStr=date.toLocaleDateString('en-ZA')+' '+date.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
+    const timeStr=fmtDDMMYYYY(n.created_at)+' '+fmtTimeHM(n.created_at);
     const statusBadge=n.status==='approved'
       ?'<span style="font-size:10px;font-weight:700;background:#EBFBEE;color:#2F9E44;border-radius:20px;padding:2px 8px;">✅ Approved</span>'
       :n.status==='flagged'
@@ -1687,13 +1698,13 @@ function renderNotifPanel(){
         </div>`:'';
     return`<div class="notif-item">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
-        <span class="notif-item-plate">${n.plate}</span>
+        <span class="notif-item-plate">${escapeHtml(n.plate)}</span>
         <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-US')+' km':'—'}</span>
         ${statusBadge}${mismatchBadge}
       </div>
       <div class="notif-item-time">📅 ${timeStr}</div>
-      ${n.notes?`<div class="notif-item-notes">📝 ${n.notes}</div>`:''}
-      ${n.photo_url?`<div style="margin-top:8px;"><img src="${n.photo_url}" alt="Odometer" style="width:100%;border-radius:6px;border:1px solid var(--border);max-height:140px;object-fit:cover;display:block;"></div>`:''}
+      ${n.notes?`<div class="notif-item-notes">📝 ${escapeHtml(n.notes)}</div>`:''}
+      ${n.photo_url?`<div style="margin-top:8px;"><img src="${escapeHtml(n.photo_url)}" alt="Odometer" style="width:100%;border-radius:6px;border:1px solid var(--border);max-height:140px;object-fit:cover;display:block;"></div>`:''}
       ${actionBtns}
     </div>`;
   }).join('');
@@ -1719,11 +1730,18 @@ let pollTimestamp=null;
 let batchRows=[];
 let batchTimer=null;
 
+let pollIntervalId=null;
 function startRealtimeListener(){
+  if(pollIntervalId)clearInterval(pollIntervalId);
   lastSeenTimestamp=notifData.length>0?notifData[0].created_at:new Date().toISOString();
   pollTimestamp=lastSeenTimestamp;
   console.log('[FleetDesk] Polling every 10s. Seeded at:',lastSeenTimestamp);
-  setInterval(pollForNewSubmissions,10000);
+  pollIntervalId=setInterval(pollForNewSubmissions,10000);
+}
+function stopRealtimeListener(){
+  if(pollIntervalId){clearInterval(pollIntervalId);pollIntervalId=null;}
+  if(batchTimer){clearTimeout(batchTimer);batchTimer=null;}
+  batchRows=[];
 }
 
 async function pollForNewSubmissions(){
@@ -1765,7 +1783,9 @@ async function pollForNewSubmissions(){
 }
 
 // ── DISC RENEWAL ──────────────────────────────────────────────────────────────
-const DISCS_KEY='fleet_discs_v1';
+// v2: v1 contained auto-seeded demo data (fake expiry dates and licence numbers) — discard it
+const DISCS_KEY='fleet_discs_v2';
+localStorage.removeItem('fleet_discs_v1');
 const DISC_WARN_DAYS=30;
 const DISC_URGENT_DAYS=7;
 
@@ -1773,9 +1793,9 @@ function loadDiscData(){try{return JSON.parse(localStorage.getItem(DISCS_KEY))||
 function saveDiscData(d){localStorage.setItem(DISCS_KEY,JSON.stringify(d));}
 
 function getDiscStatus(expiryDateStr){
-  if(!expiryDateStr)return'unknown';
+  if(!expiryDateStr)return{status:'unknown',days:null};
   const parts=expiryDateStr.split('.');
-  if(parts.length!==3)return'unknown';
+  if(parts.length!==3)return{status:'unknown',days:null};
   const expiry=new Date(+parts[2],+parts[1]-1,+parts[0]);
   const today=new Date();today.setHours(0,0,0,0);
   const diffMs=expiry-today;
@@ -1784,28 +1804,6 @@ function getDiscStatus(expiryDateStr){
   if(diffDays<=DISC_URGENT_DAYS)return{status:'urgent',days:diffDays};
   if(diffDays<=DISC_WARN_DAYS)return{status:'warn',days:diffDays};
   return{status:'ok',days:diffDays};
-}
-
-function seedDemoDiscData(plates){
-  const existing=loadDiscData();let changed=false;
-  const makes=['Yutong ZK6122H','Higer KLQ6129','King Long XMQ6127','Yutong ZK6119H','Scania K410'];
-  plates.forEach((plate,pi)=>{
-    if(!existing[plate]){
-      changed=true;
-      const today=new Date();
-      const offset=[-10,-3,5,15,25,45,90,180,270,365][pi%10];
-      const expiry=new Date(today);expiry.setDate(expiry.getDate()+offset);
-      const dd=String(expiry.getDate()).padStart(2,'0');
-      const mm=String(expiry.getMonth()+1).padStart(2,'0');
-      const yyyy=expiry.getFullYear();
-      existing[plate]={
-        expiryDate:`${dd}.${mm}.${yyyy}`,
-        licenceNo:`GP-20${(pi%5)+19}-${String(100+pi*7).slice(-3)}`,
-        makeModel:makes[pi%makes.length]
-      };
-    }
-  });
-  if(changed)saveDiscData(existing);
 }
 
 function toggleDiscEdit(plate){
@@ -1835,7 +1833,6 @@ function renderDiscsTab(){
     document.getElementById('discSummaryStrip').innerHTML='';
     return;
   }
-  seedDemoDiscData(vehicles.map(v=>v.plate));
   const discData=loadDiscData();
 
   // Sort by urgency
@@ -1852,18 +1849,20 @@ function renderDiscsTab(){
   });
 
   // Summary counts
-  let expired=0,warn=0,ok=0;
+  let expired=0,warn=0,ok=0,notSet=0;
   sorted.forEach(v=>{
     const s=v.statusResult.status;
     if(s==='expired'||s==='urgent')expired++;
     else if(s==='warn')warn++;
-    else ok++;
+    else if(s==='ok')ok++;
+    else notSet++;
   });
 
   document.getElementById('discSummaryStrip').innerHTML=`
     <div class="disc-summary-card ds-red"><div class="disc-summary-label">🔴 Expired / Urgent</div><div class="disc-summary-val">${expired}</div></div>
     <div class="disc-summary-card ds-amber"><div class="disc-summary-label">⚠ Due Within 30 Days</div><div class="disc-summary-val">${warn}</div></div>
     <div class="disc-summary-card ds-green"><div class="disc-summary-label">✅ Valid</div><div class="disc-summary-val">${ok}</div></div>
+    <div class="disc-summary-card"><div class="disc-summary-label">📋 Not Set</div><div class="disc-summary-val" style="color:var(--text3);">${notSet}</div></div>
     <div class="disc-summary-card"><div class="disc-summary-label">🚌 Total Vehicles</div><div class="disc-summary-val">${vehicles.length}</div></div>
   `;
 
@@ -1873,11 +1872,11 @@ function renderDiscsTab(){
     const d=v.discInfo;
     const sr=v.statusResult;
     const s=sr.status||'unknown';
-    const cardClass=s==='expired'||s==='urgent'?'dc-red':s==='warn'?'dc-amber':'dc-green';
-    const badgeClass=s==='expired'?'dcb-expired':s==='urgent'?'dcb-expired':s==='warn'?'dcb-warn':'dcb-ok';
-    const badgeText=s==='expired'?'Expired':s==='urgent'?'Urgent':s==='warn'?'Due Soon':'Valid';
-    const dateClass=s==='expired'||s==='urgent'?'dv-red':s==='warn'?'dv-amber':'dv-green';
-    const daysClass=s==='expired'||s==='urgent'?'dd-red':s==='warn'?'dd-amber':'dd-green';
+    const cardClass=s==='expired'||s==='urgent'?'dc-red':s==='warn'?'dc-amber':s==='ok'?'dc-green':'';
+    const badgeClass=s==='expired'?'dcb-expired':s==='urgent'?'dcb-expired':s==='warn'?'dcb-warn':s==='ok'?'dcb-ok':'';
+    const badgeText=s==='expired'?'Expired':s==='urgent'?'Urgent':s==='warn'?'Due Soon':s==='ok'?'Valid':'Not Set';
+    const dateClass=s==='expired'||s==='urgent'?'dv-red':s==='warn'?'dv-amber':s==='ok'?'dv-green':'';
+    const daysClass=s==='expired'||s==='urgent'?'dd-red':s==='warn'?'dd-amber':s==='ok'?'dd-green':'';
     const daysText=s==='expired'?`Expired ${Math.abs(sr.days)} day${Math.abs(sr.days)!==1?'s':''} ago`:s==='unknown'?'Expiry date not set':`${sr.days} day${sr.days!==1?'s':''} remaining`;
     return`<div class="disc-card ${cardClass}" style="animation-delay:${vi*0.03}s">
       <div class="disc-card-header">
@@ -1970,19 +1969,19 @@ function renderTyreVehiclePanel(){
     :`<div class="tyres-grid">${tyres.map((t,i)=>`
       <div class="tyre-card ${t.is_retread?'tc-retread':''}" style="animation-delay:${i*0.03}s">
         <div class="tyre-card-header">
-          <span class="tyre-pos-badge">${t.position}</span>
+          <span class="tyre-pos-badge">${escapeHtml(t.position)}</span>
           ${t.is_retread?'<span class="tyre-retread-badge">Retread</span>':''}
         </div>
         <div class="tyre-card-body">
-          <div class="tyre-info-row"><span class="tyre-info-label">Brand</span><span class="tyre-info-val">${t.brand||'—'}${t.model?' '+t.model:''}</span></div>
-          <div class="tyre-info-row"><span class="tyre-info-label">Size</span><span class="tyre-info-val mono">${t.size||'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Brand</span><span class="tyre-info-val">${escapeHtml(t.brand)||'—'}${t.model?' '+escapeHtml(t.model):''}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Size</span><span class="tyre-info-val mono">${escapeHtml(t.size)||'—'}</span></div>
           <div class="tyre-info-row"><span class="tyre-info-label">Cost</span><span class="tyre-info-val mono">${t.cost!=null?'R'+Number(t.cost).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</span></div>
           <div class="tyre-info-row"><span class="tyre-info-label">Fitted At</span><span class="tyre-info-val mono">${t.odometer_fitted!=null?Number(t.odometer_fitted).toLocaleString('en-US')+' km':'—'}</span></div>
           <div class="tyre-info-row"><span class="tyre-info-label">Date Fitted</span><span class="tyre-info-val mono">${t.date_fitted||'—'}</span></div>
-          ${t.supplier?`<div class="tyre-info-row"><span class="tyre-info-label">Supplier</span><span class="tyre-info-val">${t.supplier}</span></div>`:''}
-          ${t.serial_dot?`<div class="tyre-info-row"><span class="tyre-info-label">Serial / DOT</span><span class="tyre-info-val mono">${t.serial_dot}</span></div>`:''}
-          ${t.invoice_url?`<div class="tyre-info-row"><span class="tyre-info-label">Invoice</span><a class="tyre-invoice-link" href="${t.invoice_url}" target="_blank">📄 View</a></div>`:''}
-          ${t.notes?`<div class="tyre-info-row"><span class="tyre-info-label">Notes</span><span class="tyre-info-val">${t.notes}</span></div>`:''}
+          ${t.supplier?`<div class="tyre-info-row"><span class="tyre-info-label">Supplier</span><span class="tyre-info-val">${escapeHtml(t.supplier)}</span></div>`:''}
+          ${t.serial_dot?`<div class="tyre-info-row"><span class="tyre-info-label">Serial / DOT</span><span class="tyre-info-val mono">${escapeHtml(t.serial_dot)}</span></div>`:''}
+          ${t.invoice_url?`<div class="tyre-info-row"><span class="tyre-info-label">Invoice</span><a class="tyre-invoice-link" href="${escapeHtml(t.invoice_url)}" target="_blank">📄 View</a></div>`:''}
+          ${t.notes?`<div class="tyre-info-row"><span class="tyre-info-label">Notes</span><span class="tyre-info-val">${escapeHtml(t.notes)}</span></div>`:''}
         </div>
       </div>`).join('')}</div>`;
 
@@ -2232,8 +2231,7 @@ function showNotifPopup(rows){
     document.getElementById('popupBatchView').style.display='none';
     document.getElementById('popupPlate').textContent=rec.plate||'—';
     document.getElementById('popupOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-US')+' km':'—';
-    const d=new Date(rec.created_at);
-    document.getElementById('popupTime').textContent='Submitted: '+d.toLocaleDateString('en-ZA')+' at '+d.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('popupTime').textContent='Submitted: '+fmtDDMMYYYY(rec.created_at)+' at '+fmtTimeHM(rec.created_at);
     const photoWrap=document.getElementById('popupPhotoWrap');
     if(rec.photo_url){document.getElementById('popupPhoto').src=rec.photo_url;photoWrap.style.display='block';}
     else{photoWrap.style.display='none';}
@@ -2244,7 +2242,7 @@ function showNotifPopup(rows){
     const hasMismatch=rec.ai_odometer!=null&&Math.abs(rec.odometer-rec.ai_odometer)>25;
     if(hasMismatch){
       mismatchEl.style.display='block';
-      mismatchEl.innerHTML=`⚠️ <strong>Odometer Mismatch Detected</strong> — ${rec.plate}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-US')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-US')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
+      mismatchEl.innerHTML=`⚠️ <strong>Odometer Mismatch Detected</strong> — ${escapeHtml(rec.plate)}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-US')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-US')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
     }else{
       mismatchEl.style.display='none';
     }
@@ -2254,6 +2252,12 @@ function showNotifPopup(rows){
     document.getElementById('popupSingleView').style.display='none';
     document.getElementById('popupBatchView').style.display='block';
     document.getElementById('popupBatchCount').textContent=`${rows.length} new submissions — click to view`;
+    const mismatches=rows.filter(r=>r.ai_odometer!=null&&Math.abs(r.odometer-r.ai_odometer)>25);
+    const plateList=rows.map(r=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate)}</span><span style="font-family:var(--font-mono);">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span></div>`).join('');
+    const mismatchWarn=mismatches.length>0
+      ?`<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);font-weight:700;margin-top:12px;">⚠️ ${mismatches.length} submission${mismatches.length!==1?'s have':' has'} an odometer mismatch — ${escapeHtml(mismatches.map(m=>m.plate).join(', '))}</div>`
+      :'';
+    document.getElementById('popupBatchList').innerHTML=plateList+mismatchWarn;
   }
   modal.style.display='flex';
 }
@@ -2270,41 +2274,56 @@ function closeSubmissionModal(){
   _currentPopupRecord=null;
 }
 
+async function updateSubmissionStatus(id,status){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({status})
+    });
+    if(!res.ok){
+      console.error('[FleetDesk] Status update failed:',res.status,await res.text());
+      alert('Could not save the status update. Please check your connection and try again.');
+      return false;
+    }
+    const item=notifData.find(n=>n.id===id);
+    if(item)item.status=status;
+    return true;
+  }catch(err){
+    console.error('[FleetDesk] Status update error:',err);
+    alert('Could not save the status update. Please check your connection and try again.');
+    return false;
+  }
+}
+
 async function approveSubmission(){
   if(!_currentPopupRecord)return;
-  const token=localStorage.getItem(AUTH_TOKEN_KEY);
-  try{
-    await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${_currentPopupRecord.id}`,{
-      method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({status:'approved'})
-    });
-  }catch(e){}
-  closeSubmissionModal();
+  const ok=await updateSubmissionStatus(_currentPopupRecord.id,'approved');
+  if(ok){
+    closeSubmissionModal();
+    if(notifOpen)renderNotifPanel();
+  }
+}
+
+function showFlagAlert(rec){
+  document.getElementById('flagAlertPlate').textContent=rec.plate||'—';
+  document.getElementById('flagAlertOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-US')+' km':'—';
+  document.getElementById('flagAlertTime').textContent=fmtDDMMYYYY(rec.created_at)+' at '+fmtTimeHM(rec.created_at);
+  const fp=document.getElementById('flagAlertPhoto');
+  const fpi=document.getElementById('flagAlertPhotoImg');
+  if(rec.photo_url){fpi.src=rec.photo_url;fp.style.display='block';}
+  else{fp.style.display='none';}
+  document.getElementById('flagAlert').style.display='flex';
 }
 
 async function flagSubmission(){
   if(!_currentPopupRecord)return;
   const rec=_currentPopupRecord;
-  const token=localStorage.getItem(AUTH_TOKEN_KEY);
-  try{
-    await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${rec.id}`,{
-      method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({status:'flagged'})
-    });
-  }catch(e){}
+  const ok=await updateSubmissionStatus(rec.id,'flagged');
+  if(!ok)return;
+  if(notifOpen)renderNotifPanel();
   closeSubmissionModal();
-  document.getElementById('flagAlertPlate').textContent=rec.plate||'—';
-  document.getElementById('flagAlertOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-US')+' km':'—';
-  const d=new Date(rec.created_at);
-  document.getElementById('flagAlertTime').textContent=d.toLocaleDateString('en-ZA')+' at '+d.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
-  const fp=document.getElementById('flagAlertPhoto');
-  const fpi=document.getElementById('flagAlertPhotoImg');
-  if(rec.photo_url){fpi.src=rec.photo_url;fp.style.display='block';}
-  else{fp.style.display='none';}
-  const alert=document.getElementById('flagAlert');
-  alert.style.display='flex';
+  showFlagAlert(rec);
 }
 
 function closeFlagAlert(){
@@ -2312,32 +2331,16 @@ function closeFlagAlert(){
 }
 
 async function approveNotifItem(id){
-  const token=localStorage.getItem(AUTH_TOKEN_KEY);
-  try{
-    await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}`,{
-      method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({status:'approved'})
-    });
-    const item=notifData.find(n=>n.id===id);
-    if(item)item.status='approved';
-    renderNotifPanel();
-  }catch(e){}
+  const ok=await updateSubmissionStatus(id,'approved');
+  if(ok)renderNotifPanel();
 }
 
 async function rejectNotifItem(id){
-  const token=localStorage.getItem(AUTH_TOKEN_KEY);
   const rec=notifData.find(n=>n.id===id);
-  try{
-    await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}`,{
-      method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({status:'flagged'})
-    });
-    if(rec){rec.status='flagged';}
-    renderNotifPanel();
-  }catch(e){}
-  if(rec){_currentPopupRecord=rec;flagSubmission();}
+  const ok=await updateSubmissionStatus(id,'flagged');
+  if(!ok)return;
+  renderNotifPanel();
+  if(rec)showFlagAlert(rec);
 }
 </script>
 </div><!-- /appContent -->
