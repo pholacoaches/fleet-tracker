@@ -1357,7 +1357,7 @@ function renderVehicleBlock(v,vi){
   const plate=v.plate;
   const id=plate.replace(/\s+/g,'_');
   const lastTx=v.transactions[v.transactions.length-1];
-  const lastOdo=lastTx&&lastTx.odometer?lastTx.odometer.toLocaleString('en-ZA')+' km':'—';
+  const lastOdo=lastTx&&lastTx.odometer?lastTx.odometer.toLocaleString('en-US')+' km':'—';
   const currentOdo=lastTx&&lastTx.odometer?lastTx.odometer:null;
 
   const svc=loadServiceData()[plate];
@@ -1369,10 +1369,10 @@ function renderVehicleBlock(v,vi){
     const kmUsed=currentOdo?currentOdo-svc.lastServiceOdo:0;
     const kmRemaining=svc.interval-kmUsed;
     let valClass,svcText;
-    if(kmRemaining<=0){svcHeaderClass='svc-urgent';valClass='sv-red';svcText=`${Math.abs(kmRemaining).toLocaleString('en-ZA')} km overdue`;}
-    else if(kmRemaining<=500){svcHeaderClass='svc-urgent';valClass='sv-red';svcText=`${kmRemaining.toLocaleString('en-ZA')} km remaining`;}
-    else if(kmRemaining<=2000){svcHeaderClass='svc-warn';valClass='sv-yellow';svcText=`${kmRemaining.toLocaleString('en-ZA')} km remaining`;}
-    else{valClass='sv-green';svcText=`${kmRemaining.toLocaleString('en-ZA')} km remaining`;}
+    if(kmRemaining<=0){svcHeaderClass='svc-urgent';valClass='sv-red';svcText=`${Math.abs(kmRemaining).toLocaleString('en-US')} km overdue`;}
+    else if(kmRemaining<=500){svcHeaderClass='svc-urgent';valClass='sv-red';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
+    else if(kmRemaining<=2000){svcHeaderClass='svc-warn';valClass='sv-yellow';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
+    else{valClass='sv-green';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
     svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val ${valClass}">${svcText}</span></div><button class="vc-svc-btn" onclick="editVehicleService('${plate}')">✎ Edit</button></div>`;
   }
   svcRowHtml+=`<div class="vc-service-form" id="vsf-${id}"><div class="vsf-row"><div><label>Last service odometer (km)</label><input type="number" id="vs-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000"></div><div><label>Service interval (km)</label><input type="number" id="vs-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000"></div></div><button class="vsf-save" onclick="saveVehicleService('${plate}')">Save</button></div>`;
@@ -1386,7 +1386,7 @@ function renderVehicleBlock(v,vi){
   const multiSource=(currentReport?.sources||[]).length>1;
   const rows=v.transactions.map(tx=>{
     const srcTag=multiSource?(tx.source==='Engen'?'<span style="font-size:9px;color:#1971C2;font-weight:600;margin-left:4px;">[ENGEN]</span>':tx.source==='Freight'?'<span style="font-size:9px;color:#2F9E44;font-weight:600;margin-left:4px;">[FREIGHT]</span>':''):'';
-    return`<tr><td class="td-date">${tx.date}</td><td class="td-merchant">${tx.merchant}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-ZA')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
+    return`<tr><td class="td-date">${tx.date}</td><td class="td-merchant">${tx.merchant}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
   }).join('');
 
   const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn"><span>⚠</span><span>Odometer query: one or more readings are lower than the previous entry. Please verify with Engen or the driver — may be a data capture error.</span></div>`:'';
@@ -1647,7 +1647,7 @@ function renderNotifPanel(){
     return`<div class="notif-item">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
         <span class="notif-item-plate">${n.plate}</span>
-        <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-ZA')+' km':'—'}</span>
+        <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-US')+' km':'—'}</span>
         ${statusBadge}${mismatchBadge}
       </div>
       <div class="notif-item-time">📅 ${timeStr}</div>
@@ -1939,7 +1939,7 @@ function showNotifPopup(rows){
     document.getElementById('popupSingleView').style.display='block';
     document.getElementById('popupBatchView').style.display='none';
     document.getElementById('popupPlate').textContent=rec.plate||'—';
-    document.getElementById('popupOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-ZA')+' km':'—';
+    document.getElementById('popupOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-US')+' km':'—';
     const d=new Date(rec.created_at);
     document.getElementById('popupTime').textContent='Submitted: '+d.toLocaleDateString('en-ZA')+' at '+d.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
     const photoWrap=document.getElementById('popupPhotoWrap');
@@ -1952,7 +1952,7 @@ function showNotifPopup(rows){
     const hasMismatch=rec.ai_odometer!=null&&Math.abs(rec.odometer-rec.ai_odometer)>25;
     if(hasMismatch){
       mismatchEl.style.display='block';
-      mismatchEl.innerHTML=`⚠️ <strong>Odometer Mismatch Detected</strong> — ${rec.plate}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-ZA')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-ZA')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
+      mismatchEl.innerHTML=`⚠️ <strong>Odometer Mismatch Detected</strong> — ${rec.plate}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-US')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-US')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
     }else{
       mismatchEl.style.display='none';
     }
@@ -2004,7 +2004,7 @@ async function flagSubmission(){
   }catch(e){}
   closeSubmissionModal();
   document.getElementById('flagAlertPlate').textContent=rec.plate||'—';
-  document.getElementById('flagAlertOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-ZA')+' km':'—';
+  document.getElementById('flagAlertOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-US')+' km':'—';
   const d=new Date(rec.created_at);
   document.getElementById('flagAlertTime').textContent=d.toLocaleDateString('en-ZA')+' at '+d.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
   const fp=document.getElementById('flagAlertPhoto');
