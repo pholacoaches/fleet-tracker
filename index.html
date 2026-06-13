@@ -3158,11 +3158,12 @@ function buildReportLogo(){
   return`<svg viewBox="0 0 92 78" width="64" height="54" xmlns="http://www.w3.org/2000/svg">${dots}<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#E8590C" stroke-width="3" stroke-linecap="round"/><circle cx="${cx}" cy="${cy}" r="4.5" fill="#E8590C"/></svg>`;
 }
 
-function repTable(headers,rows,rightCols=[]){
+function repTable(headers,rows,rightCols=[],colWidths=null){
   if(rows.length===0)return'<p class="rep-empty">No data for this selection.</p>';
+  const cg=colWidths?`<colgroup>${colWidths.map(w=>`<col style="width:${w}">`).join('')}</colgroup>`:'';
   const th=headers.map((h,i)=>`<th${rightCols.includes(i)?' class="r"':''}>${escapeHtml(h)}</th>`).join('');
   const tb=rows.map(row=>'<tr>'+row.map((c,i)=>`<td${rightCols.includes(i)?' class="r"':''}>${c==null?'':escapeHtml(String(c))}</td>`).join('')+'</tr>').join('');
-  return`<table class="rep-table"><thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table>`;
+  return`<table class="rep-table${colWidths?' fixed':''}">${cg}<thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table>`;
 }
 
 function stripTags(s){
@@ -3223,7 +3224,7 @@ async function generateReport(){
             tx.litres.toFixed(2),
             fmtRand(tx.amount),
             tx.kmPerLitre?tx.kmPerLitre.toFixed(2):'—'
-          ]),[2,3,4,5]);
+          ]),[2,3,4,5],['13%','37%','15%','11%','15%','9%']);
         html+='</div>';
       });
     });
@@ -3236,14 +3237,14 @@ async function generateReport(){
     reports.forEach(({r})=>filterVeh(r.vehicles).filter(v=>v.hasOdometerIssue).forEach(v=>{
       v.transactions.filter(t=>t.odometerFlag).forEach(t=>rows.push([v.plate,r.scheduleDate||'—',t.date,t.odometer?t.odometer.toLocaleString('en-US'):'—']));
     }));
-    body.push({title:'Odometer Alerts',html:rows.length?repTable(['Vehicle','Period','Date','Flagged Odometer'],rows,[3]):'<p class="rep-empty">No odometer anomalies found. ✓</p>'});
+    body.push({title:'Odometer Alerts',html:rows.length?repTable(['Vehicle','Period','Date','Flagged Odometer'],rows,[3],['25%','28%','22%','25%']):'<p class="rep-empty">No odometer anomalies found. ✓</p>'});
   }
 
   // ── High spend vehicles ──
   if(sections.includes('highspend')){
     const rows=[];
     reports.forEach(({r})=>filterVeh(r.vehicles).filter(v=>v.isHighSpend).forEach(v=>rows.push([v.plate,r.scheduleDate||'—',fmtRand(v.totalAmount),v.totalLitres.toFixed(2)+' L'])));
-    body.push({title:'High Spend Vehicles',html:rows.length?repTable(['Vehicle','Period','Total Spend','Litres'],rows,[2,3]):'<p class="rep-empty">No vehicles above the high-spend threshold. ✓</p>'});
+    body.push({title:'High Spend Vehicles',html:rows.length?repTable(['Vehicle','Period','Total Spend','Litres'],rows,[2,3],['28%','30%','22%','20%']):'<p class="rep-empty">No vehicles above the high-spend threshold. ✓</p>'});
   }
 
   // ── Cost per km per vehicle ──
@@ -3258,7 +3259,7 @@ async function generateReport(){
       const kml=a.kml.length?a.kml.reduce((x,y)=>x+y,0)/a.kml.length:null;
       return[plate,cpk!=null?'R'+cpk.toFixed(2):'—',kml!=null?kml.toFixed(2)+' km/L':'—'];
     }).sort((a,b)=>a[0].localeCompare(b[0]));
-    body.push({title:'Cost Per Kilometre',html:repTable(['Vehicle','Avg Cost / km','Avg Efficiency'],rows,[1,2])});
+    body.push({title:'Cost Per Kilometre',html:repTable(['Vehicle','Avg Cost / km','Avg Efficiency'],rows,[1,2],['40%','30%','30%'])});
   }
 
   // ── Disc & compliance status ──
@@ -3275,7 +3276,7 @@ async function generateReport(){
         rows.push([p,it.label,exp?fmtDDMMYYYY(exp):'—',st.days==null?'—':st.days<0?Math.abs(st.days)+' days over':st.days+' days',label]);
       });
     });
-    body.push({title:'Disc & Compliance Status',html:rows.length?repTable(['Vehicle','Item','Expiry','Remaining','Status'],rows,[3]):'<p class="rep-empty">No compliance records captured yet.</p>'});
+    body.push({title:'Disc & Compliance Status',html:rows.length?repTable(['Vehicle','Item','Expiry','Remaining','Status'],rows,[3],['20%','26%','18%','18%','18%']):'<p class="rep-empty">No compliance records captured yet.</p>'});
   }
 
   // ── Tyre inventory ──
@@ -3283,7 +3284,7 @@ async function generateReport(){
     let list=tyresData.slice();
     if(vehFilter!=='__all__')list=list.filter(t=>t.plate===vehFilter);
     const rows=list.map(t=>[t.plate,t.position,(t.brand||'')+(t.model?' '+t.model:''),t.size||'—',t.cost!=null?fmtRand(t.cost):'—',t.odometer_fitted?t.odometer_fitted.toLocaleString('en-US')+' km':'—',t.date_fitted?fmtDDMMYYYY(t.date_fitted):'—']);
-    body.push({title:'Tyre Inventory',html:repTable(['Vehicle','Position','Brand / Model','Size','Cost','Fitted At','Date Fitted'],rows,[4,5])});
+    body.push({title:'Tyre Inventory',html:repTable(['Vehicle','Position','Brand / Model','Size','Cost','Fitted At','Date Fitted'],rows,[4,5],['15%','12%','22%','14%','13%','13%','11%'])});
   }
 
   // ── Maintenance history ──
@@ -3296,7 +3297,7 @@ async function generateReport(){
       j.total_cost!=null?fmtRand(j.total_cost):'—',
       j.date_out?'Done':'In workshop'
     ]);
-    body.push({title:'Maintenance History',html:repTable(['Vehicle','Date In','Category','Component','Description','Total','Status'],rows,[5])});
+    body.push({title:'Maintenance History',html:repTable(['Vehicle','Date In','Category','Component','Description','Total','Status'],rows,[5],['12%','12%','14%','16%','24%','12%','10%'])});
   }
 
   // ── Red flags only ──
@@ -3304,7 +3305,7 @@ async function generateReport(){
     let flags=computeMaintFlags();
     if(vehFilter!=='__all__')flags=flags.filter(f=>!f.plate||f.plate===vehFilter);
     const rows=flags.map(f=>[(f.severity==='red'?'🔴':'🟠'),f.plate||'Fleet-wide',stripTags(f.html)]);
-    body.push({title:'Red Flags',html:rows.length?repTable(['','Vehicle','Alert'],rows):'<p class="rep-empty">No red flags detected. ✓</p>'});
+    body.push({title:'Red Flags',html:rows.length?repTable(['','Vehicle','Alert'],rows,[],['5%','20%','75%']):'<p class="rep-empty">No red flags detected. ✓</p>'});
   }
 
   // ── Assemble document ──
@@ -3329,8 +3330,10 @@ async function generateReport(){
   .rep-vehicle-block{margin-bottom:12px;break-inside:avoid;}
   .rep-vehicle-name{font-size:12px;font-weight:700;margin-bottom:4px;}
   table.rep-table{width:100%;border-collapse:collapse;margin-bottom:6px;}
+  table.rep-table.fixed{table-layout:fixed;}
   .rep-table th{font-size:9.5px;text-transform:uppercase;letter-spacing:0.4px;text-align:left;padding:5px 7px;border-bottom:1.5px solid #111;color:#333;}
   .rep-table td{font-size:11px;padding:4px 7px;border-bottom:0.5px solid #DDD;vertical-align:top;}
+  .rep-table.fixed th,.rep-table.fixed td{word-break:break-word;overflow-wrap:break-word;}
   .rep-table th.r,.rep-table td.r{text-align:right;}
   .rep-table tbody tr:nth-child(even) td{background:#F7F7F7;}
   .rep-empty{font-size:11.5px;color:#777;font-style:italic;padding:4px 0;}
