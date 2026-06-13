@@ -3198,14 +3198,14 @@ async function generateReport(){
     let spend=0,litres=0,fills=0;
     reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{spend+=v.totalAmount;litres+=v.totalLitres;fills+=v.transactions.length;}));
     const avgCPL=litres>0?spend/litres:0;
-    body.push({title:'Fuel Spend Summary',html:repTable(
+    body.push({title:'Fuel Spend Summary',html:'<div class="rep-narrow">'+repTable(
       ['Metric','Value'],
       [['Total fuel spend',fmtRand(spend)],
        ['Total litres',litres.toFixed(2)+' L'],
        ['Number of fills',String(fills)],
        ['Average cost / litre',fmtRand(avgCPL)],
        ['Periods covered',periodVal==='__all__'?String(state.reports.length):'1'],
-       ['Vehicle scope',vehFilter==='__all__'?'All vehicles':vehFilter]],[1],['60%','40%'])});
+       ['Vehicle scope',vehFilter==='__all__'?'All vehicles':vehFilter]],[1],['60%','40%'])+'</div>'});
   }
 
   // ── Vehicle blocks with transactions ──
@@ -3337,10 +3337,16 @@ async function generateReport(){
   .rep-table th.r,.rep-table td.r{text-align:right;}
   .rep-table tbody tr:nth-child(even) td{background:#F7F7F7;}
   .rep-empty{font-size:11.5px;color:#777;font-style:italic;padding:4px 0;}
+  .rep-narrow{max-width:360px;}
   .rep-footer{position:fixed;bottom:0;left:0;right:0;height:14mm;border-top:0.5px solid #BBB;display:flex;align-items:center;justify-content:center;font-size:10px;color:#777;}
   .rep-footer .o{color:#E8590C;font-weight:700;}
+  .rep-toolbar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid #DDD;padding:9px 14px;display:flex;justify-content:flex-end;}
+  .rep-print-btn{background:#1971C2;color:#fff;border:none;border-radius:6px;padding:9px 20px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;}
+  .rep-print-btn:hover{background:#0C5A99;}
+  @media print{ .rep-toolbar{display:none !important;} }
 </style></head>
-<body onload="setTimeout(function(){window.print();},250);">
+<body>
+  <div class="rep-toolbar"><button class="rep-print-btn" onclick="window.print()">🖨 Print / Save as PDF</button></div>
   <div class="rep-logo-band">${buildReportLogo()}<span class="rep-wm">Fleet<span class="o">Desk</span></span></div>
   <div class="rep-head">
     <div class="rep-org">Phola Coaches</div>
