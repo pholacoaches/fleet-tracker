@@ -3205,7 +3205,7 @@ async function generateReport(){
        ['Number of fills',String(fills)],
        ['Average cost / litre',fmtRand(avgCPL)],
        ['Periods covered',periodVal==='__all__'?String(state.reports.length):'1'],
-       ['Vehicle scope',vehFilter==='__all__'?'All vehicles':vehFilter]],[1])});
+       ['Vehicle scope',vehFilter==='__all__'?'All vehicles':vehFilter]],[1],['60%','40%'])});
   }
 
   // ── Vehicle blocks with transactions ──
@@ -3324,15 +3324,15 @@ async function generateReport(){
   .rep-head{padding:16px 4px 4px;border-bottom:2px solid #111;margin-bottom:22px;}
   .rep-org{font-size:18px;font-weight:700;color:#111;}
   .rep-sub{font-size:12px;color:#555;margin-top:3px;}
-  .rep-section{margin-bottom:26px;break-inside:avoid;}
-  h2.rep-title{font-size:15px;font-weight:700;color:#111;border-bottom:1.5px solid #999;padding-bottom:5px;margin-bottom:10px;}
-  .rep-subhead{font-size:13px;font-weight:700;color:#111;margin:14px 0 6px;background:#F0F0F0;padding:5px 8px;}
-  .rep-vehicle-block{margin-bottom:12px;break-inside:avoid;}
-  .rep-vehicle-name{font-size:12px;font-weight:700;margin-bottom:4px;}
+  .rep-section{margin-bottom:18px;break-inside:avoid;}
+  h2.rep-title{font-size:14px;font-weight:700;color:#111;border-bottom:1.5px solid #999;padding-bottom:4px;margin-bottom:7px;}
+  .rep-subhead{font-size:12px;font-weight:700;color:#111;margin:10px 0 4px;background:#F0F0F0;padding:3px 7px;}
+  .rep-vehicle-block{margin-bottom:8px;break-inside:avoid;}
+  .rep-vehicle-name{font-size:11px;font-weight:700;margin-bottom:2px;}
   table.rep-table{width:100%;border-collapse:collapse;margin-bottom:6px;}
   table.rep-table.fixed{table-layout:fixed;}
-  .rep-table th{font-size:9.5px;text-transform:uppercase;letter-spacing:0.4px;text-align:left;padding:5px 7px;border-bottom:1.5px solid #111;color:#333;}
-  .rep-table td{font-size:11px;padding:4px 7px;border-bottom:0.5px solid #DDD;vertical-align:top;}
+  .rep-table th{font-size:9px;text-transform:uppercase;letter-spacing:0.3px;text-align:left;padding:3px 6px;border-bottom:1.5px solid #111;color:#333;line-height:1.2;}
+  .rep-table td{font-size:10.5px;padding:2px 6px;border-bottom:0.5px solid #E2E2E2;vertical-align:top;line-height:1.25;}
   .rep-table.fixed th,.rep-table.fixed td{word-break:break-word;overflow-wrap:break-word;}
   .rep-table th.r,.rep-table td.r{text-align:right;}
   .rep-table tbody tr:nth-child(even) td{background:#F7F7F7;}
