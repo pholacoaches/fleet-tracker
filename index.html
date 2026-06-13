@@ -3158,11 +3158,13 @@ function buildReportLogo(){
   return`<svg viewBox="0 0 92 78" width="64" height="54" xmlns="http://www.w3.org/2000/svg">${dots}<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#E8590C" stroke-width="3" stroke-linecap="round"/><circle cx="${cx}" cy="${cy}" r="4.5" fill="#E8590C"/></svg>`;
 }
 
-function repTable(headers,rows,rightCols=[],colWidths=null){
+function repTable(headers,rows,rightCols=[],colWidths=null,exactWidths=false){
   if(rows.length===0)return'<p class="rep-empty">No data for this selection.</p>';
-  // Evenly distribute columns: 100% divided equally by column count.
-  const w=(100/headers.length).toFixed(2)+'%';
-  const cg=`<colgroup>${headers.map(()=>`<col style="width:${w}">`).join('')}</colgroup>`;
+  // Evenly distribute columns by default; use exact widths only when explicitly requested.
+  let cols;
+  if(exactWidths&&colWidths){cols=colWidths;}
+  else{const w=(100/headers.length).toFixed(2)+'%';cols=headers.map(()=>w);}
+  const cg=`<colgroup>${cols.map(w=>`<col style="width:${w}">`).join('')}</colgroup>`;
   const th=headers.map((h,i)=>`<th${rightCols.includes(i)?' class="r"':''}>${escapeHtml(h)}</th>`).join('');
   const tb=rows.map(row=>'<tr>'+row.map((c,i)=>`<td${rightCols.includes(i)?' class="r"':''}>${c==null?'':escapeHtml(String(c))}</td>`).join('')+'</tr>').join('');
   return`<table class="rep-table fixed">${cg}<thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table>`;
@@ -3261,7 +3263,7 @@ async function generateReport(){
       const kml=a.kml.length?a.kml.reduce((x,y)=>x+y,0)/a.kml.length:null;
       return[plate,cpk!=null?'R'+cpk.toFixed(2):'—',kml!=null?kml.toFixed(2)+' km/L':'—'];
     }).sort((a,b)=>a[0].localeCompare(b[0]));
-    body.push({title:'Cost Per Kilometre',html:repTable(['Vehicle','Avg Cost / km','Avg Efficiency'],rows,[1,2],['50%','25%','25%'])});
+    body.push({title:'Cost Per Kilometre',html:repTable(['Vehicle','Avg Cost / km','Avg Efficiency'],rows,[1,2],['30%','40%','30%'],true)});
   }
 
   // ── Disc & compliance status ──
@@ -3327,7 +3329,7 @@ async function generateReport(){
   .rep-org{font-size:18px;font-weight:700;color:#111;}
   .rep-sub{font-size:12px;color:#555;margin-top:3px;}
   .rep-section{margin-bottom:18px;break-inside:avoid;}
-  h2.rep-title{font-family:'Century Gothic','Futura','Trebuchet MS',sans-serif;font-size:14px;font-weight:700;color:#8B3A0F;background:#FFCBA4;padding:6px 12px;margin-bottom:9px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  h2.rep-title{font-family:'Century Gothic','Futura','Trebuchet MS',sans-serif;font-size:14px;font-weight:700;color:#000000;background:#FFCBA4;padding:6px 12px;margin-bottom:9px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rep-subhead{font-size:12px;font-weight:700;color:#111;margin:10px 0 4px;background:#F0F0F0;padding:3px 7px;}
   .rep-vehicle-block{margin-bottom:8px;break-inside:avoid;}
   .rep-vehicle-name{font-size:11px;font-weight:700;margin-bottom:2px;}
