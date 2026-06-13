@@ -677,6 +677,30 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .mf-parts-head { display:grid; grid-template-columns:2fr 1fr 1fr 60px 1fr 1fr 1fr 30px; gap:6px; margin-bottom:4px; }
 .mf-parts-head span { font-size:9px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); font-weight:700; }
 @media (max-width:700px){ .mf-part-row, .mf-parts-head { grid-template-columns:1fr 1fr 1fr; } .mf-parts-head { display:none; } }
+
+/* REPORTS TAB */
+.rep-type-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
+@media (max-width:640px){ .rep-type-row { grid-template-columns:1fr; } }
+.rep-type-card { background:var(--surface); border:2px solid var(--border); border-radius:var(--radius); padding:18px 20px; cursor:pointer; transition:all 0.15s; box-shadow:var(--shadow); }
+.rep-type-card:hover { border-color:var(--accent); }
+.rep-type-card.active { border-color:var(--accent); background:var(--accent-light); }
+.rep-type-title { font-size:15px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px; }
+.rep-type-desc { font-size:12px; color:var(--text3); margin-top:5px; line-height:1.5; }
+.rep-panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; margin-bottom:18px; }
+.rep-field { margin-bottom:16px; }
+.rep-field > label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--text2); display:block; margin-bottom:7px; }
+.rep-field select { width:100%; max-width:340px; padding:9px 12px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); font-family:var(--font); font-size:13px; color:var(--text); background:var(--surface); outline:none; }
+.rep-field select:focus { border-color:var(--accent); }
+.rep-checks { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; }
+.rep-check { display:flex; align-items:center; gap:10px; padding:11px 14px; border:1.5px solid var(--border); border-radius:var(--radius-sm); background:var(--surface2); cursor:pointer; transition:all 0.15s; font-size:13px; color:var(--text2); font-weight:600; }
+.rep-check:hover { border-color:var(--accent); }
+.rep-check input { width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0; }
+.rep-check.on { border-color:var(--accent); background:var(--accent-light); color:var(--accent); }
+.rep-generate { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.rep-generate-btn { padding:12px 28px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:var(--font); font-size:14px; font-weight:700; cursor:pointer; transition:background 0.15s; display:inline-flex; align-items:center; gap:8px; }
+.rep-generate-btn:hover { background:var(--accent2); }
+.rep-hint { font-size:12px; color:var(--text3); }
+
 .hidden { display: none !important; }
 input[type=file] { display: none; }
 @media (max-width: 600px) {
@@ -798,6 +822,7 @@ input[type=file] { display: none; }
       <button class="dash-tab-btn"        data-tab="history"     onclick="switchDashTab('history')">📁 History</button>
       <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')">🛞 Tyres</button>
       <button class="dash-tab-btn"        data-tab="maint"       onclick="switchDashTab('maint')">🔧 Maintenance</button>
+      <button class="dash-tab-btn"        data-tab="reports"     onclick="switchDashTab('reports')">📋 Reports</button>
     </div>
 
     <!-- TAB 1: OVERVIEW -->
@@ -928,6 +953,48 @@ input[type=file] { display: none; }
       <div id="maintVehiclePanel"><p class="tyre-empty">Select a vehicle above to view its maintenance history.</p></div>
     </div>
 
+    <!-- TAB 9: REPORTS -->
+    <div class="tab-panel" id="tab-reports">
+      <div class="section-header">
+        <div class="section-title">📋 Reports</div>
+        <div style="font-size:12px;color:var(--text3);margin-left:8px;">Generate a print-ready PDF for printing or emailing</div>
+      </div>
+
+      <div class="rep-type-row">
+        <div class="rep-type-card active" id="repTypeFull" onclick="setReportType('full')">
+          <div class="rep-type-title">📄 Full Report</div>
+          <div class="rep-type-desc">Everything in one document — fuel, vehicles, compliance, tyres and maintenance.</div>
+        </div>
+        <div class="rep-type-card" id="repTypeCustom" onclick="setReportType('custom')">
+          <div class="rep-type-title">⚙️ Custom Report</div>
+          <div class="rep-type-desc">Choose exactly which sections to include below.</div>
+        </div>
+      </div>
+
+      <div class="rep-panel">
+        <div style="display:flex;gap:24px;flex-wrap:wrap;">
+          <div class="rep-field" style="flex:1;min-width:240px;">
+            <label>Vehicle</label>
+            <select id="repVehicle"><option value="__all__">All Vehicles</option></select>
+          </div>
+          <div class="rep-field" style="flex:1;min-width:240px;">
+            <label>Period</label>
+            <select id="repPeriod"><option value="__all__">All Periods</option></select>
+          </div>
+        </div>
+
+        <div class="rep-field hidden" id="repCustomChecks" style="margin-bottom:4px;">
+          <label>Sections to include</label>
+          <div class="rep-checks" id="repChecksGrid"></div>
+        </div>
+      </div>
+
+      <div class="rep-generate">
+        <button class="rep-generate-btn" onclick="generateReport()">📄 Generate PDF</button>
+        <span class="rep-hint">Opens in a new browser tab — use your browser's “Save as PDF” to download or print.</span>
+      </div>
+    </div>
+
   </div>
 </main>
 
@@ -1043,6 +1110,7 @@ function switchDashTab(tab){
   if(tab==='discs')renderDiscsTab();
   if(tab==='tyres')renderTyresTab();
   if(tab==='maint')renderMaintTab();
+  if(tab==='reports')renderReportsTab();
 }
 
 const STORAGE_KEY='fleet_tracker_v2';
@@ -3032,6 +3100,257 @@ async function markJobDone(id){
     }
     await renderMaintTab();
   }catch{alert('Could not update the job. Please check your connection and try again.');}
+}
+
+// ── REPORTS TAB ───────────────────────────────────────────────────────────────
+let reportType='full';
+const REPORT_SECTIONS=[
+  {key:'fuel',     label:'Fuel spend summary'},
+  {key:'blocks',   label:'Vehicle blocks with transactions'},
+  {key:'odo',      label:'Odometer alerts'},
+  {key:'highspend',label:'High spend vehicles'},
+  {key:'cpk',      label:'Cost per km per vehicle'},
+  {key:'compliance',label:'Disc & compliance status'},
+  {key:'tyres',    label:'Tyre inventory'},
+  {key:'maint',    label:'Maintenance history'},
+  {key:'flags',    label:'Red flags only'}
+];
+
+function renderReportsTab(){
+  // Vehicle dropdown — every plate across every report
+  const plates=new Set();
+  state.reports.forEach(r=>r.vehicles.forEach(v=>plates.add(v.plate)));
+  const vSel=document.getElementById('repVehicle');
+  vSel.innerHTML='<option value="__all__">All Vehicles</option>'+[...plates].sort().map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+
+  // Period dropdown — one per uploaded report
+  const pSel=document.getElementById('repPeriod');
+  pSel.innerHTML='<option value="__all__">All Periods</option>'+state.reports.map((r,i)=>`<option value="${i}">${escapeHtml(r.scheduleDate||'Report '+(i+1))}</option>`).join('');
+
+  // Custom checkboxes
+  document.getElementById('repChecksGrid').innerHTML=REPORT_SECTIONS.map(s=>`
+    <label class="rep-check on"><input type="checkbox" value="${s.key}" checked onchange="this.closest('.rep-check').classList.toggle('on',this.checked)"> ${s.label}</label>
+  `).join('');
+}
+
+function setReportType(t){
+  reportType=t;
+  document.getElementById('repTypeFull').classList.toggle('active',t==='full');
+  document.getElementById('repTypeCustom').classList.toggle('active',t==='custom');
+  document.getElementById('repCustomChecks').classList.toggle('hidden',t!=='custom');
+}
+
+function selectedSectionKeys(){
+  if(reportType==='full')return REPORT_SECTIONS.map(s=>s.key);
+  return[...document.querySelectorAll('#repChecksGrid input:checked')].map(c=>c.value);
+}
+
+function buildReportLogo(){
+  const cx=46,cy=62,r=30;
+  let dots='';
+  for(let i=0;i<9;i++){
+    const ang=(180-i*22.5)*Math.PI/180;
+    const x=cx+r*Math.cos(ang), y=cy-r*Math.sin(ang);
+    dots+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(2.2+i*0.5).toFixed(1)}" fill="#E8590C"/>`;
+  }
+  const nang=(180-6*22.5)*Math.PI/180;
+  const nx=cx+(r-7)*Math.cos(nang), ny=cy-(r-7)*Math.sin(nang);
+  return`<svg viewBox="0 0 92 78" width="64" height="54" xmlns="http://www.w3.org/2000/svg">${dots}<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#E8590C" stroke-width="3" stroke-linecap="round"/><circle cx="${cx}" cy="${cy}" r="4.5" fill="#E8590C"/></svg>`;
+}
+
+function repTable(headers,rows,rightCols=[]){
+  if(rows.length===0)return'<p class="rep-empty">No data for this selection.</p>';
+  const th=headers.map((h,i)=>`<th${rightCols.includes(i)?' class="r"':''}>${escapeHtml(h)}</th>`).join('');
+  const tb=rows.map(row=>'<tr>'+row.map((c,i)=>`<td${rightCols.includes(i)?' class="r"':''}>${c==null?'':escapeHtml(String(c))}</td>`).join('')+'</tr>').join('');
+  return`<table class="rep-table"><thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table>`;
+}
+
+function stripTags(s){
+  return String(s).replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+}
+
+async function generateReport(){
+  if(state.reports.length===0){alert('Upload a fuel report first — there is no data to report on yet.');return;}
+  const sections=selectedSectionKeys();
+  if(sections.length===0){alert('Please select at least one section to include.');return;}
+
+  // Open the tab synchronously so popup blockers allow it
+  const win=window.open('','_blank');
+  if(!win){alert('Please allow pop-ups for this site to open the report.');return;}
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Generating report…</title></head><body style="font-family:sans-serif;padding:40px;color:#555;">Generating report…</body></html>');
+
+  // Selection
+  const vehFilter=document.getElementById('repVehicle').value;
+  const periodVal=document.getElementById('repPeriod').value;
+  const reports=periodVal==='__all__'?state.reports.map((r,i)=>({r,i})):[{r:state.reports[+periodVal],i:+periodVal}];
+  const filterVeh=vs=>vehFilter==='__all__'?vs:vs.filter(v=>v.plate===vehFilter);
+
+  // Fetch only what the selected sections need
+  if(sections.includes('compliance'))await fetchCompliance();
+  if(sections.includes('tyres'))await fetchTyres();
+  if(sections.includes('maint')||sections.includes('flags'))await fetchMaintData();
+
+  const body=[];
+
+  // ── Fuel spend summary ──
+  if(sections.includes('fuel')){
+    let spend=0,litres=0,fills=0;
+    reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{spend+=v.totalAmount;litres+=v.totalLitres;fills+=v.transactions.length;}));
+    const avgCPL=litres>0?spend/litres:0;
+    body.push({title:'Fuel Spend Summary',html:repTable(
+      ['Metric','Value'],
+      [['Total fuel spend',fmtRand(spend)],
+       ['Total litres',litres.toFixed(2)+' L'],
+       ['Number of fills',String(fills)],
+       ['Average cost / litre',fmtRand(avgCPL)],
+       ['Periods covered',periodVal==='__all__'?String(state.reports.length):'1'],
+       ['Vehicle scope',vehFilter==='__all__'?'All vehicles':vehFilter]],[1])});
+  }
+
+  // ── Vehicle blocks with transactions ──
+  if(sections.includes('blocks')){
+    let html='';
+    reports.forEach(({r})=>{
+      const vs=filterVeh(r.vehicles);
+      if(vs.length===0)return;
+      html+=`<div class="rep-subhead">${escapeHtml(r.scheduleDate||'Report')}</div>`;
+      vs.forEach(v=>{
+        html+=`<div class="rep-vehicle-block"><div class="rep-vehicle-name">${escapeHtml(v.plate)} — ${fmtRand(v.totalAmount)} · ${v.totalLitres.toFixed(2)} L · ${v.transactions.length} fill(s)</div>`;
+        html+=repTable(['Date','Merchant','Odometer','Litres','Amount','km/L'],
+          v.transactions.map(tx=>[
+            tx.date, tx.merchant,
+            tx.odometer?tx.odometer.toLocaleString('en-US'):'—',
+            tx.litres.toFixed(2),
+            fmtRand(tx.amount),
+            tx.kmPerLitre?tx.kmPerLitre.toFixed(2):'—'
+          ]),[2,3,4,5]);
+        html+='</div>';
+      });
+    });
+    body.push({title:'Vehicle Blocks',html:html||'<p class="rep-empty">No vehicles for this selection.</p>'});
+  }
+
+  // ── Odometer alerts ──
+  if(sections.includes('odo')){
+    const rows=[];
+    reports.forEach(({r})=>filterVeh(r.vehicles).filter(v=>v.hasOdometerIssue).forEach(v=>{
+      v.transactions.filter(t=>t.odometerFlag).forEach(t=>rows.push([v.plate,r.scheduleDate||'—',t.date,t.odometer?t.odometer.toLocaleString('en-US'):'—']));
+    }));
+    body.push({title:'Odometer Alerts',html:rows.length?repTable(['Vehicle','Period','Date','Flagged Odometer'],rows,[3]):'<p class="rep-empty">No odometer anomalies found. ✓</p>'});
+  }
+
+  // ── High spend vehicles ──
+  if(sections.includes('highspend')){
+    const rows=[];
+    reports.forEach(({r})=>filterVeh(r.vehicles).filter(v=>v.isHighSpend).forEach(v=>rows.push([v.plate,r.scheduleDate||'—',fmtRand(v.totalAmount),v.totalLitres.toFixed(2)+' L'])));
+    body.push({title:'High Spend Vehicles',html:rows.length?repTable(['Vehicle','Period','Total Spend','Litres'],rows,[2,3]):'<p class="rep-empty">No vehicles above the high-spend threshold. ✓</p>'});
+  }
+
+  // ── Cost per km per vehicle ──
+  if(sections.includes('cpk')){
+    const agg={};
+    reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{
+      const a=agg[v.plate]||(agg[v.plate]={cpk:[],kml:[]});
+      v.transactions.forEach(t=>{if(t.costPerKm)a.cpk.push(t.costPerKm);if(t.kmPerLitre)a.kml.push(t.kmPerLitre);});
+    }));
+    const rows=Object.entries(agg).map(([plate,a])=>{
+      const cpk=a.cpk.length?a.cpk.reduce((x,y)=>x+y,0)/a.cpk.length:null;
+      const kml=a.kml.length?a.kml.reduce((x,y)=>x+y,0)/a.kml.length:null;
+      return[plate,cpk!=null?'R'+cpk.toFixed(2):'—',kml!=null?kml.toFixed(2)+' km/L':'—'];
+    }).sort((a,b)=>a[0].localeCompare(b[0]));
+    body.push({title:'Cost Per Kilometre',html:repTable(['Vehicle','Avg Cost / km','Avg Efficiency'],rows,[1,2])});
+  }
+
+  // ── Disc & compliance status ──
+  if(sections.includes('compliance')){
+    let plates=Object.keys(complianceData);
+    if(vehFilter!=='__all__')plates=plates.filter(p=>p===vehFilter);
+    const rows=[];
+    plates.sort().forEach(p=>{
+      const rec=complianceData[p];
+      COMP_ITEMS.forEach(it=>{
+        const exp=rec[it.expiryField];
+        const st=complianceStatus(exp);
+        const label=st.status==='expired'?'EXPIRED':st.status==='urgent'?'Urgent':st.status==='warn'?'Due soon':st.status==='ok'?'Valid':'Not set';
+        rows.push([p,it.label,exp?fmtDDMMYYYY(exp):'—',st.days==null?'—':st.days<0?Math.abs(st.days)+' days over':st.days+' days',label]);
+      });
+    });
+    body.push({title:'Disc & Compliance Status',html:rows.length?repTable(['Vehicle','Item','Expiry','Remaining','Status'],rows,[3]):'<p class="rep-empty">No compliance records captured yet.</p>'});
+  }
+
+  // ── Tyre inventory ──
+  if(sections.includes('tyres')){
+    let list=tyresData.slice();
+    if(vehFilter!=='__all__')list=list.filter(t=>t.plate===vehFilter);
+    const rows=list.map(t=>[t.plate,t.position,(t.brand||'')+(t.model?' '+t.model:''),t.size||'—',t.cost!=null?fmtRand(t.cost):'—',t.odometer_fitted?t.odometer_fitted.toLocaleString('en-US')+' km':'—',t.date_fitted?fmtDDMMYYYY(t.date_fitted):'—']);
+    body.push({title:'Tyre Inventory',html:repTable(['Vehicle','Position','Brand / Model','Size','Cost','Fitted At','Date Fitted'],rows,[4,5])});
+  }
+
+  // ── Maintenance history ──
+  if(sections.includes('maint')){
+    let list=maintJobs.slice();
+    if(vehFilter!=='__all__')list=list.filter(j=>j.plate===vehFilter);
+    const rows=list.map(j=>[
+      j.plate,fmtDDMMYYYY(j.date_in),(MAINT_CATEGORIES[j.category]||{}).label||j.category,
+      j.component||'—',j.description,
+      j.total_cost!=null?fmtRand(j.total_cost):'—',
+      j.date_out?'Done':'In workshop'
+    ]);
+    body.push({title:'Maintenance History',html:repTable(['Vehicle','Date In','Category','Component','Description','Total','Status'],rows,[5])});
+  }
+
+  // ── Red flags only ──
+  if(sections.includes('flags')){
+    let flags=computeMaintFlags();
+    if(vehFilter!=='__all__')flags=flags.filter(f=>!f.plate||f.plate===vehFilter);
+    const rows=flags.map(f=>[(f.severity==='red'?'🔴':'🟠'),f.plate||'Fleet-wide',stripTags(f.html)]);
+    body.push({title:'Red Flags',html:rows.length?repTable(['','Vehicle','Alert'],rows):'<p class="rep-empty">No red flags detected. ✓</p>'});
+  }
+
+  // ── Assemble document ──
+  const now=new Date();
+  const dateStr=fmtDDMMYYYY(now)+' '+fmtTimeHM(now);
+  const scopeLine=(vehFilter==='__all__'?'All Vehicles':vehFilter)+' · '+(periodVal==='__all__'?'All Periods':escapeHtml(state.reports[+periodVal].scheduleDate||'Selected Period'));
+
+  const doc=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>FleetDesk Report — ${escapeHtml(dateStr)}</title>
+<style>
+  @page { margin: 16mm 14mm 22mm; }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Century Gothic','Futura','Trebuchet MS',sans-serif;color:#111;font-size:12px;line-height:1.5;}
+  .rep-logo-band{background:#1A1A1A;padding:18px 24px;display:flex;align-items:center;gap:14px;}
+  .rep-wm{font-size:30px;font-weight:700;letter-spacing:0.5px;color:#fff;}
+  .rep-wm .o{color:#E8590C;}
+  .rep-head{padding:16px 4px 4px;border-bottom:2px solid #111;margin-bottom:22px;}
+  .rep-org{font-size:18px;font-weight:700;color:#111;}
+  .rep-sub{font-size:12px;color:#555;margin-top:3px;}
+  .rep-section{margin-bottom:26px;break-inside:avoid;}
+  h2.rep-title{font-size:15px;font-weight:700;color:#111;border-bottom:1.5px solid #999;padding-bottom:5px;margin-bottom:10px;}
+  .rep-subhead{font-size:13px;font-weight:700;color:#111;margin:14px 0 6px;background:#F0F0F0;padding:5px 8px;}
+  .rep-vehicle-block{margin-bottom:12px;break-inside:avoid;}
+  .rep-vehicle-name{font-size:12px;font-weight:700;margin-bottom:4px;}
+  table.rep-table{width:100%;border-collapse:collapse;margin-bottom:6px;}
+  .rep-table th{font-size:9.5px;text-transform:uppercase;letter-spacing:0.4px;text-align:left;padding:5px 7px;border-bottom:1.5px solid #111;color:#333;}
+  .rep-table td{font-size:11px;padding:4px 7px;border-bottom:0.5px solid #DDD;vertical-align:top;}
+  .rep-table th.r,.rep-table td.r{text-align:right;}
+  .rep-table tbody tr:nth-child(even) td{background:#F7F7F7;}
+  .rep-empty{font-size:11.5px;color:#777;font-style:italic;padding:4px 0;}
+  .rep-footer{position:fixed;bottom:0;left:0;right:0;height:14mm;border-top:0.5px solid #BBB;display:flex;align-items:center;justify-content:center;font-size:10px;color:#777;}
+  .rep-footer .o{color:#E8590C;font-weight:700;}
+</style></head>
+<body onload="setTimeout(function(){window.print();},250);">
+  <div class="rep-logo-band">${buildReportLogo()}<span class="rep-wm">Fleet<span class="o">Desk</span></span></div>
+  <div class="rep-head">
+    <div class="rep-org">Phola Coaches</div>
+    <div class="rep-sub">${reportType==='full'?'Full Fleet Report':'Custom Report'} · ${scopeLine}</div>
+    <div class="rep-sub">Generated ${escapeHtml(dateStr)}</div>
+  </div>
+  ${body.map(s=>`<div class="rep-section"><h2 class="rep-title">${escapeHtml(s.title)}</h2>${s.html}</div>`).join('')}
+  <div class="rep-footer"><span><span class="o">FleetDesk</span> · Fleet Management · Generated on ${escapeHtml(dateStr)}</span></div>
+</body></html>`;
+
+  win.document.open();
+  win.document.write(doc);
+  win.document.close();
 }
 
 initApp();
