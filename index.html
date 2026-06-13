@@ -3241,14 +3241,14 @@ async function generateReport(){
     reports.forEach(({r})=>filterVeh(r.vehicles).filter(v=>v.hasOdometerIssue).forEach(v=>{
       v.transactions.filter(t=>t.odometerFlag).forEach(t=>rows.push([v.plate,r.scheduleDate||'—',t.date,t.odometer?t.odometer.toLocaleString('en-US'):'—']));
     }));
-    body.push({title:'Odometer Alerts',html:rows.length?repTable(['Vehicle','Period','Date','Flagged Odometer'],rows,[3],['20%','20%','20%','40%'],true):'<p class="rep-empty">No odometer anomalies found. ✓</p>'});
+    body.push({title:'Odometer Alerts',html:rows.length?repTable(['Vehicle','Period','Date','Flagged Odometer'],rows,[3],['12%','35%','15%','38%'],true):'<p class="rep-empty">No odometer anomalies found. ✓</p>'});
   }
 
   // ── High spend vehicles ──
   if(sections.includes('highspend')){
     const rows=[];
     reports.forEach(({r})=>filterVeh(r.vehicles).filter(v=>v.isHighSpend).forEach(v=>rows.push([v.plate,r.scheduleDate||'—',fmtRand(v.totalAmount),v.totalLitres.toFixed(2)+' L'])));
-    body.push({title:'High Spend Vehicles',html:rows.length?repTable(['Vehicle','Period','Total Spend','Litres'],rows,[2,3],['20%','20%','30%','30%'],true):'<p class="rep-empty">No vehicles above the high-spend threshold. ✓</p>'});
+    body.push({title:'High Spend Vehicles',html:rows.length?repTable(['Vehicle','Period','Total Spend','Litres'],rows,[2,3],['12%','35%','15%','38%'],true):'<p class="rep-empty">No vehicles above the high-spend threshold. ✓</p>'});
   }
 
   // ── Cost per km per vehicle ──
@@ -3261,9 +3261,9 @@ async function generateReport(){
     const rows=Object.entries(agg).map(([plate,a])=>{
       const cpk=a.cpk.length?a.cpk.reduce((x,y)=>x+y,0)/a.cpk.length:null;
       const kml=a.kml.length?a.kml.reduce((x,y)=>x+y,0)/a.kml.length:null;
-      return[plate,cpk!=null?'R'+cpk.toFixed(2):'—',kml!=null?kml.toFixed(2)+' km/L':'—'];
+      return[plate,'',cpk!=null?'R'+cpk.toFixed(2):'—',kml!=null?kml.toFixed(2)+' km/L':'—'];
     }).sort((a,b)=>a[0].localeCompare(b[0]));
-    body.push({title:'Cost Per Kilometre',html:repTable(['Vehicle','Avg Cost / km','Avg Efficiency'],rows,[1,2],['40%','30%','30%'],true)});
+    body.push({title:'Cost Per Kilometre',html:repTable(['Vehicle','','Avg Cost / km','Avg Efficiency'],rows,[2,3],['12%','35%','15%','38%'],true)});
   }
 
   // ── Disc & compliance status ──
