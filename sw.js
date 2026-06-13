@@ -1,10 +1,15 @@
-const CACHE = 'fleetdesk-v16';
+const CACHE = 'fleetdesk-v17';
 const PRECACHE = [
   '/fleet-tracker/',
   '/fleet-tracker/index.html',
   '/fleet-tracker/driver.html',
   '/fleet-tracker/manifest.json',
-  '/fleet-tracker/hero.jpg'
+  '/fleet-tracker/hero.jpg',
+  '/fleet-tracker/fleetdesk-icon-final.svg',
+  '/fleet-tracker/fleetdesk-icon-final-32.png',
+  '/fleet-tracker/fleetdesk-icon-final-180.png',
+  '/fleet-tracker/fleetdesk-icon-final-192.png',
+  '/fleet-tracker/fleetdesk-icon-final-512.png'
 ];
 
 self.addEventListener('install', e => {
