@@ -1372,7 +1372,7 @@ async function extractWithAI(base64Data,filename){
       const endIdx=Math.min(startIdx+CHUNK_SIZE,totalPages);
       const chunkDoc=await PDFDocument.create();
       const indices=Array.from({length:endIdx-startIdx},(_,j)=>startIdx+j);
-      const copied=await chunkDoc.copyPagesFrom(pdfDoc,indices);
+      const copied=await chunkDoc.copyPages(pdfDoc,indices);
       copied.forEach(p=>chunkDoc.addPage(p));
       const chunkBase64=await chunkDoc.saveAsBase64();
       chunks.push({startPage:startIdx+1,endPage:endIdx,base64:chunkBase64});
