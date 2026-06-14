@@ -730,6 +730,7 @@ input[type=file] { display: none; }
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 </head>
 <body>
 
@@ -1355,9 +1356,119 @@ async function parseFreightExcel(file){
 }
 
 async function extractWithAI(base64Data,filename){
-  updateLoading('Extracting vehicle data...','AI is reading all pages — please wait');
+  updateLoading('Detecting PDF size…','Splitting into chunks for processing');
   try{
-    const prompt=`Extract data from this Engen Schedule of Purchases fleet fuel invoice PDF.
+    // Split PDF into 3-page chunks using pdf-lib so each call stays well under timeout
+    const pdfBytes=Uint8Array.from(atob(base64Data),c=>c.charCodeAt(0));
+    const {PDFDocument}=PDFLib;
+    const pdfDoc=await PDFDocument.load(pdfBytes,{ignoreEncryption:true});
+    const totalPages=pdfDoc.getPageCount();
+    const CHUNK_SIZE=3;
+    const totalChunks=Math.ceil(totalPages/CHUNK_SIZE);
+
+    const chunks=[];
+    for(let i=0;i<totalChunks;i++){
+      const startIdx=i*CHUNK_SIZE;
+      const endIdx=Math.min(startIdx+CHUNK_SIZE,totalPages);
+      const chunkDoc=await PDFDocument.create();
+      const indices=Array.from({length:endIdx-startIdx},(_,j)=>startIdx+j);
+      const copied=await chunkDoc.copyPagesFrom(pdfDoc,indices);
+      copied.forEach(p=>chunkDoc.addPage(p));
+      const chunkBase64=await chunkDoc.saveAsBase64();
+      chunks.push({startPage:startIdx+1,endPage:endIdx,base64:chunkBase64});
+    }
+
+    // Process chunks sequentially and merge results
+    const combinedVehicles={};
+    let headerData=null;
+    let combinedTotal=0;
+    const failedRanges=[];
+    const allEngenIds=[];
+
+    for(let ci=0;ci<chunks.length;ci++){
+      const {startPage,endPage,base64}=chunks[ci];
+      updateLoading(
+        `Processing pages ${startPage}–${endPage} of ${totalPages}…`,
+        `Batch ${ci+1} of ${totalChunks} — please wait`
+      );
+      try{
+        const result=await extractChunkWithAI(base64,startPage,endPage,totalPages);
+        if(!headerData&&result.scheduleDate){
+          headerData={customer:result.customer,scheduleDate:result.scheduleDate,accountNo:result.accountNo,fleetNo:result.fleetNo};
+        }
+        combinedTotal+=(result.scheduleTotal||0);
+        (result.vehicles||[]).forEach(v=>{
+          if(!combinedVehicles[v.plate])combinedVehicles[v.plate]={plate:v.plate,transactions:[]};
+          v.transactions.forEach(tx=>{
+            tx.source='Engen';
+            combinedVehicles[v.plate].transactions.push(tx);
+            allEngenIds.push(`${tx.date}|${v.plate}|${tx.litres.toFixed(2)}`);
+          });
+        });
+      }catch(batchErr){
+        console.error(`Batch pages ${startPage}–${endPage} failed:`,batchErr);
+        failedRanges.push(`pages ${startPage}–${endPage}`);
+      }
+    }
+
+    const vehicles=Object.values(combinedVehicles);
+    if(vehicles.length===0){
+      hideLoading();
+      const detail=failedRanges.length?`\n\nFailed batches: ${failedRanges.join(', ')}`:'';
+      showErrorBanner('Could not extract any vehicle data from this PDF.'+detail+'\n\nPlease check your internet connection and try again.');
+      return;
+    }
+
+    vehicles.forEach(v=>v.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date)));
+
+    // Filter-based deduplication: skip already-seen transactions so partial re-uploads work correctly
+    const existingEngenIds=new Set(loadUploadIds().engen||[]);
+    const newVehicles=[];
+    const newEngenIds=[];
+    vehicles.forEach(v=>{
+      const newTxs=v.transactions.filter(tx=>!existingEngenIds.has(`${tx.date}|${v.plate}|${tx.litres.toFixed(2)}`));
+      if(newTxs.length>0){
+        newVehicles.push({...v,transactions:newTxs});
+        newTxs.forEach(tx=>newEngenIds.push(`${tx.date}|${v.plate}|${tx.litres.toFixed(2)}`));
+      }
+    });
+    if(newVehicles.length===0){
+      hideLoading();
+      alert('This report has already been fully uploaded. Please check your upload history.');
+      return;
+    }
+
+    finaliseAndSave({
+      scheduleDate:headerData?.scheduleDate||'',
+      customer:headerData?.customer||'Phola Coaches',
+      accountNo:headerData?.accountNo||'—',
+      fleetNo:headerData?.fleetNo||'—',
+      scheduleTotal:combinedTotal,
+      filename,sources:['Engen'],vehicles:newVehicles
+    },newEngenIds,[]);
+
+    // Show partial-failure warning after dashboard renders
+    if(failedRanges.length>0){
+      setTimeout(()=>{
+        const ab=document.getElementById('alertBanner');
+        if(ab){
+          ab.classList.remove('hidden');
+          ab.innerHTML=`<div style="font-size:16px">⚠</div><div><strong>Partial upload — some pages could not be read</strong><br>Failed: ${failedRanges.join(', ')} — some vehicles may be missing. Re-upload the same PDF to retry the missing pages.</div>`;
+          ab.className='alert-banner';
+        }
+      },600);
+    }
+
+  }catch(err){
+    hideLoading();
+    console.error(err);
+    showErrorBanner('Error processing PDF:\n\n'+err.message+'\n\nPlease check your internet connection and try again.');
+  }
+}
+
+async function extractChunkWithAI(base64Data,startPage,endPage,totalPages){
+  const prompt=`Extract data from this Engen Schedule of Purchases fleet fuel invoice PDF.
+This is pages ${startPage}–${endPage} of a ${totalPages}-page document.
 
 ONLY include vehicles that have actual FUEL transactions where litres > 0.
 EXCLUDE all EDC ADMIN rows (they have 0.00 litres and say "EDC ADMIN" as merchant).
@@ -1394,57 +1505,26 @@ Important rules:
 - Sort transactions by date ascending within each vehicle
 - odometer = integer
 - amount = final charged amount (after rebate if applicable)
-- isCompetitor = true if the transaction is marked with ? in the document (competitor fuel station)`;
+- isCompetitor = true if the transaction is marked with ? in the document (competitor fuel station)
+- If no fuel transactions appear on these pages, return an empty vehicles array: []`;
 
-    const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-6',
-        max_tokens:4000,
-        messages:[{role:'user',content:[
-          {type:'document',source:{type:'base64',media_type:'application/pdf',data:base64Data}},
-          {type:'text',text:prompt}
-        ]}]
-      })
-    });
-
-    const data=await response.json();
-    if(data.error)throw new Error(data.error.message);
-    const text=data.content.map(i=>i.text||'').join('');
-    const clean=text.replace(/```json|```/g,'').trim();
-    const parsed=JSON.parse(clean);
-
-    parsed.vehicles.forEach(v=>v.transactions.forEach(tx=>{tx.source='Engen';}));
-    const engenIds=[];
-    parsed.vehicles.forEach(v=>v.transactions.forEach(tx=>{engenIds.push(`${tx.date}|${v.plate}|${tx.litres.toFixed(2)}`)}));
-    const engenDupes=checkEngenDuplicates(engenIds);
-    if(engenDupes.length>0){ hideLoading(); alert('This file has already been uploaded. Please check your upload history.'); return; }
-
-    finaliseAndSave({
-      scheduleDate:parsed.scheduleDate,customer:parsed.customer,
-      accountNo:parsed.accountNo,fleetNo:parsed.fleetNo,
-      scheduleTotal:parsed.scheduleTotal,filename,sources:['Engen'],
-      vehicles:parsed.vehicles
-    },engenIds,[]);
-
-  }catch(err){
-    hideLoading();
-    console.error(err);
-    let msg='';
-    if(!navigator.onLine){
-      msg='No internet connection detected.\n\nPlease check your connection and try again.';
-    }else if(err.message&&err.message.includes('timeout')){
-      msg='The request timed out — the PDF may be too large or your connection is slow.\n\nPlease try again.';
-    }else if(err.message&&err.message.includes('JSON')){
-      msg='Could not read the PDF correctly.\n\nPlease make sure this is an Engen Schedule of Purchases PDF and try again.';
-    }else if(err.message&&err.message.includes('fetch')){
-      msg='Could not connect to the server.\n\nPlease check your internet connection and try again.';
-    }else{
-      msg='Something went wrong reading your PDF.\n\nPlease try again. If the problem continues, try a different PDF.';
-    }
-    showErrorBanner(msg);
-  }
+  const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-6',
+      max_tokens:4000,
+      messages:[{role:'user',content:[
+        {type:'document',source:{type:'base64',media_type:'application/pdf',data:base64Data}},
+        {type:'text',text:prompt}
+      ]}]
+    })
+  });
+  const data=await response.json();
+  if(data.error)throw new Error(data.error.message);
+  const text=data.content.map(i=>i.text||'').join('');
+  const clean=text.replace(/```json|```/g,'').trim();
+  return JSON.parse(clean);
 }
 
 function renderDashboard(){
