@@ -984,6 +984,12 @@ input[type=file] { display: none; }
           <div class="rep-type-title">⚙️ Custom Report</div>
           <div class="rep-type-desc">Choose exactly which sections to include below.</div>
         </div>
+        <!-- TODO: Per-driver report — not built yet. Driver identity isn't wired into the data
+             until the Drivers tab lands. Build a per-driver report once that exists. -->
+        <div class="rep-type-card" style="opacity:0.55;cursor:not-allowed;" title="Coming soon — requires the Drivers tab">
+          <div class="rep-type-title">🧍 Per-Driver Report <span style="font-size:10px;font-weight:600;color:var(--text3);">· Coming soon</span></div>
+          <div class="rep-type-desc">Per-driver breakdowns will be available once the Drivers tab is added.</div>
+        </div>
       </div>
 
       <div class="rep-panel">
@@ -996,6 +1002,14 @@ input[type=file] { display: none; }
             <label>Period</label>
             <select id="repPeriod"><option value="__all__">All Periods</option></select>
           </div>
+        </div>
+
+        <div class="rep-field" style="margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text2);">
+            <input type="checkbox" id="repIncludeDetail" style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent);">
+            Include full transaction detail
+          </label>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px;padding-left:23px;">When ticked, per-vehicle transaction tables are appended after the summary. Applies to Full Report and single-vehicle reports.</div>
         </div>
 
         <div class="rep-field hidden" id="repCustomChecks" style="margin-bottom:4px;">
@@ -3340,7 +3354,11 @@ function setReportType(t){
 }
 
 function selectedSectionKeys(){
-  if(reportType==='full')return REPORT_SECTIONS.map(s=>s.key);
+  if(reportType==='full'){
+    const keys=REPORT_SECTIONS.map(s=>s.key);
+    const includeDetail=document.getElementById('repIncludeDetail')?.checked;
+    return includeDetail?keys:keys.filter(k=>k!=='blocks');
+  }
   return[...document.querySelectorAll('#repChecksGrid input:checked')].map(c=>c.value);
 }
 
@@ -3388,6 +3406,34 @@ async function generateReport(){
 
   const body=[];
 
+  // ── Single-vehicle mini-summary (prepended when a specific vehicle is selected) ──
+  if(vehFilter!=='__all__'){
+    let vSpend=0,vLitres=0,vFills=0;
+    const kmlVals=[];let firstOdo=null,lastOdo=null;
+    reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{
+      vSpend+=v.totalAmount;vLitres+=v.totalLitres;vFills+=v.transactions.length;
+      v.transactions.forEach(tx=>{
+        if(tx.kmPerLitre)kmlVals.push(tx.kmPerLitre);
+        if(tx.odometer){
+          if(firstOdo===null||tx.odometer<firstOdo)firstOdo=tx.odometer;
+          if(lastOdo===null||tx.odometer>lastOdo)lastOdo=tx.odometer;
+        }
+      });
+    }));
+    const avgKml=kmlVals.length?kmlVals.reduce((a,b)=>a+b,0)/kmlVals.length:null;
+    const avgCPL=vLitres>0?vSpend/vLitres:0;
+    const dist=firstOdo&&lastOdo?lastOdo-firstOdo:null;
+    body.push({title:'Vehicle Summary — '+vehFilter,html:'<div class="rep-narrow">'+repTable(['Metric','Value'],[
+      ['Total fuel spend',fmtRand(vSpend)],
+      ['Total litres',vLitres.toFixed(2)+' L'],
+      ['Number of fills',String(vFills)],
+      ['Average km/L',avgKml!=null?avgKml.toFixed(2)+' km/L':'—'],
+      ['Average cost / litre',fmtRand(avgCPL)],
+      ['Odometer range',firstOdo&&lastOdo?firstOdo.toLocaleString('en-US')+' → '+lastOdo.toLocaleString('en-US')+' km':'—'],
+      ['Distance covered',dist!=null?dist.toLocaleString('en-US')+' km':'—'],
+    ],[1],['60%','40%'])+'</div>'});
+  }
+
   // ── Fuel spend summary ──
   if(sections.includes('fuel')){
     let spend=0,litres=0,fills=0;
@@ -3403,7 +3449,8 @@ async function generateReport(){
        ['Vehicle scope',vehFilter==='__all__'?'All vehicles':vehFilter]],[1],['60%','40%'])+'</div>'});
   }
 
-  // ── Vehicle blocks with transactions ──
+  // ── Vehicle blocks with transactions (full detail) — assembled here, appended at the very end ──
+  let blocksSection=null;
   if(sections.includes('blocks')){
     let html='';
     reports.forEach(({r})=>{
@@ -3412,18 +3459,18 @@ async function generateReport(){
       html+=`<div class="rep-subhead">${escapeHtml(r.scheduleDate||'Report')}</div>`;
       vs.forEach(v=>{
         html+=`<div class="rep-vehicle-block"><div class="rep-vehicle-name">${escapeHtml(v.plate)} — ${fmtRand(v.totalAmount)} · ${v.totalLitres.toFixed(2)} L · ${v.transactions.length} fill(s)</div>`;
-        html+=repTable(['Date','Merchant','Odometer','Litres','Amount','km/L'],
+        html+=repTable(['Date','Merchant','Odometer','Litres','KM/L','Amount'],
           v.transactions.map(tx=>[
             tx.date, tx.merchant,
             tx.odometer?tx.odometer.toLocaleString('en-US'):'—',
-            tx.litres.toFixed(2),
-            fmtRand(tx.amount),
-            tx.kmPerLitre?tx.kmPerLitre.toFixed(2):'—'
-          ]),[2,3,4,5],['12%','35%','15%','12%','15%','11%']);
+            tx.litres.toFixed(2)+' L',
+            tx.kmPerLitre?tx.kmPerLitre.toFixed(2):'—',
+            fmtRand(tx.amount)
+          ]),[2,3,4,5],['12%','30%','15%','12%','13%','18%']);
         html+='</div>';
       });
     });
-    body.push({title:'Vehicle Blocks',html:html||'<p class="rep-empty">No vehicles for this selection.</p>'});
+    blocksSection={title:'Transaction Detail',html:html||'<p class="rep-empty">No vehicles for this selection.</p>'};
   }
 
   // ── Odometer alerts ──
@@ -3452,9 +3499,9 @@ async function generateReport(){
     const rows=Object.entries(agg).map(([plate,a])=>{
       const cpk=a.cpk.length?a.cpk.reduce((x,y)=>x+y,0)/a.cpk.length:null;
       const kml=a.kml.length?a.kml.reduce((x,y)=>x+y,0)/a.kml.length:null;
-      return[plate,'',cpk!=null?'R'+cpk.toFixed(2):'—',kml!=null?kml.toFixed(2)+' km/L':'—'];
+      return[plate,cpk!=null?'R'+cpk.toFixed(2):'—',kml!=null?kml.toFixed(2)+' km/L':'—'];
     }).sort((a,b)=>a[0].localeCompare(b[0]));
-    body.push({title:'Cost Per Kilometre',html:repTable(['Vehicle','','Avg Cost / km','Avg Efficiency'],rows,[2,3],['12%','35%','15%','38%'],true)});
+    body.push({title:'Cost Per Kilometre',html:repTable(['Vehicle','Avg Cost / km','Avg Efficiency'],rows,[1,2],['40%','30%','30%'],true)});
   }
 
   // ── Disc & compliance status ──
@@ -3503,39 +3550,59 @@ async function generateReport(){
     body.push({title:'Red Flags',html:rows.length?repTable(['','Vehicle','Alert'],rows,[],['5%','20%','75%']):'<p class="rep-empty">No red flags detected. ✓</p>'});
   }
 
+  // Append full transaction detail last so the report stays summary-first
+  if(blocksSection)body.push(blocksSection);
+
   // ── Assemble document ──
   const now=new Date();
   const dateStr=fmtDDMMYYYY(now)+' '+fmtTimeHM(now);
   const scopeLine=(vehFilter==='__all__'?'All Vehicles':vehFilter)+' · '+(periodVal==='__all__'?'All Periods':escapeHtml(state.reports[+periodVal].scheduleDate||'Selected Period'));
 
+  const reportTitle=reportType==='full'?(vehFilter!=='__all__'?'Vehicle Report':'Full Fleet Report'):'Custom Report';
+
   const doc=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>FleetDesk Report — ${escapeHtml(dateStr)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Questrial&family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   @page { margin: 16mm 14mm 22mm; }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'Century Gothic','Futura','Trebuchet MS',sans-serif;color:#111;font-size:12px;line-height:1.5;}
-  .rep-logo-band{background:#1A1A1A;padding:18px 24px;display:flex;align-items:center;gap:14px;}
-  .rep-wm{font-size:30px;font-weight:700;letter-spacing:0.5px;color:#fff;}
+  /* Century Gothic loads first from the local system; Questrial/Jost are the web fallback */
+  body{font-family:'Century Gothic','Questrial','Jost',sans-serif;color:#1A1A1A;font-size:11px;line-height:1.5;}
+
+  /* ── Navy top header: company + report type + date on the left, FleetDesk on the right ── */
+  .rep-header{background:#0D2B4E;padding:20px 26px;display:flex;align-items:center;justify-content:space-between;gap:20px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .rep-header-left{min-width:0;}
+  .rep-title-main{font-size:25px;font-weight:700;color:#fff;letter-spacing:0.4px;line-height:1.1;}
+  .rep-title-type{font-size:13px;font-weight:600;color:#74C0FC;margin-top:5px;letter-spacing:0.4px;}
+  .rep-sub{font-size:10.5px;color:#AFC6E0;margin-top:3px;letter-spacing:0.2px;}
+  .rep-header-right{display:flex;align-items:center;gap:12px;flex-shrink:0;}
+  .rep-wm{font-size:26px;font-weight:700;letter-spacing:0.5px;color:#fff;}
   .rep-wm .o{color:#74C0FC;}
-  .rep-head{padding:16px 4px 4px;border-bottom:2px solid #111;margin-bottom:22px;}
-  .rep-org{font-size:18px;font-weight:700;color:#111;}
-  .rep-sub{font-size:12px;color:#555;margin-top:3px;}
-  .rep-section{margin-bottom:18px;break-inside:avoid;}
-  h2.rep-title{font-family:'Century Gothic','Futura','Trebuchet MS',sans-serif;font-size:14px;font-weight:700;color:#000000;background:#FFCBA4;padding:6px 12px;margin-bottom:9px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .rep-subhead{font-size:12px;font-weight:700;color:#111;margin:10px 0 4px;background:#F0F0F0;padding:3px 7px;}
-  .rep-vehicle-block{margin-bottom:8px;break-inside:avoid;}
-  .rep-vehicle-name{font-size:11px;font-weight:700;margin-bottom:2px;}
-  table.rep-table{width:100%;border-collapse:collapse;margin-bottom:6px;}
+
+  /* Body content wrapper */
+  .rep-body{padding:24px 4px 0;}
+
+  /* ── Sections: slim blue left-accent rule, bold heading bigger than table text, no coloured bar ── */
+  .rep-section{margin-bottom:20px;break-inside:avoid;}
+  h2.rep-title{font-size:15px;font-weight:700;color:#0D2B4E;border-left:4px solid #1971C2;padding:1px 0 1px 11px;margin-bottom:11px;letter-spacing:0.2px;}
+  .rep-subhead{font-size:12px;font-weight:700;color:#0D2B4E;margin:13px 0 5px;border-left:3px solid #74C0FC;padding-left:9px;}
+  .rep-vehicle-block{margin-bottom:10px;break-inside:avoid;}
+  .rep-vehicle-name{font-size:11px;font-weight:700;margin-bottom:3px;color:#1A1A1A;}
+
+  /* ── Tables: tidy alignment, alternating row shading ── */
+  table.rep-table{width:100%;border-collapse:collapse;margin-bottom:8px;}
   table.rep-table.fixed{table-layout:fixed;}
-  .rep-table th{font-size:9px;text-transform:uppercase;letter-spacing:0.3px;text-align:left;padding:3px 8px;border-bottom:1.5px solid #111;color:#333;line-height:1.2;}
-  .rep-table td{font-size:10.5px;padding:2px 8px;border-bottom:0.5px solid #E2E2E2;vertical-align:top;line-height:1.25;}
-  .rep-table th:first-child,.rep-table td:first-child{padding-left:8px;}
+  .rep-table th{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;text-align:left;padding:5px 8px;border-bottom:1.5px solid #0D2B4E;color:#0D2B4E;line-height:1.2;}
+  .rep-table td{font-size:10.5px;font-weight:400;padding:4px 8px;border-bottom:0.5px solid #E6E8EC;vertical-align:top;line-height:1.3;}
   .rep-table.fixed th,.rep-table.fixed td{word-break:break-word;overflow-wrap:break-word;}
   .rep-table th.r,.rep-table td.r{text-align:right;}
-  .rep-table tbody tr:nth-child(even) td{background:#F7F7F7;}
-  .rep-empty{font-size:11.5px;color:#777;font-style:italic;padding:4px 0;}
+  .rep-table tbody tr:nth-child(even) td{background:#F5F6F8;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .rep-empty{font-size:11px;color:#777;font-style:italic;padding:4px 0;}
   .rep-narrow{max-width:360px;}
-  .rep-footer{position:fixed;bottom:0;left:0;right:0;height:14mm;border-top:0.5px solid #BBB;display:flex;align-items:center;justify-content:center;font-size:10px;color:#777;}
-  .rep-footer .o{color:#E8590C;font-weight:700;}
+
+  .rep-footer{position:fixed;bottom:0;left:0;right:0;height:14mm;border-top:0.5px solid #CBD3DE;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:#7A8699;}
+  .rep-footer .o{color:#1971C2;font-weight:700;}
   .rep-toolbar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid #DDD;padding:9px 14px;display:flex;justify-content:flex-end;}
   .rep-print-btn{background:#1971C2;color:#fff;border:none;border-radius:6px;padding:9px 20px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;}
   .rep-print-btn:hover{background:#0C5A99;}
@@ -3543,13 +3610,18 @@ async function generateReport(){
 </style></head>
 <body>
   <div class="rep-toolbar"><button class="rep-print-btn" onclick="window.print()">🖨 Print / Save as PDF</button></div>
-  <div class="rep-logo-band">${buildReportLogo()}<span class="rep-wm">Fleet<span class="o">Desk</span></span></div>
-  <div class="rep-head">
-    <div class="rep-org">Phola Coaches</div>
-    <div class="rep-sub">${reportType==='full'?'Full Fleet Report':'Custom Report'} · ${scopeLine}</div>
-    <div class="rep-sub">Generated ${escapeHtml(dateStr)}</div>
+  <div class="rep-header">
+    <div class="rep-header-left">
+      <div class="rep-title-main">Phola Coaches</div>
+      <div class="rep-title-type">${escapeHtml(reportTitle)}</div>
+      <div class="rep-sub">${scopeLine}</div>
+      <div class="rep-sub">Generated ${escapeHtml(dateStr)}</div>
+    </div>
+    <div class="rep-header-right">${buildReportLogo()}<span class="rep-wm">Fleet<span class="o">Desk</span></span></div>
   </div>
-  ${body.map(s=>`<div class="rep-section"><h2 class="rep-title">${escapeHtml(s.title)}</h2>${s.html}</div>`).join('')}
+  <div class="rep-body">
+    ${body.map(s=>`<div class="rep-section"><h2 class="rep-title">${escapeHtml(s.title)}</h2>${s.html}</div>`).join('')}
+  </div>
   <div class="rep-footer"><span><span class="o">FleetDesk</span> · Fleet Management · Generated on ${escapeHtml(dateStr)}</span></div>
 </body></html>`;
 
