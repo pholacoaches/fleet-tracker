@@ -3355,9 +3355,13 @@ function setReportType(t){
 
 function selectedSectionKeys(){
   if(reportType==='full'){
-    const keys=REPORT_SECTIONS.map(s=>s.key);
+    let keys=REPORT_SECTIONS.map(s=>s.key);
     const includeDetail=document.getElementById('repIncludeDetail')?.checked;
-    return includeDetail?keys:keys.filter(k=>k!=='blocks');
+    if(!includeDetail)keys=keys.filter(k=>k!=='blocks');
+    // Single-vehicle: drop duplicate/fleet-comparison sections (Vehicle Summary covers spend; high-spend & fleet cost/km are fleet-wide)
+    const vf=document.getElementById('repVehicle')?.value;
+    if(vf&&vf!=='__all__')keys=keys.filter(k=>!['fuel','highspend','cpk'].includes(k));
+    return keys;
   }
   return[...document.querySelectorAll('#repChecksGrid input:checked')].map(c=>c.value);
 }
@@ -3404,7 +3408,7 @@ async function generateReport(){
   if(sections.includes('tyres'))await fetchTyres();
   if(sections.includes('maint')||sections.includes('flags'))await fetchMaintData();
 
-  const body=[];
+  let body=[];
 
   // ── Single-vehicle mini-summary (prepended when a specific vehicle is selected) ──
   if(vehFilter!=='__all__'){
@@ -3550,6 +3554,9 @@ async function generateReport(){
     body.push({title:'Red Flags',html:rows.length?repTable(['','Vehicle','Alert'],rows,[],['5%','20%','75%']):'<p class="rep-empty">No red flags detected. ✓</p>'});
   }
 
+  // Single-vehicle: hide empty "No data" sections entirely (keep only sections that produced a table)
+  if(vehFilter!=='__all__')body=body.filter(s=>s.html.includes('<table'));
+
   // Append full transaction detail last so the report stays summary-first
   if(blocksSection)body.push(blocksSection);
 
@@ -3565,7 +3572,7 @@ async function generateReport(){
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Questrial&family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  @page { margin: 16mm 14mm 22mm; }
+  @page { margin: 16mm 14mm 26mm; }
   *{box-sizing:border-box;margin:0;padding:0;}
   /* Century Gothic loads first from the local system; Questrial/Jost are the web fallback */
   body{font-family:'Century Gothic','Questrial','Jost',sans-serif;color:#1A1A1A;font-size:11px;line-height:1.5;}
@@ -3580,8 +3587,8 @@ async function generateReport(){
   .rep-wm{font-size:26px;font-weight:700;letter-spacing:0.5px;color:#fff;}
   .rep-wm .o{color:#74C0FC;}
 
-  /* Body content wrapper */
-  .rep-body{padding:24px 4px 0;}
+  /* Body content wrapper — bottom padding keeps the last rows clear of the fixed footer */
+  .rep-body{padding:24px 4px 16mm;}
 
   /* ── Sections: slim blue left-accent rule, bold heading bigger than table text, no coloured bar ── */
   .rep-section{margin-bottom:20px;break-inside:avoid;}
