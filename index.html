@@ -106,8 +106,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   letter-spacing: 0.3px;
 }
 .hero-upload-btn:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
-.hero-upload-btn.primary { background: #BF6B4F; }
-.hero-upload-btn.primary:hover { background: #A85B41; }
+.hero-upload-btn.primary { background: #BF6B4F; border: 2px solid #BF6B4F; }
+.hero-upload-btn.primary:hover { background: #A85B41; border-color: #A85B41; }
+.hero-upload-btn.danger { background: rgba(193,88,74,0.18); border: 1.5px solid #B5623C; color: #E6A99B; }
+.hero-upload-btn.danger:hover { background: rgba(193,88,74,0.28); }
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand-icon {
   width: 36px; height: 36px; background: var(--accent);
@@ -768,7 +770,7 @@ input[type=file] { display: none; }
     <div style="display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;align-items:center;justify-content:center;">
       <button class="hero-upload-btn primary" onclick="document.getElementById('fileInput').click()">&#8679; Upload Report</button>
       <button class="hero-upload-btn" style="background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.9);" onclick="exportCSV()">&#8595; Export CSV</button>
-      <button class="hero-upload-btn" style="background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.9);color:rgba(255,255,255,0.9);" onclick="clearAllData()">&#128465; Clear Data</button>
+      <button class="hero-upload-btn danger" onclick="clearAllData()">&#128465; Clear Data</button>
     </div>
   </div>
 </div>
