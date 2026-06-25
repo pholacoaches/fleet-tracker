@@ -759,6 +759,7 @@ input[type=file] { display: none; }
     </div>
     <button class="login-btn" id="loginBtn" onclick="login()">Log in</button>
     <div class="login-err" id="loginErr"></div>
+    <button type="button" id="loginFallbackLink" onclick="loginFallback()" style="display:block;margin:12px auto 0;background:none;border:none;color:#9aa3ad;font-size:12px;text-decoration:underline;cursor:pointer;opacity:.75">Use legacy login</button>
     <div class="login-credit"><img src="fleetdesk-icon-final.svg" alt="" width="20" height="20"><span>Powered by <strong>FleetDesk</strong></span></div>
   </div>
 </div>
@@ -1117,6 +1118,8 @@ function togglePasswordVisibility(){
     :'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
 }
 
+// Stage 3: primary login is real Supabase Auth — creates a genuine session
+// (access_token + refresh_token), not the cosmetic 'local-' token.
 async function login(){
   const email=document.getElementById('loginEmail').value.trim().toLowerCase();
   const password=document.getElementById('loginPassword').value;
@@ -1126,6 +1129,40 @@ async function login(){
   btn.disabled=true;
   btn.textContent='Signing in...';
   try{
+    const response=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+      body:JSON.stringify({email,password})
+    });
+    const data=await response.json();
+    if(!response.ok||!data.access_token){
+      errEl.textContent='Incorrect email or password.';
+      btn.disabled=false;
+      btn.textContent='Log in';
+      return;
+    }
+    localStorage.setItem(AUTH_TOKEN_KEY,data.access_token);
+    if(data.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,data.refresh_token);
+    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
+    showDashboard();
+  }catch(err){
+    errEl.textContent='Connection error. Please try again.';
+    btn.disabled=false;
+    btn.textContent='Log in';
+  }
+}
+
+// Stage 3 fallback: the original proxy /login. Conscious + manual ONLY — the user
+// must click "Use legacy login"; nothing falls back to it silently. Stores a
+// cosmetic 'local-' token (no real Supabase session). To be removed in Stage 5.
+async function loginFallback(){
+  const email=document.getElementById('loginEmail').value.trim().toLowerCase();
+  const password=document.getElementById('loginPassword').value;
+  const errEl=document.getElementById('loginErr');
+  const link=document.getElementById('loginFallbackLink');
+  errEl.textContent='';
+  if(link){link.disabled=true;link.textContent='Signing in (legacy)…';}
+  try{
     const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/login',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -1134,17 +1171,16 @@ async function login(){
     const data=await response.json();
     if(!data.success){
       errEl.textContent='Incorrect email or password.';
-      btn.disabled=false;
-      btn.textContent='Log in';
+      if(link){link.disabled=false;link.textContent='Use legacy login';}
       return;
     }
     localStorage.setItem(AUTH_TOKEN_KEY,'local-'+email);
+    localStorage.removeItem(AUTH_REFRESH_KEY);
     localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
     showDashboard();
   }catch(err){
     errEl.textContent='Connection error. Please try again.';
-    btn.disabled=false;
-    btn.textContent='Log in';
+    if(link){link.disabled=false;link.textContent='Use legacy login';}
   }
 }
 
@@ -1800,7 +1836,7 @@ async function uploadBackupToSupabase(json){
   const filename='fleetdesk-backup-'+backupTimestamp()+'.json';
   const res=await fetch(`${SUPABASE_URL}/storage/v1/object/${BACKUPS_BUCKET}/${filename}`,{
     method:'POST',
-    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','x-upsert':'false'},
+    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','x-upsert':'false'},
     body:json
   });
   if(!res.ok){
@@ -1841,7 +1877,7 @@ async function clearAllData(){
 async function listSupabaseBackups(){
   const res=await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BACKUPS_BUCKET}`,{
     method:'POST',
-    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json'},
+    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json'},
     body:JSON.stringify({prefix:'',limit:200,sortBy:{column:'name',order:'desc'}})
   });
   if(!res.ok)throw new Error('HTTP '+res.status);
@@ -1853,7 +1889,7 @@ async function listSupabaseBackups(){
 async function downloadBackupFromSupabase(filename){
   try{
     const res=await fetch(`${SUPABASE_URL}/storage/v1/object/${BACKUPS_BUCKET}/${encodeURIComponent(filename)}`,{
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
     const blob=await res.blob();
@@ -1955,6 +1991,13 @@ function recomputeAllStats(){
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
 const SUPABASE_URL='https://wlwwzbyuchsonwugqhww.supabase.co';
 const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
+// Stage 3: send the logged-in user's session JWT in Authorization (apikey stays the
+// publishable key, as Supabase requires). Falls back to the publishable key for the
+// legacy/cosmetic login ('local-' token) — that path goes away in Stage 5.
+function authToken(){
+  const t=localStorage.getItem(AUTH_TOKEN_KEY);
+  return (t && !t.startsWith('local-')) ? t : SUPABASE_KEY;
+}
 let notifOpen=false;
 let lastNotifCheck=0;
 let notifData=[];
@@ -1962,7 +2005,7 @@ let notifData=[];
 async function fetchSubmissions(){
   try{
     const response=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=*&order=created_at.desc&limit=50`,{
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(response.ok){
       notifData=await response.json();
@@ -2116,7 +2159,7 @@ async function pollForNewSubmissions(){
   try{
     const res=await fetch(
       `${SUPABASE_URL}/rest/v1/odometer_readings?select=*&created_at=gt.${encodeURIComponent(pollTimestamp)}&order=created_at.asc`,
-      {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}}
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}}
     );
     if(!res.ok)return;
     const rows=await res.json();
@@ -2186,7 +2229,7 @@ function worstComplianceStatus(rec){
 async function fetchCompliance(){
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_compliance?select=*`,{
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(!res.ok)return;
     const rows=await res.json();
@@ -2215,7 +2258,7 @@ async function upsertCompliance(rows){
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_compliance?on_conflict=plate`,{
       method:'POST',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
       body:JSON.stringify(rows)
     });
     if(!res.ok)console.error('[FleetDesk] Compliance save failed:',res.status,await res.text());
@@ -2330,7 +2373,7 @@ async function renewComplianceItem(plate,key){
   try{
     await fetch(`${SUPABASE_URL}/rest/v1/compliance_history`,{
       method:'POST',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({plate,item:key,old_expiry:cur,new_expiry:newIso,cost})
     });
   }catch(err){console.error('[FleetDesk] History save failed:',err);}
@@ -2561,7 +2604,7 @@ let tyreInvoiceFile=null;
 async function fetchTyres(){
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/tyres?select=*&status=eq.fitted&order=created_at.desc`,{
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(res.ok)tyresData=await res.json();
   }catch(err){console.error('[FleetDesk] fetchTyres failed:',err);}
@@ -2674,7 +2717,7 @@ function renderTyreVehiclePanel(){
 async function fetchLatestOdoForPlate(plate){
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&select=odometer&order=created_at.desc&limit=1`,{
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(res.ok){
       const rows=await res.json();
@@ -2722,7 +2765,7 @@ async function uploadTyreInvoice(plate){
     const filename=`tyre-invoice_${plate.replace(/\s+/g,'_')}_${Date.now()}.${ext}`;
     const res=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
       method:'POST',
-      headers:{'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':tyreInvoiceFile.type,'x-upsert':'true'},
+      headers:{'Authorization':`Bearer ${authToken()}`,'Content-Type':tyreInvoiceFile.type,'x-upsert':'true'},
       body:tyreInvoiceFile
     });
     if(res.ok)return`${SUPABASE_URL}/storage/v1/object/public/odometer-photos/${filename}`;
@@ -2779,7 +2822,7 @@ async function submitTyre(){
     };
     const res=await fetch(`${SUPABASE_URL}/rest/v1/tyres`,{
       method:'POST',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify(body)
     });
     if(!res.ok){
@@ -2846,7 +2889,7 @@ function daysSince(d){return Math.floor((Date.now()-new Date(d))/(1000*60*60*24)
 
 async function fetchMaintData(){
   try{
-    const headers={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`};
+    const headers={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`};
     const[jobsRes,partsRes]=await Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?select=*&order=date_in.desc,created_at.desc`,{headers}),
       fetch(`${SUPABASE_URL}/rest/v1/maintenance_parts?select=*`,{headers})
@@ -3204,7 +3247,7 @@ async function uploadMaintInvoice(plate){
     const filename=`maint-invoice_${plate.replace(/\s+/g,'_')}_${Date.now()}.${ext}`;
     const res=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
       method:'POST',
-      headers:{'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':maintInvoiceFile.type,'x-upsert':'true'},
+      headers:{'Authorization':`Bearer ${authToken()}`,'Content-Type':maintInvoiceFile.type,'x-upsert':'true'},
       body:maintInvoiceFile
     });
     if(res.ok)return`${SUPABASE_URL}/storage/v1/object/public/odometer-photos/${filename}`;
@@ -3273,7 +3316,7 @@ async function submitMaintJob(){
     };
     const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs`,{
       method:'POST',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=representation'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify(jobBody)
     });
     if(!res.ok){
@@ -3288,7 +3331,7 @@ async function submitMaintJob(){
     if(jobId&&parts.length>0){
       const pRes=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_parts`,{
         method:'POST',
-        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify(parts.map(p=>({...p,job_id:jobId})))
       });
       if(!pRes.ok)console.error('[FleetDesk] Parts save failed:',pRes.status,await pRes.text());
@@ -3307,7 +3350,7 @@ async function markJobDone(id){
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}`,{
       method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({date_out:new Date().toISOString().slice(0,10),status:'done'})
     });
     if(!res.ok){
@@ -3768,7 +3811,7 @@ async function updateSubmissionStatus(id,status){
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}`,{
       method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({status})
     });
     if(!res.ok){
