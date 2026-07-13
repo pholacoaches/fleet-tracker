@@ -759,7 +759,6 @@ input[type=file] { display: none; }
     </div>
     <button class="login-btn" id="loginBtn" onclick="login()">Log in</button>
     <div class="login-err" id="loginErr"></div>
-    <button type="button" id="loginFallbackLink" onclick="loginFallback()" style="display:block;margin:12px auto 0;background:none;border:none;color:#9aa3ad;font-size:12px;text-decoration:underline;cursor:pointer;opacity:.75">Use legacy login</button>
     <div class="login-credit"><img src="fleetdesk-icon-final.svg" alt="" width="20" height="20"><span>Powered by <strong>FleetDesk</strong></span></div>
   </div>
 </div>
@@ -1059,6 +1058,8 @@ async function checkAuth(){
     const refresh=localStorage.getItem(AUTH_REFRESH_KEY);
     const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
     if(!token)return false;
+    // Stage 5: legacy login removed — a leftover 'local-' token is not a session
+    if(token.startsWith('local-')){localStorage.removeItem(AUTH_TOKEN_KEY);return false;}
     // Token still fresh — no network call needed
     if(Date.now()-time<55*60*1000)return true;
     // Token is older than 55 min — use refresh token to get a new one
@@ -1118,8 +1119,7 @@ function togglePasswordVisibility(){
     :'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
 }
 
-// Stage 3: primary login is real Supabase Auth — creates a genuine session
-// (access_token + refresh_token), not the cosmetic 'local-' token.
+// Login is real Supabase Auth — creates a genuine session (access_token + refresh_token).
 async function login(){
   const email=document.getElementById('loginEmail').value.trim().toLowerCase();
   const password=document.getElementById('loginPassword').value;
@@ -1149,38 +1149,6 @@ async function login(){
     errEl.textContent='Connection error. Please try again.';
     btn.disabled=false;
     btn.textContent='Log in';
-  }
-}
-
-// Stage 3 fallback: the original proxy /login. Conscious + manual ONLY — the user
-// must click "Use legacy login"; nothing falls back to it silently. Stores a
-// cosmetic 'local-' token (no real Supabase session). To be removed in Stage 5.
-async function loginFallback(){
-  const email=document.getElementById('loginEmail').value.trim().toLowerCase();
-  const password=document.getElementById('loginPassword').value;
-  const errEl=document.getElementById('loginErr');
-  const link=document.getElementById('loginFallbackLink');
-  errEl.textContent='';
-  if(link){link.disabled=true;link.textContent='Signing in (legacy)…';}
-  try{
-    const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/login',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email,password})
-    });
-    const data=await response.json();
-    if(!data.success){
-      errEl.textContent='Incorrect email or password.';
-      if(link){link.disabled=false;link.textContent='Use legacy login';}
-      return;
-    }
-    localStorage.setItem(AUTH_TOKEN_KEY,'local-'+email);
-    localStorage.removeItem(AUTH_REFRESH_KEY);
-    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
-    showDashboard();
-  }catch(err){
-    errEl.textContent='Connection error. Please try again.';
-    if(link){link.disabled=false;link.textContent='Use legacy login';}
   }
 }
 
@@ -1992,11 +1960,10 @@ function recomputeAllStats(){
 const SUPABASE_URL='https://wlwwzbyuchsonwugqhww.supabase.co';
 const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
 // Stage 3: send the logged-in user's session JWT in Authorization (apikey stays the
-// publishable key, as Supabase requires). Falls back to the publishable key for the
-// legacy/cosmetic login ('local-' token) — that path goes away in Stage 5.
+// publishable key, as Supabase requires).
 function authToken(){
   const t=localStorage.getItem(AUTH_TOKEN_KEY);
-  return (t && !t.startsWith('local-')) ? t : SUPABASE_KEY;
+  return t || SUPABASE_KEY;
 }
 let notifOpen=false;
 let lastNotifCheck=0;
