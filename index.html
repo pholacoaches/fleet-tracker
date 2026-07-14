@@ -518,6 +518,35 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .login-credit { display:flex; align-items:center; justify-content:center; gap:7px; margin-top:22px; font-size:11px; color:var(--text2); letter-spacing:0.3px; }
 .login-credit img { border-radius:5px; display:block; }
 .login-credit strong { color:var(--accent); font-weight:700; }
+.login-forgot {
+  display:inline-block; margin-top:14px; background:none; border:none; cursor:pointer;
+  font-family:var(--font); font-size:12px; font-weight:700; color:var(--accent); padding:0;
+}
+.login-forgot:hover { text-decoration:underline; color:var(--accent2); }
+.login-ok { font-size:12px; color:var(--green); margin-top:10px; min-height:18px; font-weight:700; }
+.login-hint { font-size:11px; color:var(--text3); text-align:left; margin:-8px 0 14px; }
+.login-card-title { font-size:17px; font-weight:700; color:var(--text); margin-bottom:8px; }
+.login-card-text { font-size:12px; color:var(--text2); margin-bottom:22px; line-height:1.5; }
+.account-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000;
+  align-items:center; justify-content:center; padding:20px;
+}
+.account-panel {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow-lg); padding:28px 30px; width:100%; max-width:400px; text-align:left;
+}
+.account-panel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+.account-panel-title { font-size:16px; font-weight:700; color:var(--accent); }
+.account-close {
+  background:none; border:none; cursor:pointer; font-size:18px; color:var(--text3);
+  font-family:var(--font); line-height:1; padding:2px 6px;
+}
+.account-close:hover { color:var(--text); }
+.account-email {
+  font-size:12px; color:var(--text2); background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:18px; word-break:break-all;
+}
+.account-email strong { color:var(--text); }
 .logout-btn {
   font-size:11px; padding:4px 12px; border:1.5px solid rgba(255,255,255,0.4);
   border-radius:var(--radius-sm); background:transparent; color:rgba(255,255,255,0.85);
@@ -743,7 +772,7 @@ input[type=file] { display: none; }
 <!-- LOGIN SCREEN -->
 <div id="loginScreen">
 <div class="hero-bg"></div>
-  <div class="login-card">
+  <div class="login-card" id="loginCard">
     <div class="login-logo">Phola Coaches</div>
     <div class="login-sub">FleetDesk</div>
     <label class="login-label" for="loginEmail">Email address</label>
@@ -758,8 +787,47 @@ input[type=file] { display: none; }
       </button>
     </div>
     <button class="login-btn" id="loginBtn" onclick="login()">Log in</button>
+    <button type="button" class="login-forgot" onclick="showForgotScreen()">Forgot password?</button>
     <div class="login-err" id="loginErr"></div>
     <div class="login-credit"><img src="fleetdesk-icon-final.svg" alt="" width="20" height="20"><span>Powered by <strong>FleetDesk</strong></span></div>
+  </div>
+
+  <!-- FORGOT PASSWORD CARD -->
+  <div class="login-card hidden" id="forgotCard">
+    <div class="login-logo">Phola Coaches</div>
+    <div class="login-sub">FleetDesk</div>
+    <div id="forgotForm">
+      <div class="login-card-title">Reset your password</div>
+      <div class="login-card-text">Enter your email address and we'll send you a link to reset your password.</div>
+      <label class="login-label" for="forgotEmail">Email address</label>
+      <input class="login-input" type="email" id="forgotEmail" placeholder="you@example.com" autocomplete="email" onkeydown="if(event.key==='Enter')sendResetEmail()">
+      <button class="login-btn" id="forgotBtn" onclick="sendResetEmail()">Send reset link</button>
+      <div class="login-err" id="forgotErr"></div>
+    </div>
+    <div id="forgotDone" class="hidden">
+      <div class="login-card-title">✉️ Check your email</div>
+      <div class="login-card-text">If an account exists for that address, a password reset link is on its way. The link is valid for a limited time — if it expires, just request a new one.</div>
+    </div>
+    <button type="button" class="login-forgot" onclick="showLogin()">← Back to log in</button>
+  </div>
+
+  <!-- SET NEW PASSWORD CARD (password recovery) -->
+  <div class="login-card hidden" id="resetCard">
+    <div class="login-logo">Phola Coaches</div>
+    <div class="login-sub">FleetDesk</div>
+    <div id="resetForm">
+      <div class="login-card-title">Set a new password</div>
+      <div class="login-card-text">Choose a new password for your account.</div>
+      <label class="login-label" for="resetPw1">New password</label>
+      <input class="login-input" type="password" id="resetPw1" placeholder="••••••••" autocomplete="new-password">
+      <div class="login-hint">At least 8 characters</div>
+      <label class="login-label" for="resetPw2">Confirm new password</label>
+      <input class="login-input" type="password" id="resetPw2" placeholder="••••••••" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitNewPassword()">
+      <button class="login-btn" id="resetBtn" onclick="submitNewPassword()">Save new password</button>
+    </div>
+    <div class="login-ok" id="resetOk"></div>
+    <div class="login-err" id="resetErr"></div>
+    <button type="button" class="login-btn hidden" id="resetBackBtn" style="margin-top:10px;" onclick="showLogin()">Back to log in</button>
   </div>
 </div>
 
@@ -808,6 +876,7 @@ input[type=file] { display: none; }
       <button class="notif-btn" id="notifBtn" onclick="toggleNotifPanel()" style="position:relative;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.4);border-radius:8px;padding:6px 14px;cursor:pointer;color:white;font-family:var(--font);font-weight:700;font-size:13px;margin-right:8px;">
   🔔 <span id="notifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#C92A2A;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;align-items:center;justify-content:center;">0</span>
 </button>
+<button class="logout-btn" onclick="openAccountPanel()" style="margin-right:8px;">👤 Account</button>
 <button class="logout-btn" onclick="logout()">⎋ Log out</button>
     </div>
   </div>
@@ -1080,6 +1149,7 @@ async function checkAuth(){
 }
 
 async function initApp(){
+  if(handleRecoveryRedirect())return;
   const authed=await checkAuth();
   if(authed){showDashboard();}else{showLogin();}
 }
@@ -1093,9 +1163,16 @@ function showDashboard(){
   fetchCompliance().then(()=>{updateDiscTabBadge();renderAlertBanner();});
 }
 
-function showLogin(){
+function showAuthCard(which){
   document.getElementById('appContent').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
+  ['loginCard','forgotCard','resetCard'].forEach(id=>{
+    document.getElementById(id).classList.toggle('hidden',id!==which);
+  });
+}
+
+function showLogin(){
+  showAuthCard('loginCard');
   document.getElementById('loginEmail').value='';
   document.getElementById('loginPassword').value='';
   document.getElementById('loginErr').textContent='';
@@ -1149,6 +1226,183 @@ async function login(){
     errEl.textContent='Connection error. Please try again.';
     btn.disabled=false;
     btn.textContent='Log in';
+  }
+}
+
+// ── PASSWORD MANAGEMENT ───────────────────────────────────────────────────────
+// The app talks to Supabase Auth (GoTrue) via REST — no supabase-js client.
+// Recovery links arrive as https://.../#access_token=...&refresh_token=...&type=recovery
+const RESET_REDIRECT_URL='https://pholacoaches.github.io/fleet-tracker';
+let recoveryToken=null,recoveryRefresh=null;
+
+// Returns true when it has taken over the screen (reset form or error message shown).
+function handleRecoveryRedirect(){
+  if(!location.hash||location.hash.length<2)return false;
+  const p=new URLSearchParams(location.hash.slice(1));
+  const clearHash=()=>history.replaceState(null,'',location.pathname+location.search);
+  if(p.get('type')==='recovery'&&p.get('access_token')){
+    recoveryToken=p.get('access_token');
+    recoveryRefresh=p.get('refresh_token');
+    clearHash();
+    showAuthCard('resetCard');
+    document.getElementById('resetErr').textContent='';
+    document.getElementById('resetOk').textContent='';
+    return true;
+  }
+  if(p.get('error')||p.get('error_code')){
+    const expired=p.get('error_code')==='otp_expired';
+    clearHash();
+    showLogin();
+    document.getElementById('loginErr').textContent=expired
+      ?'That password reset link has expired or was already used. Click “Forgot password?” to request a new one.'
+      :'That link is invalid or has expired. Please log in, or request a new password reset link.';
+    return true;
+  }
+  return false;
+}
+
+function validateNewPassword(pw1,pw2){
+  if(pw1.length<8)return'Password must be at least 8 characters.';
+  if(pw1!==pw2)return'Passwords do not match.';
+  return null;
+}
+
+async function submitNewPassword(){
+  const pw1=document.getElementById('resetPw1').value;
+  const pw2=document.getElementById('resetPw2').value;
+  const errEl=document.getElementById('resetErr');
+  const okEl=document.getElementById('resetOk');
+  const btn=document.getElementById('resetBtn');
+  errEl.textContent='';okEl.textContent='';
+  const invalid=validateNewPassword(pw1,pw2);
+  if(invalid){errEl.textContent=invalid;return;}
+  btn.disabled=true;btn.textContent='Saving...';
+  try{
+    const res=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+recoveryToken},
+      body:JSON.stringify({password:pw1})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){
+      btn.disabled=false;btn.textContent='Save new password';
+      if(res.status===401||res.status===403){
+        document.getElementById('resetForm').classList.add('hidden');
+        errEl.textContent='This password reset link is no longer valid. Please request a new one from the login screen.';
+        document.getElementById('resetBackBtn').classList.remove('hidden');
+      }else{
+        errEl.textContent=data.msg||data.error_description||'Could not update the password. Please try again.';
+      }
+      return;
+    }
+    // Recovery session becomes the app session — user continues straight into the app.
+    localStorage.setItem(AUTH_TOKEN_KEY,recoveryToken);
+    if(recoveryRefresh)localStorage.setItem(AUTH_REFRESH_KEY,recoveryRefresh);
+    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
+    recoveryToken=null;recoveryRefresh=null;
+    document.getElementById('resetForm').classList.add('hidden');
+    okEl.textContent='✓ Password updated — signing you in…';
+    setTimeout(showDashboard,1200);
+  }catch{
+    btn.disabled=false;btn.textContent='Save new password';
+    errEl.textContent='Connection error. Please try again.';
+  }
+}
+
+function showForgotScreen(){
+  showAuthCard('forgotCard');
+  document.getElementById('forgotForm').classList.remove('hidden');
+  document.getElementById('forgotDone').classList.add('hidden');
+  document.getElementById('forgotErr').textContent='';
+  const email=document.getElementById('loginEmail').value.trim();
+  if(email)document.getElementById('forgotEmail').value=email;
+  document.getElementById('forgotEmail').focus();
+}
+
+async function sendResetEmail(){
+  const email=document.getElementById('forgotEmail').value.trim().toLowerCase();
+  const errEl=document.getElementById('forgotErr');
+  const btn=document.getElementById('forgotBtn');
+  errEl.textContent='';
+  if(!email||!email.includes('@')){errEl.textContent='Please enter a valid email address.';return;}
+  btn.disabled=true;btn.textContent='Sending...';
+  try{
+    const res=await fetch(`${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(RESET_REDIRECT_URL)}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+      body:JSON.stringify({email})
+    });
+    btn.disabled=false;btn.textContent='Send reset link';
+    if(res.ok){
+      document.getElementById('forgotForm').classList.add('hidden');
+      document.getElementById('forgotDone').classList.remove('hidden');
+    }else if(res.status===429){
+      errEl.textContent='Too many requests — please wait a minute before trying again.';
+    }else{
+      const data=await res.json().catch(()=>({}));
+      errEl.textContent=data.msg||data.error_description||'Could not send the reset email. Please try again.';
+    }
+  }catch{
+    btn.disabled=false;btn.textContent='Send reset link';
+    errEl.textContent='Connection error. Please try again.';
+  }
+}
+
+// ── ACCOUNT PANEL (change password while logged in) ─────────────────────────
+function getAuthEmail(){
+  try{
+    const token=localStorage.getItem(AUTH_TOKEN_KEY);
+    const payload=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return payload.email||'';
+  }catch{return'';}
+}
+
+function openAccountPanel(){
+  document.getElementById('accountEmail').textContent=getAuthEmail()||'Unknown';
+  document.getElementById('accountPw1').value='';
+  document.getElementById('accountPw2').value='';
+  document.getElementById('accountOk').textContent='';
+  document.getElementById('accountErr').textContent='';
+  const btn=document.getElementById('accountSaveBtn');
+  btn.disabled=false;btn.textContent='Save new password';
+  document.getElementById('accountModal').style.display='flex';
+}
+
+function closeAccountPanel(){
+  document.getElementById('accountModal').style.display='none';
+}
+
+async function saveAccountPassword(){
+  const pw1=document.getElementById('accountPw1').value;
+  const pw2=document.getElementById('accountPw2').value;
+  const errEl=document.getElementById('accountErr');
+  const okEl=document.getElementById('accountOk');
+  const btn=document.getElementById('accountSaveBtn');
+  errEl.textContent='';okEl.textContent='';
+  const invalid=validateNewPassword(pw1,pw2);
+  if(invalid){errEl.textContent=invalid;return;}
+  btn.disabled=true;btn.textContent='Saving...';
+  try{
+    await checkAuth(); // refresh the access token if it is stale
+    const res=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+localStorage.getItem(AUTH_TOKEN_KEY)},
+      body:JSON.stringify({password:pw1})
+    });
+    const data=await res.json().catch(()=>({}));
+    btn.disabled=false;btn.textContent='Save new password';
+    if(!res.ok){
+      errEl.textContent=(res.status===401||res.status===403)
+        ?'Your session has expired. Please log out and log back in, then try again.'
+        :(data.msg||data.error_description||'Could not update the password. Please try again.');
+      return;
+    }
+    document.getElementById('accountPw1').value='';
+    document.getElementById('accountPw2').value='';
+    okEl.textContent='✓ Password updated successfully.';
+  }catch{
+    btn.disabled=false;btn.textContent='Save new password';
+    errEl.textContent='Connection error. Please try again.';
   }
 }
 
@@ -3655,6 +3909,26 @@ async function generateReport(){
 
 initApp();
 </script>
+
+<!-- ACCOUNT PANEL -->
+<div class="account-overlay" id="accountModal" onclick="if(event.target===this)closeAccountPanel()">
+  <div class="account-panel">
+    <div class="account-panel-header">
+      <span class="account-panel-title">👤 Account</span>
+      <button type="button" class="account-close" onclick="closeAccountPanel()" aria-label="Close">✕</button>
+    </div>
+    <label class="login-label">Signed in as</label>
+    <div class="account-email"><strong id="accountEmail">—</strong></div>
+    <label class="login-label" for="accountPw1">New password</label>
+    <input class="login-input" type="password" id="accountPw1" placeholder="••••••••" autocomplete="new-password">
+    <div class="login-hint">At least 8 characters</div>
+    <label class="login-label" for="accountPw2">Confirm new password</label>
+    <input class="login-input" type="password" id="accountPw2" placeholder="••••••••" autocomplete="new-password" onkeydown="if(event.key==='Enter')saveAccountPassword()">
+    <button class="login-btn" id="accountSaveBtn" onclick="saveAccountPassword()">Save new password</button>
+    <div class="login-ok" id="accountOk"></div>
+    <div class="login-err" id="accountErr"></div>
+  </div>
+</div>
 
 <div class="notif-panel" id="notifPanel">
   <div class="notif-panel-header">
