@@ -3863,12 +3863,13 @@ async function generateReport(){
   if(sections.includes('flags')){
     let flags=computeMaintFlags();
     if(vehFilter!=='__all__')flags=flags.filter(f=>!f.plate||f.plate===vehFilter);
-    const rows=flags.map(f=>[`<span class="rep-dot ${f.severity==='red'?'red':'amber'}"></span>`,f.plate||'Fleet-wide',stripTags(f.html)]);
-    body.push({title:'Red Flags',html:rows.length?repTable(['','Vehicle','Alert'],rows,[],[0]):'<p class="rep-empty">No red flags detected. ✓</p>'});
+    body.push({title:'Red Flags',html:flags.length?'<div class="rep-flags">'+flags.map(f=>
+      `<div class="rep-flag-row"><span class="rep-dot ${f.severity==='red'?'red':'amber'}"></span><span class="rep-flag-plate">${escapeHtml(f.plate||'Fleet-wide')}</span><span class="rep-flag-text">${escapeHtml(stripTags(f.html))}</span></div>`
+    ).join('')+'</div>':'<p class="rep-empty">No red flags detected. ✓</p>'});
   }
 
-  // Single-vehicle: hide empty "No data" sections entirely (keep only sections that produced a table or chart)
-  if(vehFilter!=='__all__')body=body.filter(s=>s.html.includes('<table')||s.html.includes('rep-bars'));
+  // Single-vehicle: hide empty "No data" sections entirely (keep only sections that produced a table, chart, or flag list)
+  if(vehFilter!=='__all__')body=body.filter(s=>s.html.includes('<table')||s.html.includes('rep-bars')||s.html.includes('rep-flags'));
 
   // Append full transaction detail last so the report stays summary-first
   if(blocksSection)body.push(blocksSection);
@@ -3959,6 +3960,13 @@ async function generateReport(){
 
   /* ── Side-by-side table columns ── */
   .rep-cols{display:flex;gap:28px;align-items:flex-start;}
+
+  /* ── Red-flag rows: dot · plate · alert text ── */
+  .rep-flags{break-inside:avoid;}
+  .rep-flag-row{display:flex;align-items:center;gap:9px;padding:4px 9px;border-bottom:0.5px solid #E6E8EC;font-size:10.5px;line-height:1.35;break-inside:avoid;}
+  .rep-flag-row .rep-dot{flex-shrink:0;}
+  .rep-flag-plate{font-family:Consolas,'Courier New',monospace;font-size:10px;font-weight:700;white-space:nowrap;flex-shrink:0;}
+  .rep-flag-text{flex:1;}
 
   .rep-footer{position:fixed;bottom:0;left:0;right:0;height:14mm;border-top:0.5px solid #CBD3DE;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:#7A8699;}
   .rep-footer .o{color:#1971C2;font-weight:700;}
