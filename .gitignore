@@ -1,0 +1,39 @@
+# ── Business documents & media — never commit ──────────────────
+*.pdf
+*.PDF
+*.docx
+*.doc
+*.xlsx
+*.xlsm
+*.csv
+*.msg
+*.exe
+*.lnk
+*.zip
+*.jpg
+*.jpeg
+*.jfif
+*.png
+
+# App image assets remain visible to git (exceptions to the above)
+!fleetdesk-*.png
+!fleetdesk-*.svg
+!hero.jpg
+
+# ── Business/document folders living alongside the repo ────────
+23 June Invoice/
+July2 Invoices FD/
+Licences Batch 1/
+Vehicle Licences 2026/
+Fleet Desk Manual/
+FleetDesk Backups/
+invoices/
+Odo/
+
+# ── Local tooling ───────────────────────────────────────────────
+.claude/
+.wrangler/
+
+# ── Design drafts (not part of the app) ─────────────────────────
+logo-concepts.html
+fleetdesk-icon.svg
