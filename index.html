@@ -3654,6 +3654,9 @@ function repTiles(pairs){
   return'<div class="rep-tiles">'+pairs.map(([label,value])=>`<div class="rep-tile"><div class="rep-tile-label">${escapeHtml(label)}</div><div class="rep-tile-value">${escapeHtml(String(value))}</div></div>`).join('')+'</div>';
 }
 
+// Litres formatted with the same locale/grouping as fmtRand amounts
+function fmtLitres(n){return Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' L';}
+
 function stripTags(s){
   return String(s).replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
 }
@@ -3687,7 +3690,7 @@ async function generateReport(){
     let gSpend=0,gLitres=0;const gPlates=new Set();
     reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{gSpend+=v.totalAmount;gLitres+=v.totalLitres;gPlates.add(v.plate);}));
     const gCPL=gLitres>0?gSpend/gLitres:0;
-    const s1=`Total fuel spend of <strong>${fmtRand(gSpend)}</strong> across <strong>${gPlates.size}</strong> vehicle${gPlates.size===1?'':'s'} — ${gLitres.toFixed(2)} L at an average of ${fmtRand(gCPL)} per litre.`;
+    const s1=`Total fuel spend of <strong>${fmtRand(gSpend)}</strong> across <strong>${gPlates.size}</strong> vehicle${gPlates.size===1?'':'s'} — ${fmtLitres(gLitres)} at an average of ${fmtRand(gCPL)} per litre.`;
     const attention=[];
     if(sections.includes('compliance')){
       let gcPlates=Object.keys(complianceData);
@@ -3726,7 +3729,7 @@ async function generateReport(){
     const dist=firstOdo&&lastOdo?lastOdo-firstOdo:null;
     body.push({title:'Vehicle Summary — '+vehFilter,html:'<div class="rep-narrow">'+repTable(['Metric','Value'],[
       ['Total fuel spend',fmtRand(vSpend)],
-      ['Total litres',vLitres.toFixed(2)+' L'],
+      ['Total litres',fmtLitres(vLitres)],
       ['Number of fills',String(vFills)],
       ['Average km/L',avgKml!=null?avgKml.toFixed(2)+' km/L':'—'],
       ['Average cost / litre',fmtRand(avgCPL)],
@@ -3742,7 +3745,7 @@ async function generateReport(){
     const avgCPL=litres>0?spend/litres:0;
     body.push({title:'Fuel Spend Summary',html:repTiles(
       [['Total fuel spend',fmtRand(spend)],
-       ['Total litres',litres.toFixed(2)+' L'],
+       ['Total litres',fmtLitres(litres)],
        ['Number of fills',String(fills)],
        ['Average cost / litre',fmtRand(avgCPL)],
        ['Periods covered',periodVal==='__all__'?String(state.reports.length):'1'],
@@ -3758,12 +3761,12 @@ async function generateReport(){
       if(vs.length===0)return;
       html+=`<div class="rep-subhead">${escapeHtml(r.scheduleDate||'Report')}</div>`;
       vs.forEach(v=>{
-        html+=`<div class="rep-vehicle-block"><div class="rep-vehicle-name">${escapeHtml(v.plate)} — ${fmtRand(v.totalAmount)} · ${v.totalLitres.toFixed(2)} L · ${v.transactions.length} fill(s)</div>`;
+        html+=`<div class="rep-vehicle-block"><div class="rep-vehicle-name">${escapeHtml(v.plate)} — ${fmtRand(v.totalAmount)} · ${fmtLitres(v.totalLitres)} · ${v.transactions.length} fill(s)</div>`;
         html+=repTable(['Date','Merchant','Odometer','Litres','KM/L','Amount'],
           v.transactions.map(tx=>[
             tx.date, tx.merchant,
             tx.odometer?tx.odometer.toLocaleString('en-US'):'—',
-            tx.litres.toFixed(2)+' L',
+            fmtLitres(tx.litres),
             tx.kmPerLitre?tx.kmPerLitre.toFixed(2):'—',
             fmtRand(tx.amount)
           ]),[2,3,4,5]);
@@ -3782,19 +3785,16 @@ async function generateReport(){
     body.push({title:'Odometer Alerts',html:rows.length?repTable(['Vehicle','Period','Date','Flagged Odometer'],rows,[3]):'<p class="rep-empty">No odometer anomalies found. ✓</p>'});
   }
 
-  // ── High spend vehicles: top-5 spend bar chart, then the above-threshold table ──
+  // ── High spend vehicles: top-5 total-spend bar chart (spend + litres per bar) ──
   if(sections.includes('highspend')){
-    const spendByPlate={};
-    reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{spendByPlate[v.plate]=(spendByPlate[v.plate]||0)+v.totalAmount;}));
-    const top=Object.entries(spendByPlate).sort((a,b)=>b[1]-a[1]).slice(0,5);
-    const maxSpend=top.length?top[0][1]:0;
+    const agg={};
+    reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{const a=agg[v.plate]||(agg[v.plate]={spend:0,litres:0});a.spend+=v.totalAmount;a.litres+=v.totalLitres;}));
+    const top=Object.entries(agg).sort((a,b)=>b[1].spend-a[1].spend).slice(0,5);
+    const maxSpend=top.length?top[0][1].spend:0;
     const shades=['#0D2B4E','#14508A','#1971C2','#3E8FD4','#74C0FC'];
-    const chart=top.length?'<div class="rep-subhead">Top 5 by total fuel spend</div><div class="rep-bars">'+top.map(([p,amt],i)=>
-      `<div class="rep-bar-row"><span class="rep-bar-plate">${escapeHtml(p)}</span><span class="rep-bar-track"><span class="rep-bar-fill" style="width:${maxSpend?Math.max(2,Math.round(amt/maxSpend*100)):0}%;background:${shades[i]}"></span></span><span class="rep-bar-amt">${fmtRand(amt)}</span></div>`
-    ).join('')+'</div>':'';
-    const rows=[];
-    reports.forEach(({r})=>filterVeh(r.vehicles).filter(v=>v.isHighSpend).forEach(v=>rows.push([v.plate,r.scheduleDate||'—',fmtRand(v.totalAmount),v.totalLitres.toFixed(2)+' L'])));
-    body.push({title:'High Spend Vehicles',html:chart+(rows.length?repTable(['Vehicle','Period','Total Spend','Litres'],rows,[2,3]):'<p class="rep-empty">No vehicles above the high-spend threshold. ✓</p>')});
+    body.push({title:'High Spend Vehicles',html:top.length?'<div class="rep-subhead">Top 5 by total fuel spend</div><div class="rep-bars">'+top.map(([p,a],i)=>
+      `<div class="rep-bar-row"><span class="rep-bar-plate">${escapeHtml(p)}</span><span class="rep-bar-track"><span class="rep-bar-fill" style="width:${maxSpend?Math.max(2,Math.round(a.spend/maxSpend*100)):0}%;background:${shades[i]}"></span></span><span class="rep-bar-amt">${fmtRand(a.spend)} <span class="rep-bar-l">· ${fmtLitres(a.litres)}</span></span></div>`
+    ).join('')+'</div>':'<p class="rep-empty">No vehicles for this selection.</p>'});
   }
 
   // ── Cost per km per vehicle ──
@@ -3867,8 +3867,8 @@ async function generateReport(){
     body.push({title:'Red Flags',html:rows.length?repTable(['','Vehicle','Alert'],rows,[],[0]):'<p class="rep-empty">No red flags detected. ✓</p>'});
   }
 
-  // Single-vehicle: hide empty "No data" sections entirely (keep only sections that produced a table)
-  if(vehFilter!=='__all__')body=body.filter(s=>s.html.includes('<table'));
+  // Single-vehicle: hide empty "No data" sections entirely (keep only sections that produced a table or chart)
+  if(vehFilter!=='__all__')body=body.filter(s=>s.html.includes('<table')||s.html.includes('rep-bars'));
 
   // Append full transaction detail last so the report stays summary-first
   if(blocksSection)body.push(blocksSection);
@@ -3906,7 +3906,7 @@ async function generateReport(){
   .rep-body{padding:24px 4px 16mm;}
 
   /* ── Executive summary box ── */
-  .rep-glance{background:#E7F5FF;border-left:4px solid #185FA5;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:26px;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .rep-glance{background:#E7F5FF;border-left:4px solid #185FA5;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:28px;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rep-glance-title{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#185FA5;margin-bottom:5px;}
   .rep-glance p{font-size:11px;line-height:1.65;color:#1A1A1A;}
   .rep-glance p+p{margin-top:4px;}
@@ -3919,7 +3919,7 @@ async function generateReport(){
   .rep-vehicle-name{font-size:11px;font-weight:700;margin-bottom:3px;color:#1A1A1A;}
 
   /* ── Tables: compact, natural width (no page-wide stretching), alternating row shading ── */
-  table.rep-table{width:auto;max-width:100%;border-collapse:collapse;margin-bottom:8px;break-inside:avoid;}
+  table.rep-table{width:auto;max-width:100%;border-collapse:collapse;margin-bottom:0;break-inside:avoid;}
   .rep-table tr{break-inside:avoid;}
   .rep-table th{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;text-align:left;padding:5.5px 9px;border-bottom:1.5px solid #0D2B4E;color:#0D2B4E;line-height:1.2;white-space:nowrap;}
   .rep-table td{font-size:10.5px;font-weight:400;padding:5px 9px;border-bottom:0.5px solid #E6E8EC;vertical-align:top;line-height:1.35;}
@@ -3930,7 +3930,7 @@ async function generateReport(){
   .rep-narrow{max-width:360px;}
 
   /* ── Fuel summary stat tiles ── */
-  .rep-tiles{display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:8px;max-width:560px;margin-bottom:8px;}
+  .rep-tiles{display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:8px;max-width:560px;margin-bottom:0;break-inside:avoid;}
   .rep-tile{background:#F5F6F8;border-radius:6px;padding:8px 12px;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rep-tile-label{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#5A6678;margin-bottom:2px;}
   .rep-tile-value{font-size:13.5px;font-weight:700;color:#0D2B4E;}
@@ -3948,12 +3948,14 @@ async function generateReport(){
   .rep-dot.amber{background:#E8890C;}
 
   /* ── Top-5 spend bar chart (pure HTML/CSS, print-safe) ── */
-  .rep-bars{max-width:560px;margin-bottom:12px;break-inside:avoid;}
+  .rep-bars{margin-bottom:0;break-inside:avoid;}
   .rep-bar-row{display:flex;align-items:center;gap:9px;margin-bottom:6px;}
+  .rep-bar-row:last-child{margin-bottom:0;}
   .rep-bar-plate{width:92px;flex-shrink:0;font-size:10px;font-weight:700;white-space:nowrap;}
   .rep-bar-track{flex:1;height:13px;background:#EEF1F5;border-radius:3px;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rep-bar-fill{display:block;height:100%;border-radius:3px 0 0 3px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .rep-bar-amt{width:84px;flex-shrink:0;text-align:right;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .rep-bar-amt{width:150px;flex-shrink:0;text-align:left;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .rep-bar-l{font-size:9px;font-weight:400;color:#7A8699;}
 
   /* ── Side-by-side table columns ── */
   .rep-cols{display:flex;gap:28px;align-items:flex-start;}
