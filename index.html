@@ -721,6 +721,29 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .mf-parts-head span { font-size:9px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); font-weight:700; }
 @media (max-width:700px){ .mf-part-row, .mf-parts-head { grid-template-columns:1fr 1fr 1fr; } .mf-parts-head { display:none; } }
 
+/* DRIVERS TAB */
+.drivers-table-wrap { overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); margin-top:14px; }
+.drivers-table { width:100%; border-collapse:collapse; font-family:var(--font); }
+.drivers-table th { padding:10px 14px; font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--text3); font-weight:700; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; }
+.drivers-table td { padding:10px 14px; font-size:12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.drivers-table tr:last-child td { border-bottom:none; }
+.drivers-table tr:hover td { background:var(--accent-light); }
+.driver-row-inactive td { opacity:0.45; }
+.driver-row-inactive td:hover, .drivers-table tr.driver-row-inactive:hover td { background:var(--surface2); }
+.drv-code { font-family:var(--font-mono); font-weight:700; font-size:12px; color:var(--accent); white-space:nowrap; }
+.drv-badge { display:inline-block; font-size:10px; font-weight:700; letter-spacing:0.3px; padding:3px 10px; border-radius:20px; white-space:nowrap; }
+.drv-badge.on { background:var(--green-light); color:var(--green); }
+.drv-badge.off { background:var(--surface2); color:var(--text3); }
+.drv-link { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+.drv-link code { font-family:var(--font-mono); font-size:11px; color:var(--text2); background:var(--surface2); padding:2px 7px; border-radius:4px; }
+.drv-copy-btn { border:1.5px solid var(--border2); background:var(--surface); border-radius:var(--radius-sm); padding:3px 8px; font-size:12px; cursor:pointer; font-family:var(--font); transition:all 0.15s; }
+.drv-copy-btn:hover { border-color:var(--accent); background:var(--accent-light); }
+.drv-action-btn { border:1.5px solid var(--border2); background:var(--surface); color:var(--text2); border-radius:var(--radius-sm); padding:4px 10px; font-size:11px; font-weight:700; cursor:pointer; font-family:var(--font); transition:all 0.15s; white-space:nowrap; }
+.drv-action-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-light); }
+.drv-exp-red { color:var(--red); font-weight:700; }
+.drv-exp-amber { color:var(--amber); font-weight:700; }
+.drv-exp-blank { color:var(--text3); }
+
 /* REPORTS TAB */
 .rep-type-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
 @media (max-width:640px){ .rep-type-row { grid-template-columns:1fr; } }
@@ -908,6 +931,7 @@ input[type=file] { display: none; }
       <button class="dash-tab-btn active" data-tab="overview"    onclick="switchDashTab('overview')">📊 Overview</button>
       <button class="dash-tab-btn"        data-tab="performance" onclick="switchDashTab('performance')">🏆 Performance</button>
       <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')">🚌 Vehicle Blocks</button>
+      <button class="dash-tab-btn"        data-tab="drivers"     onclick="switchDashTab('drivers')">👤 Drivers</button>
 <button class="dash-tab-btn" data-tab="discs" onclick="switchDashTab('discs')">📋 Disc Renewal<span class="dash-tab-badge" id="discTabBadge">0</span></button>
       <button class="dash-tab-btn"        data-tab="trends"      onclick="switchDashTab('trends')">📈 Trends</button>
       <button class="dash-tab-btn"        data-tab="history"     onclick="switchDashTab('history')">📁 History</button>
@@ -964,6 +988,19 @@ input[type=file] { display: none; }
       </div>
       <div id="vehiclesGrid" class="vehicles-grid"></div>
       <div id="vehiclesTableWrap" class="vehicles-table-wrap hidden"></div>
+    </div>
+
+    <!-- TAB: DRIVERS (Stage 1 — admin registry; driver page integration is Stage 2) -->
+    <div class="tab-panel" id="tab-drivers">
+      <div class="section-header">
+        <div class="section-title">👤 Drivers</div>
+        <div style="font-size:12px;color:var(--text3);margin-left:8px;">Driver profiles, personal codes and licence tracking</div>
+        <div class="section-actions">
+          <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="openDriverForm('add')">＋ Add Driver</button>
+        </div>
+      </div>
+      <div class="tyre-add-form" id="driverForm"></div>
+      <div id="driversList"><p class="tyre-empty">Loading drivers...</p></div>
     </div>
 
 
@@ -1412,6 +1449,7 @@ function switchDashTab(tab){
   currentDashTab=tab;
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
   document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  if(tab==='drivers')renderDriversTab();
   if(tab==='discs')renderDiscsTab();
   if(tab==='tyres')renderTyresTab();
   if(tab==='maint')renderMaintTab();
@@ -3581,6 +3619,178 @@ async function markJobDone(id){
     }
     await renderMaintTab();
   }catch{alert('Could not update the job. Please check your connection and try again.');}
+}
+
+// ── DRIVERS TAB (Stage 1: admin registry only; driver.html integration is Stage 2) ──
+let driversData=[];
+let driverFormMode=null; // null = closed, 'add' = new driver, otherwise the id of the driver being edited
+
+async function fetchDrivers(){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?select=*&order=name.asc`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
+    });
+    if(!res.ok){console.error('[FleetDesk] fetchDrivers failed:',res.status,await res.text());return false;}
+    driversData=await res.json();
+    return true;
+  }catch(err){console.error('[FleetDesk] fetchDrivers failed:',err);return false;}
+}
+
+async function renderDriversTab(){
+  const ok=await fetchDrivers();
+  const el=document.getElementById('driversList');
+  if(!ok){el.innerHTML='<p class="tyre-empty">Could not load drivers. Please check your connection and that you are logged in.</p>';return;}
+  if(driversData.length===0){
+    el.innerHTML='<p class="tyre-empty">No drivers yet. Click "＋ Add Driver" to create the first driver profile.</p>';
+    return;
+  }
+  // Active drivers first (A–Z from the fetch), deactivated greyed out at the bottom
+  const sorted=[...driversData.filter(d=>d.active),...driversData.filter(d=>!d.active)];
+  el.innerHTML=`<div class="drivers-table-wrap"><table class="drivers-table">
+    <thead><tr><th>Name</th><th>Phone</th><th>Code</th><th>Licence Expiry</th><th>PrDP Expiry</th><th>Personal Link</th><th>Status</th><th></th></tr></thead>
+    <tbody>${sorted.map(d=>`
+      <tr class="${d.active?'':'driver-row-inactive'}">
+        <td style="font-weight:700;">${escapeHtml(d.name)}</td>
+        <td>${d.phone?escapeHtml(d.phone):'<span class="drv-exp-blank">—</span>'}</td>
+        <td><span class="drv-code">${escapeHtml(d.personal_code)}</span></td>
+        <td>${driverExpiryCell(d.licence_expiry)}</td>
+        <td>${driverExpiryCell(d.prdp_expiry)}</td>
+        <td>${d.active?`<span class="drv-link"><code>driver.html?d=${escapeHtml(d.personal_code)}</code><button class="drv-copy-btn" title="Copy link for WhatsApp" onclick="copyDriverLink('${escapeHtml(d.personal_code)}',this)">📋</button></span>`:'<span class="drv-exp-blank">—</span>'}</td>
+        <td><span class="drv-badge ${d.active?'on':'off'}">${d.active?'Active':'Deactivated'}</span></td>
+        <td style="white-space:nowrap;">
+          <button class="drv-action-btn" onclick="openDriverForm('${d.id}')">✏ Edit</button>
+          <button class="drv-action-btn" onclick="toggleDriverActive('${d.id}',${d.active?'false':'true'})">${d.active?'Deactivate':'Reactivate'}</button>
+        </td>
+      </tr>`).join('')}</tbody></table></div>`;
+}
+
+function driverExpiryCell(dateStr){
+  if(!dateStr)return'<span class="drv-exp-blank">—</span>';
+  const st=complianceStatus(dateStr);
+  const txt=fmtDDMMYYYY(dateStr);
+  if(st.status==='expired')return`<span class="drv-exp-red">${txt} · expired</span>`;
+  if(st.days!=null&&st.days<=60)return`<span class="drv-exp-amber">${txt} · ${st.days} day${st.days===1?'':'s'}</span>`;
+  return`<span>${txt}</span>`;
+}
+
+// personal_code = first 3 letters of the name (A–Z only, padded with X) + 4 random digits.
+// Uniqueness is checked against the fetched list; the DB unique constraint is the backstop.
+function generateDriverCode(name){
+  const letters=String(name||'').toUpperCase().replace(/[^A-Z]/g,'');
+  const prefix=(letters+'XXX').slice(0,3);
+  const existing=new Set(driversData.map(d=>d.personal_code));
+  for(let i=0;i<100;i++){
+    const code=prefix+'-'+String(Math.floor(1000+Math.random()*9000));
+    if(!existing.has(code))return code;
+  }
+  return null;
+}
+
+function driverLink(code){
+  return new URL('driver.html?d='+encodeURIComponent(code),window.location.href).href;
+}
+
+async function copyDriverLink(code,btn){
+  const link=driverLink(code);
+  try{
+    await navigator.clipboard.writeText(link);
+    const orig=btn.textContent;btn.textContent='✓';
+    setTimeout(()=>{btn.textContent=orig;},1200);
+  }catch{
+    prompt('Copy this link:',link);
+  }
+}
+
+function openDriverForm(mode){
+  const form=document.getElementById('driverForm');
+  if(driverFormMode===mode&&form.classList.contains('open')){closeDriverForm();return;}
+  driverFormMode=mode;
+  const editing=mode!=='add';
+  const d=editing?driversData.find(x=>x.id===mode):null;
+  if(editing&&!d){driverFormMode=null;return;}
+  form.innerHTML=`
+    <div class="tyre-form-title">${editing?'✏ Edit Driver — '+escapeHtml(d.personal_code):'＋ Add Driver'}</div>
+    <div class="tyre-form-err" id="driverFormErr"></div>
+    <div class="tf-grid">
+      <div class="tf-field"><label>Name *</label><input type="text" id="df-name" value="${editing?escapeHtml(d.name):''}" placeholder="e.g. Thabo Nkosi"></div>
+      <div class="tf-field"><label>Phone</label><input type="text" id="df-phone" value="${editing&&d.phone?escapeHtml(d.phone):''}" placeholder="e.g. 082 123 4567"></div>
+      ${editing?`
+      <div class="tf-field"><label>Licence Expiry</label><input type="date" id="df-licence" value="${d.licence_expiry||''}"></div>
+      <div class="tf-field"><label>PrDP Expiry</label><input type="date" id="df-prdp" value="${d.prdp_expiry||''}"></div>`:''}
+    </div>
+    ${editing?'':'<div style="font-size:11px;color:var(--text3);margin-bottom:14px;">A personal code (e.g. THA-4827) is generated automatically when you save. Licence and PrDP expiry dates can be added afterwards via Edit.</div>'}
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <button class="def-save" id="dfSaveBtn" onclick="submitDriver()">💾 ${editing?'Save Changes':'Save Driver'}</button>
+      <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="closeDriverForm()">Cancel</button>
+    </div>`;
+  form.classList.add('open');
+  form.scrollIntoView({behavior:'smooth',block:'nearest'});
+  document.getElementById('df-name').focus();
+}
+
+function closeDriverForm(){
+  driverFormMode=null;
+  const form=document.getElementById('driverForm');
+  form.classList.remove('open');
+  form.innerHTML='';
+}
+
+async function submitDriver(){
+  const errEl=document.getElementById('driverFormErr');
+  const btn=document.getElementById('dfSaveBtn');
+  errEl.classList.remove('show');
+  const name=document.getElementById('df-name').value.trim();
+  const phone=document.getElementById('df-phone').value.trim();
+  if(!name){errEl.textContent='Please enter the driver\'s name.';errEl.classList.add('show');return;}
+  const editing=driverFormMode!=='add';
+  btn.disabled=true;btn.textContent='Saving...';
+  try{
+    const headers={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'};
+    let res;
+    if(editing){
+      const body={name,phone:phone||null,
+        licence_expiry:document.getElementById('df-licence').value||null,
+        prdp_expiry:document.getElementById('df-prdp').value||null};
+      res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverFormMode}`,{method:'PATCH',headers,body:JSON.stringify(body)});
+    }else{
+      // Refresh the list first so the uniqueness check sees codes added from other devices
+      await fetchDrivers();
+      // On a 409 the random digits collided with a code created since the fetch — regenerate and retry
+      for(let attempt=0;attempt<3;attempt++){
+        const code=generateDriverCode(name);
+        if(!code)break;
+        res=await fetch(`${SUPABASE_URL}/rest/v1/drivers`,{method:'POST',headers,body:JSON.stringify({name,phone:phone||null,personal_code:code})});
+        if(res.status!==409)break;
+      }
+    }
+    if(!res||!res.ok){
+      console.error('[FleetDesk] Driver save failed:',res&&res.status,res&&await res.text());
+      errEl.textContent='Could not save the driver. Please try again.';
+      errEl.classList.add('show');
+      btn.disabled=false;btn.textContent=editing?'💾 Save Changes':'💾 Save Driver';
+      return;
+    }
+    closeDriverForm();
+    await renderDriversTab();
+  }catch(err){
+    console.error('[FleetDesk] Driver save error:',err);
+    errEl.textContent='Connection error. Please try again.';
+    errEl.classList.add('show');
+    btn.disabled=false;btn.textContent=editing?'💾 Save Changes':'💾 Save Driver';
+  }
+}
+
+async function toggleDriverActive(id,makeActive){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${id}`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({active:makeActive==='true'||makeActive===true})
+    });
+    if(!res.ok){alert('Could not update the driver. Please try again.');return;}
+    if(driverFormMode&&driverFormMode!=='add')closeDriverForm();
+    await renderDriversTab();
+  }catch{alert('Could not update the driver. Please check your connection and try again.');}
 }
 
 // ── REPORTS TAB ───────────────────────────────────────────────────────────────
