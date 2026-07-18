@@ -23,32 +23,82 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .header-logo { font-size: 22px; font-weight: 700; color: white; letter-spacing: 0.5px; }
 .header-sub { font-size: 11px; color: rgba(255,255,255,0.75); text-transform: uppercase; letter-spacing: 1.5px; }
 
-.vehicle-banner {
-  background: var(--accent2); padding: 14px 24px;
-  display: flex; align-items: center; justify-content: center; gap: 12px;
-  text-align: center; flex-direction: column;
-}
-.vehicle-plate-display {
-  font-family: 'Courier New', monospace; font-size: 22px; font-weight: 700;
-  color: white; letter-spacing: 2px; background: rgba(255,255,255,0.15);
-  padding: 6px 16px; border-radius: 6px;
-}
-.vehicle-label { font-size: 11px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px; }
-
 .main { padding: 24px 20px; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 
-.card {
-  background: var(--surface); border-radius: var(--radius);
-  box-shadow: var(--shadow); overflow: hidden;
+.screen { display: none; }
+.screen.show { display: block; }
+
+/* ── Invalid link ── */
+.center-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; text-align: center; gap: 16px; padding: 24px; }
+.big-icon { font-size: 64px; }
+.center-title { font-size: 22px; font-weight: 700; color: var(--red); }
+.center-sub { font-size: 15px; color: var(--text2); line-height: 1.7; max-width: 320px; }
+
+/* ── Greeting ── */
+.greet-title { font-size: 34px; font-weight: 700; color: var(--text); text-align: center; }
+.greet-sub { font-size: 15px; color: var(--text2); text-align: center; line-height: 1.7; }
+.dup-banner {
+  background: #FFF9DB; border: 2px solid var(--amber); border-radius: var(--radius);
+  padding: 14px 16px; font-size: 14px; color: var(--amber); font-weight: 700;
+  text-align: center; line-height: 1.6;
 }
+.big-btn {
+  width: 100%; padding: 18px; background: var(--accent); color: white;
+  border: none; border-radius: var(--radius); font-family: var(--font);
+  font-size: 17px; font-weight: 700; cursor: pointer; letter-spacing: 0.3px;
+  box-shadow: 0 4px 12px rgba(25,113,194,0.3); transition: background 0.15s;
+}
+.big-btn:active, .big-btn:hover { background: var(--accent2); }
+.big-btn.green { background: var(--green); box-shadow: 0 4px 12px rgba(47,158,68,0.3); }
+.big-btn.green:active, .big-btn.green:hover { background: #27873B; }
+.big-btn.outline { background: transparent; color: var(--accent); border: 2px solid var(--accent); box-shadow: none; }
+.big-btn:disabled { background: #9ca3af !important; color: #f3f4f6 !important; cursor: not-allowed; box-shadow: none; }
+
+/* ── Plate list ── */
+.step-title { font-size: 18px; font-weight: 700; color: var(--text); text-align: center; }
+.search-input {
+  width: 100%; padding: 14px 16px; font-size: 18px; border: 2px solid var(--border);
+  border-radius: var(--radius); font-family: var(--font); outline: none;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.search-input:focus { border-color: var(--accent); }
+.plate-list { display: flex; flex-direction: column; gap: 10px; }
+.plate-row {
+  width: 100%; padding: 18px 16px; background: var(--surface); border: 2px solid var(--border);
+  border-radius: var(--radius); font-family: 'Courier New', monospace; font-size: 22px;
+  font-weight: 700; letter-spacing: 2px; color: var(--text); cursor: pointer;
+  text-align: center; box-shadow: var(--shadow); transition: all 0.12s;
+}
+.plate-row:active, .plate-row:hover { border-color: var(--accent); color: var(--accent); background: #E7F5FF; }
+.plate-none { text-align: center; color: var(--text3); font-size: 14px; font-style: italic; padding: 20px 0; }
+
+/* ── Confirm ── */
+.confirm-wrap { display: flex; flex-direction: column; align-items: center; gap: 24px; min-height: 60vh; justify-content: center; text-align: center; padding: 12px; }
+.confirm-plate {
+  font-family: 'Courier New', monospace; font-size: clamp(40px, 13vw, 64px); font-weight: 700;
+  letter-spacing: 3px; color: var(--accent); background: var(--surface);
+  border: 3px solid var(--accent); border-radius: 14px; padding: 22px 18px;
+  width: 100%; word-break: break-all; box-shadow: var(--shadow);
+}
+.confirm-q { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.5; }
+.confirm-btns { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+
+/* ── Form cards (photo / km / notes) ── */
+.card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .card-header {
   padding: 14px 18px; background: #F8F9FA; border-bottom: 1px solid var(--border);
   font-size: 12px; font-weight: 700; color: var(--text2);
   text-transform: uppercase; letter-spacing: 0.8px;
 }
 .card-body { padding: 18px; }
+.form-plate-chip {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--accent2); border-radius: var(--radius); padding: 12px 16px;
+}
+.form-plate-chip .fp-name { font-size: 13px; color: rgba(255,255,255,0.8); }
+.form-plate-chip .fp-plate { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; color: white; letter-spacing: 2px; }
+.form-plate-chip button { background: rgba(255,255,255,0.15); border: none; color: white; font-family: var(--font); font-size: 11px; font-weight: 700; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
 
-/* PHOTO CAPTURE */
 .photo-area {
   border: 2px dashed var(--border); border-radius: 10px;
   min-height: 200px; display: flex; flex-direction: column;
@@ -65,19 +115,12 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   background: rgba(0,0,0,0.5); padding: 8px; text-align: center;
   font-size: 12px; color: white; font-weight: 700; z-index: 2;
 }
-.photo-btn {
-  width: 100%; padding: 12px; background: var(--accent); color: white;
-  border: none; border-radius: 8px; font-family: var(--font); font-size: 14px;
-  font-weight: 700; cursor: pointer; margin-top: 12px; transition: background 0.15s;
-}
-.photo-btn:hover { background: var(--accent2); }
 .photo-btn.secondary {
-  background: transparent; color: var(--accent);
-  border: 2px solid var(--accent); margin-top: 8px;
+  width: 100%; padding: 12px; background: transparent; color: var(--accent);
+  border: 2px solid var(--accent); border-radius: 8px; font-family: var(--font);
+  font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 12px;
 }
 
-/* ODO INPUT */
-.odo-input-wrap { position: relative; }
 .odo-input {
   width: 100%; padding: 14px 16px; font-size: 24px; font-family: 'Courier New', monospace;
   font-weight: 700; color: var(--accent); border: 2px solid var(--border);
@@ -93,38 +136,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   font-size: 13px; color: var(--green); font-weight: 700; text-align: center;
 }
 .odo-ai-result.show { display: block; }
-
-/* NOTES */
-.notes-input {
-  width: 100%; padding: 12px 14px; border: 2px solid var(--border);
-  border-radius: 10px; font-family: var(--font); font-size: 13px;
-  color: var(--text); outline: none; resize: none; height: 80px;
-  transition: border-color 0.15s;
-}
-.notes-input:focus { border-color: var(--accent); }
-
-/* SUBMIT */
-.submit-btn {
-  width: 100%; padding: 16px; background: var(--green); color: white;
-  border: none; border-radius: var(--radius); font-family: var(--font);
-  font-size: 16px; font-weight: 700; cursor: pointer;
-  letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(47,158,68,0.3);
-  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
-}
-.submit-btn:hover:not(.btn-disabled) { background: #27873B; transform: translateY(-1px); }
-.submit-btn:disabled,
-.submit-btn.btn-disabled {
-  background-color: #9ca3af !important;
-  background: #9ca3af !important;
-  color: #f3f4f6 !important;
-  cursor: not-allowed !important;
-  transform: none !important;
-  box-shadow: none !important;
-  opacity: 0.65 !important;
-  pointer-events: none;
-}
-
-/* AI READING */
 .ai-status {
   display: none; padding: 10px 14px; border-radius: 8px;
   font-size: 12px; font-weight: 700; text-align: center; margin-top: 10px;
@@ -133,32 +144,24 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .ai-status.success { display: block; background: #EBFBEE; color: var(--green); }
 .ai-status.error { display: block; background: #FFF5F5; color: var(--red); }
 
-/* SUCCESS SCREEN */
-.success-screen {
-  display: none; flex-direction: column; align-items: center;
-  justify-content: center; min-height: 60vh; text-align: center; gap: 16px; padding: 24px;
+.notes-input {
+  width: 100%; padding: 12px 14px; border: 2px solid var(--border);
+  border-radius: 10px; font-family: var(--font); font-size: 13px;
+  color: var(--text); outline: none; resize: none; height: 80px;
+  transition: border-color 0.15s;
 }
-.success-screen.show { display: flex; }
-.success-icon { font-size: 72px; }
+.notes-input:focus { border-color: var(--accent); }
+
+.photo-required-banner {
+  background: #FFF5F5; border: 2px solid var(--red); border-radius: 10px;
+  padding: 14px 16px; display: flex; align-items: center; gap: 10px;
+}
+.photo-required-banner .prb-text { font-size: 13px; color: var(--red); font-weight: 700; flex: 1; }
+
+/* ── Thank you ── */
 .success-title { font-size: 24px; font-weight: 700; color: var(--green); }
-.success-sub { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 300px; }
 .success-plate { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; color: var(--accent); background: var(--bg); padding: 8px 20px; border-radius: 8px; border: 2px solid var(--border); margin: 4px 0; }
 .success-odo { font-size: 28px; font-weight: 700; color: var(--text); font-family: 'Courier New', monospace; }
-.another-btn {
-  padding: 12px 28px; background: var(--accent); color: white; border: none;
-  border-radius: var(--radius); font-family: var(--font); font-size: 14px;
-  font-weight: 700; cursor: pointer; margin-top: 8px;
-}
-
-/* ERROR SCREEN */
-.error-screen {
-  display: none; flex-direction: column; align-items: center;
-  justify-content: center; min-height: 60vh; text-align: center; gap: 16px; padding: 24px;
-}
-.error-screen.show { display: flex; }
-.error-icon { font-size: 64px; }
-.error-title { font-size: 22px; font-weight: 700; color: var(--red); }
-.error-sub { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 300px; }
 
 .loading-spinner {
   width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.4);
@@ -166,31 +169,71 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   animation: spin 0.7s linear infinite; display: inline-block; margin-right: 8px; vertical-align: middle;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+.page-loading { display: flex; align-items: center; justify-content: center; min-height: 50vh; color: var(--text3); font-size: 14px; }
 </style>
 </head>
 <body>
 
-<div id="errorScreen" class="error-screen">
-  <div class="error-icon">🚫</div>
-  <div class="error-title">Invalid Link</div>
-  <div class="error-sub">This link is not valid. Please ask your fleet manager for your personal link.</div>
+<div class="header">
+  <div class="header-logo">Phola Coaches</div>
+  <div class="header-sub">Odometer Submission</div>
 </div>
 
-<div id="mainContent" style="display:none;">
-  <div class="header">
-    <div class="header-logo">Phola Coaches</div>
-    <div class="header-sub">Odometer Submission</div>
-  </div>
+<!-- LOADING (while the code is checked) -->
+<div id="loadingScreen" class="screen show"><div class="page-loading">Checking your link...</div></div>
 
-  <div class="vehicle-banner">
-    <div>
-      <div class="vehicle-label">Your Vehicle</div>
-      <div class="vehicle-plate-display" id="plateBanner">—</div>
+<!-- INVALID LINK -->
+<div id="invalidScreen" class="screen">
+  <div class="center-screen">
+    <div class="big-icon">🚫</div>
+    <div class="center-title">Link not recognised</div>
+    <div class="center-sub">Please ask the office for your new link.</div>
+  </div>
+</div>
+
+<!-- GREETING -->
+<div id="greetScreen" class="screen">
+  <div class="main">
+    <div style="text-align:center;font-size:56px;margin-top:24px;">👋</div>
+    <div class="greet-title" id="greetName">Hi</div>
+    <div class="greet-sub">Ready to submit your odometer reading?</div>
+    <div class="dup-banner" id="dupBanner" style="display:none;">You already submitted a reading today — continue?</div>
+    <button class="big-btn" id="startBtn" onclick="showScreen('plateScreen');document.getElementById('plateSearch').focus();">🚌 Start</button>
+  </div>
+</div>
+
+<!-- STEP 1: PLATE LIST -->
+<div id="plateScreen" class="screen">
+  <div class="main">
+    <div class="step-title">Which vehicle are you driving?</div>
+    <input type="text" class="search-input" id="plateSearch" placeholder="🔍 Search plate..." oninput="renderPlateList()" autocomplete="off">
+    <div class="plate-list" id="plateList"><div class="plate-none">Loading vehicles...</div></div>
+  </div>
+</div>
+
+<!-- STEP 2: CONFIRM VEHICLE -->
+<div id="confirmScreen" class="screen">
+  <div class="main">
+    <div class="confirm-wrap">
+      <div class="confirm-plate" id="confirmPlate">—</div>
+      <div class="confirm-q">Is this the vehicle you are driving?</div>
+      <div class="confirm-btns">
+        <button class="big-btn green" onclick="confirmVehicle()">✅ Yes</button>
+        <button class="big-btn outline" onclick="showScreen('plateScreen')">↩ No — choose again</button>
+      </div>
     </div>
   </div>
+</div>
 
-  <div class="main" id="formContent">
-    <!-- PHOTO CARD -->
+<!-- STEP 3: PHOTO + KM + NOTES -->
+<div id="formScreen" class="screen">
+  <div class="main">
+    <div class="form-plate-chip">
+      <span class="fp-name" id="formDriverName"></span>
+      <span class="fp-plate" id="formPlate">—</span>
+      <button onclick="showScreen('plateScreen')">Change</button>
+    </div>
+
     <div class="card">
       <div class="card-header">📷 Step 1 — Take Odometer Photo</div>
       <div class="card-body">
@@ -205,18 +248,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
       </div>
     </div>
 
-    <!-- ODO CARD -->
     <div class="card">
       <div class="card-header">🔢 Step 2 — Confirm Odometer Reading</div>
       <div class="card-body">
-        <div class="odo-input-wrap">
-          <input type="number" class="odo-input" id="odoInput" placeholder="000000" inputmode="numeric">
-        </div>
+        <input type="number" class="odo-input" id="odoInput" placeholder="000000" inputmode="numeric">
         <div class="odo-label">Enter or confirm the km reading shown on the dashboard</div>
       </div>
     </div>
 
-    <!-- NOTES CARD -->
     <div class="card">
       <div class="card-header">📝 Step 3 — Notes (Optional)</div>
       <div class="card-body">
@@ -224,89 +263,159 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
       </div>
     </div>
 
-    <!-- SUBMIT -->
-    <div id="photoRequiredBanner" style="background:#FFF5F5;border:2px solid #C92A2A;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:10px;">
+    <div class="photo-required-banner" id="photoRequiredBanner">
       <div style="font-size:20px;">📷</div>
-      <div style="font-size:13px;color:#C92A2A;font-weight:700;flex:1;">A photo of the odometer is required before you can submit.</div>
+      <div class="prb-text">A photo of the odometer is required before you can submit.</div>
     </div>
-    <button class="submit-btn btn-disabled" id="submitBtn" disabled>
-      ✅ Submit Odometer Reading
-    </button>
+    <button class="big-btn green" id="submitBtn" disabled>✅ Submit Odometer Reading</button>
 
     <div style="font-size:11px;color:var(--text3);text-align:center;padding-bottom:24px;">
-      Submission is recorded with date, time and your vehicle plate automatically.
+      Submission is recorded with date, time, your name and the vehicle plate automatically.
     </div>
   </div>
+</div>
 
-  <!-- SUCCESS -->
-  <div class="success-screen" id="successScreen">
-    <div class="success-icon">✅</div>
-    <div class="success-title">Submitted!</div>
+<!-- THANK YOU -->
+<div id="thanksScreen" class="screen">
+  <div class="center-screen">
+    <div class="big-icon">✅</div>
+    <div class="success-title" id="thanksTitle">Thank you, reading received</div>
     <div class="success-plate" id="successPlate">—</div>
     <div class="success-odo" id="successOdo">—</div>
-    <div class="success-sub">Your odometer reading has been recorded. Thank you!</div>
-    <button class="another-btn" onclick="resetForm()">Submit Another Reading</button>
+    <div class="center-sub">Your odometer reading has been recorded.</div>
+    <button class="big-btn outline" style="max-width:280px;" onclick="startAnother()">Submit Another Reading</button>
   </div>
 </div>
 
 <script>
 const SUPABASE_URL='https://wlwwzbyuchsonwugqhww.supabase.co';
 const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
+const SB_HEADERS={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`};
 
-// Valid plates list — add all vehicle plates here
-const VALID_PLATES=[
-  'LY14YTGP','LY14YHGP','KT70PKGP','LY16BFGP','LY14XMGP','LY15ZWGP',
-  'LY14XXGP','FLS393MP','LY14WLGP','LR65LDGP','LR65GWGP','LY14RLGP',
-  'LR65MLGP','FSF689MP','LR65KPGP','LR65LTGP','KV24SBGP','FSF709MP',
-  'FSF665MP','FSF659MP','LY14WBGP','LY14VRGP','LJ79BYGP','FWF683MP',
-  'FYZ228MP','FYZ211MP','FYZ231MP','LR65GZGP','FYZ251MP','FYZ241MP',
-  'FYZ245MP','FYZ237MP','LR65HWGP','HBY172MP','HBY153MP','LY14XFGP',
-  'HBY155MP','HBY161MP','HBY146MP','KT70SLGP','DJ17PTGP','HHF164MP',
-  'HHF158MP','DN65ZGGP','LR65MGGP','LY14SCGP','LR65JFGP','LR65LPGP',
-  'LR65HKGP','FH02VLGP','LR65KBGP','FH11SJGP','FB92TBGP','FB92TSGP',
-  'FB92VMGP','FJ28JNGP','FJ28SVGP','FJ28TDGP','FJ28JPGP','LR65GGGP',
-  'LR65JRGP','FP57FMGP','FP57GJGP','FP57FTGP','FP57GDGP','FP57FKGP',
-  'FP57FGGP','KT70PTGP','HN83MSGP','HP80BFGP','HR18XVGP','HX04KLGP',
-  'HX04KKGP','HY68NXGP','HY68PCGP','JM08TCGP','FLS393MP','FSF689MP',
-  'FSF709MP','FSF665MP','FSF659MP','FWF683MP'
-];
-
+let driver=null;          // {name, personal_code}
+let vehiclePlates=[];     // active plates from the vehicles table
 let currentPlate='';
+let photoBlob=null;       // compressed JPEG ready for upload
 let photoBase64='';
-let photoFile=null;
 let aiDetectedOdometer=null;
 
-function init(){
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('show',s.id===id));
+  window.scrollTo({top:0});
+}
+
+async function init(){
   const params=new URLSearchParams(window.location.search);
-  const plate=params.get('id');
-  if(!plate||!VALID_PLATES.includes(plate.toUpperCase())){
-    document.getElementById('errorScreen').style.display='flex';
-    return;
+  const code=(params.get('d')||'').trim().toUpperCase();
+  // Old ?id=PLATE links (flow removed) and missing/malformed codes all land here
+  if(!code||!/^[A-Z]{3}-[0-9]{4}$/.test(code)){showScreen('invalidScreen');return;}
+  try{
+    // RLS: anon sees active drivers only, and only name/personal_code/active columns
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?select=name,personal_code&personal_code=eq.${encodeURIComponent(code)}&active=is.true&limit=1`,{headers:SB_HEADERS});
+    const rows=res.ok?await res.json():[];
+    if(!rows.length){showScreen('invalidScreen');return;}
+    driver=rows[0];
+    document.getElementById('greetName').textContent='Hi '+driver.name.split(' ')[0];
+    document.getElementById('formDriverName').textContent=driver.name.split(' ')[0]+' ·';
+    checkDuplicateToday();   // fire-and-forget; shows the banner if found
+    loadVehicles();          // fetch plates in the background while the driver reads the greeting
+    showScreen('greetScreen');
+  }catch(err){
+    console.error('[FleetDesk] code lookup failed:',err);
+    showScreen('invalidScreen');
   }
-  currentPlate=plate.toUpperCase();
-  document.getElementById('plateBanner').textContent=currentPlate;
+}
+
+async function checkDuplicateToday(){
+  try{
+    const today=new Date();today.setHours(0,0,0,0);
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=id&driver_code=eq.${encodeURIComponent(driver.personal_code)}&created_at=gte.${today.toISOString()}&limit=1`,{headers:SB_HEADERS});
+    if(res.ok&&(await res.json()).length>0){
+      document.getElementById('dupBanner').style.display='block';
+      document.getElementById('startBtn').textContent='Continue anyway';
+    }
+  }catch(err){console.error('[FleetDesk] duplicate check failed:',err);}
+}
+
+async function loadVehicles(){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?select=plate&active=is.true&order=plate.asc`,{headers:SB_HEADERS});
+    if(res.ok)vehiclePlates=(await res.json()).map(v=>v.plate);
+  }catch(err){console.error('[FleetDesk] vehicles load failed:',err);}
+  renderPlateList();
+}
+
+function renderPlateList(){
+  const q=(document.getElementById('plateSearch').value||'').toUpperCase().replace(/\s+/g,'');
+  const list=vehiclePlates.filter(p=>p.toUpperCase().replace(/\s+/g,'').includes(q));
+  const el=document.getElementById('plateList');
+  if(vehiclePlates.length===0){el.innerHTML='<div class="plate-none">No vehicles available — please contact the office.</div>';return;}
+  el.innerHTML=list.length
+    ?list.map(p=>`<button class="plate-row" onclick="pickPlate('${p.replace(/'/g,"\\'")}')">${p}</button>`).join('')
+    :'<div class="plate-none">No plates match your search.</div>';
+}
+
+function pickPlate(plate){
+  currentPlate=plate;
+  document.getElementById('confirmPlate').textContent=plate;
+  showScreen('confirmScreen');
+}
+
+function confirmVehicle(){
+  document.getElementById('formPlate').textContent=currentPlate;
   document.getElementById('successPlate').textContent=currentPlate;
-  document.getElementById('mainContent').style.display='block';
+  showScreen('formScreen');
+}
+
+// ── Photo: compress client-side to max 1280px / ~200KB JPEG ──
+const MAX_DIM=1280, TARGET_BYTES=200*1024, MAX_INPUT_BYTES=25*1024*1024;
+
+async function compressPhoto(file){
+  const dataUrl=await new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=e=>resolve(e.target.result);
+    r.onerror=reject;
+    r.readAsDataURL(file);
+  });
+  const img=await new Promise((resolve,reject)=>{
+    const i=new Image();
+    i.onload=()=>resolve(i);
+    i.onerror=reject;
+    i.src=dataUrl;
+  });
+  const scale=Math.min(1,MAX_DIM/Math.max(img.width,img.height));
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.round(img.width*scale);
+  canvas.height=Math.round(img.height*scale);
+  canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+  // Walk quality down until we are under ~200KB (0.5 floor keeps the odometer legible)
+  for(const q of [0.8,0.7,0.6,0.5]){
+    const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',q));
+    if(blob&&(blob.size<=TARGET_BYTES||q===0.5))return{blob,preview:canvas.toDataURL('image/jpeg',q)};
+  }
+  return null;
 }
 
 async function handlePhoto(event){
   const file=event.target.files[0];
   if(!file)return;
-  photoFile=file;
-  const reader=new FileReader();
-  reader.onload=async(e)=>{
-    photoBase64=e.target.result;
+  if(file.size>MAX_INPUT_BYTES){showDriverError('That photo is too large. Please try again.');return;}
+  try{
+    const out=await compressPhoto(file);
+    if(!out){showDriverError('Could not process the photo. Please try again.');return;}
+    photoBlob=out.blob;
+    photoBase64=out.preview;
     const photoArea=document.getElementById('photoArea');
     photoArea.innerHTML=`<img src="${photoBase64}"><div class="photo-overlay">📷 Tap to retake</div>`;
     photoArea.classList.add('has-photo');
     document.getElementById('retakeBtn').style.display='block';
     document.getElementById('photoRequiredBanner').style.display='none';
-    const btn=document.getElementById('submitBtn');
-    btn.disabled=false;
-    btn.classList.remove('btn-disabled');
+    document.getElementById('submitBtn').disabled=false;
     await readOdometerWithAI(photoBase64.split(',')[1]);
-  };
-  reader.readAsDataURL(file);
+  }catch(err){
+    console.error('[FleetDesk] photo processing failed:',err);
+    showDriverError('Could not process the photo. Please try again.');
+  }
 }
 
 async function readOdometerWithAI(base64){
@@ -332,7 +441,6 @@ async function readOdometerWithAI(base64){
     const text=data.content.map(i=>i.text||'').join('').trim().replace(/[^0-9]/g,'');
     if(text&&text.length>3){
       aiDetectedOdometer=parseInt(text);
-      console.log('[FleetDesk] AI odometer set to:', aiDetectedOdometer);
       document.getElementById('odoInput').value=text;
       status.className='ai-status success';
       status.textContent='✅ AI read your odometer — please confirm below';
@@ -351,74 +459,57 @@ async function readOdometerWithAI(base64){
 }
 
 async function uploadPhoto(){
-  if(!photoFile)return null;
-  try{
-    const filename=`${currentPlate}_${Date.now()}.jpg`;
-    const response=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
-      method:'POST',
-      headers:{
-        'Authorization':`Bearer ${SUPABASE_KEY}`,
-        'Content-Type':photoFile.type,
-        'x-upsert':'true'
-      },
-      body:photoFile
-    });
-    if(response.ok){
-      return`${SUPABASE_URL}/storage/v1/object/public/odometer-photos/${filename}`;
-    }
-  }catch(err){console.error('Photo upload failed:',err);}
-  return null;
+  if(!photoBlob)return null;
+  const plateClean=currentPlate.replace(/[^A-Za-z0-9]/g,'');
+  const filename=`${plateClean}_${driver.personal_code}_${Date.now()}.jpg`;
+  const response=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
+    method:'POST',
+    headers:{...SB_HEADERS,'Content-Type':'image/jpeg'},
+    body:photoBlob
+  });
+  if(!response.ok){
+    console.error('[FleetDesk] photo upload failed:',response.status,await response.text());
+    return null;
+  }
+  return`odometer-photos/${filename}`;
 }
 
 async function submitReading(){
-  if(!photoFile){ showDriverError('Please take a photo of your odometer first.'); return; }
+  if(!photoBlob){showDriverError('Please take a photo of your odometer first.');return;}
   const odo=parseInt(document.getElementById('odoInput').value);
   const notes=document.getElementById('notesInput').value.trim();
-  console.log('[FleetDesk] Submit check — odo:', odo, 'aiDetectedOdometer:', aiDetectedOdometer);
   if(aiDetectedOdometer!==null&&Math.abs(odo-aiDetectedOdometer)>25){
-    console.log('[FleetDesk] Mismatch blocked — diff:', Math.abs(odo-aiDetectedOdometer));
     showDriverError('The number you entered does not match the photo. Please retake the photo or correct the reading.');
     return;
   }
-  if(!odo||odo<1000){
-    showDriverError('Please enter a valid odometer reading — must be at least 1,000 km.');
-    return;
-  }
-  if(odo>2000000){
-    showDriverError('That reading seems too high. Please check the odometer and try again.');
-    return;
-  }
+  if(!odo||odo<1000){showDriverError('Please enter a valid odometer reading — must be at least 1,000 km.');return;}
+  if(odo>2000000){showDriverError('That reading seems too high. Please check the odometer and try again.');return;}
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   btn.innerHTML='<span class="loading-spinner"></span> Submitting...';
   try{
-    let photoUrl=null;
-    if(photoFile)photoUrl=await uploadPhoto();
+    const photoPath=await uploadPhoto();
+    if(!photoPath)throw new Error('photo upload failed');
     const response=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings`,{
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'apikey':SUPABASE_KEY,
-        'Authorization':`Bearer ${SUPABASE_KEY}`,
-        'Prefer':'return=minimal'
-      },
+      headers:{...SB_HEADERS,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({
         plate:currentPlate,
         odometer:odo,
-        photo_url:photoUrl,
         notes:notes||null,
-        ai_odometer:aiDetectedOdometer
+        ai_odometer:aiDetectedOdometer,
+        driver_code:driver.personal_code,
+        driver_name:driver.name,
+        photo_path:photoPath
       })
     });
-    if(response.ok||response.status===201){
-      document.getElementById('formContent').style.display='none';
-      document.getElementById('successOdo').textContent=odo.toLocaleString('en-ZA')+' km';
-      document.getElementById('successScreen').classList.add('show');
-    }else{
-      throw new Error('Submission failed');
-    }
+    if(!response.ok&&response.status!==201)throw new Error('Submission failed: '+response.status);
+    document.getElementById('thanksTitle').textContent=`Thank you ${driver.name.split(' ')[0]}, reading received`;
+    document.getElementById('successOdo').textContent=odo.toLocaleString('en-ZA')+' km';
+    showScreen('thanksScreen');
   }catch(err){
-    alert('Something went wrong. Please try again or contact your fleet manager.');
+    console.error('[FleetDesk] submit failed:',err);
+    showDriverError('Something went wrong. Please try again or contact the office.');
     btn.disabled=false;
     btn.innerHTML='✅ Submit Odometer Reading';
   }
@@ -429,42 +520,43 @@ function showDriverError(msg){
   if(existing)existing.remove();
   const banner=document.createElement('div');
   banner.id='driverErrBanner';
-  banner.style.cssText='background:#FFF5F5;border:1.5px solid #FFA8A8;border-radius:10px;padding:14px 16px;margin-bottom:16px;font-family:var(--font);';
+  banner.style.cssText='background:#FFF5F5;border:1.5px solid #FFA8A8;border-radius:10px;padding:14px 16px;font-family:var(--font);';
   banner.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;">
       <div style="font-size:20px;">⚠️</div>
       <div style="font-size:13px;color:#C92A2A;font-weight:700;flex:1;">${msg}</div>
       <button onclick="document.getElementById('driverErrBanner').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#C92A2A;">×</button>
     </div>`;
-  const form=document.getElementById('formContent');
-  if(form)form.insertBefore(banner,form.firstChild);
+  const form=document.querySelector('#formScreen .main');
+  form.insertBefore(banner,form.firstChild);
   setTimeout(()=>{if(document.getElementById('driverErrBanner'))document.getElementById('driverErrBanner').remove();},6000);
 }
-function resetForm(){
+
+function resetFormFields(){
   document.getElementById('odoInput').value='';
   document.getElementById('notesInput').value='';
+  document.getElementById('cameraInput').value='';
   document.getElementById('photoArea').innerHTML=`<div class="photo-area-icon">📷</div><div class="photo-area-text">Tap here to take a photo<br>of your odometer</div>`;
   document.getElementById('photoArea').classList.remove('has-photo');
   document.getElementById('retakeBtn').style.display='none';
   document.getElementById('aiStatus').className='ai-status';
   document.getElementById('aiResult').classList.remove('show');
-  document.getElementById('successScreen').classList.remove('show');
-  document.getElementById('formContent').style.display='block';
-  const rsb=document.getElementById('submitBtn');
-  rsb.disabled=true;rsb.classList.add('btn-disabled');
-  rsb.innerHTML='✅ Submit Odometer Reading';
   document.getElementById('photoRequiredBanner').style.display='flex';
-  photoBase64='';
-  photoFile=null;
-  aiDetectedOdometer=null;
+  const btn=document.getElementById('submitBtn');
+  btn.disabled=true;
+  btn.innerHTML='✅ Submit Odometer Reading';
+  photoBlob=null;photoBase64='';aiDetectedOdometer=null;
 }
 
-init();
+function startAnother(){
+  resetFormFields();
+  document.getElementById('plateSearch').value='';
+  renderPlateList();
+  showScreen('plateScreen');
+}
 
-document.getElementById('submitBtn').addEventListener('click', function(e){
-  if(!photoFile){ showDriverError('Please take a photo of your odometer first.'); return; }
-  submitReading();
-});
+document.getElementById('submitBtn').addEventListener('click',submitReading);
+init();
 </script>
 </body>
 </html>
