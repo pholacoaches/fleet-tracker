@@ -996,6 +996,7 @@ input[type=file] { display: none; }
         <div class="section-title">👤 Drivers</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Driver profiles, personal codes and licence tracking</div>
         <div class="section-actions">
+          <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="copyLaunchList(this)" id="launchListBtn">📋 Copy launch list</button>
           <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="openDriverForm('add')">＋ Add Driver</button>
         </div>
       </div>
@@ -2290,7 +2291,7 @@ function autoApplyOdometerReadings(){
       if(!existing){
         vehicle.transactions.push({
           date:fmtDDMMYYYY(submission.created_at),
-          merchant:'Driver Submission',
+          merchant:'Driver Submission'+(submission.driver_name?' — '+submission.driver_name:''),
           odometer:submission.odometer,
           litres:0,
           amount:0,
@@ -2373,6 +2374,7 @@ function renderNotifPanel(){
         <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-US')+' km':'—'}</span>
         ${statusBadge}${mismatchBadge}
       </div>
+      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-top:3px;">👤 ${escapeHtml(n.driver_name||'—')}</div>
       <div class="notif-item-time">📅 ${timeStr}</div>
       ${n.notes?`<div class="notif-item-notes">📝 ${escapeHtml(n.notes)}</div>`:''}
       ${n.photo_url?`<div style="margin-top:8px;"><img src="${escapeHtml(n.photo_url)}" alt="Odometer" style="width:100%;border-radius:6px;border:1px solid var(--border);max-height:140px;object-fit:cover;display:block;"></div>`:''}
@@ -3780,6 +3782,24 @@ async function submitDriver(){
   }
 }
 
+// WhatsApp launch list: one "Name: link" line per ACTIVE driver, using the
+// production URL (not location.href — the dashboard may be opened from localhost)
+const DRIVER_LINK_BASE='https://pholacoaches.github.io/fleet-tracker/driver.html?d=';
+async function copyLaunchList(btn){
+  await fetchDrivers();
+  const active=driversData.filter(d=>d.active);
+  if(active.length===0){alert('No active drivers to copy yet. Add drivers first.');return;}
+  const text=active.map(d=>`${d.name}: ${DRIVER_LINK_BASE}${encodeURIComponent(d.personal_code)}`).join('\n');
+  try{
+    await navigator.clipboard.writeText(text);
+    const orig=btn.textContent;
+    btn.textContent=`✓ Copied ${active.length} driver${active.length===1?'':'s'}`;
+    setTimeout(()=>{btn.textContent=orig;},1800);
+  }catch{
+    prompt('Copy the launch list below:',text);
+  }
+}
+
 async function toggleDriverActive(id,makeActive){
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${id}`,{
@@ -4255,6 +4275,7 @@ initApp();
           <div style="font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--text);" id="popupOdo">—</div>
         </div>
       </div>
+      <div id="popupDriver" style="font-size:13px;font-weight:700;color:var(--text2);margin:-8px 0 16px;">👤 —</div>
       <div id="popupPhotoWrap" style="display:none;margin-bottom:16px;">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Odometer Photo</div>
         <img id="popupPhoto" src="" alt="Odometer photo" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:220px;object-fit:cover;">
@@ -4281,6 +4302,7 @@ initApp();
   <div style="font-size:72px;animation:spin 1s linear 3;">🚨</div>
   <div style="font-size:36px;font-weight:700;color:white;letter-spacing:1px;">SUBMISSION FLAGGED</div>
   <div style="background:rgba(0,0,0,0.25);border-radius:12px;padding:20px 32px;max-width:480px;">
+    <div style="font-size:16px;font-weight:700;color:rgba(255,255,255,0.9);margin-bottom:6px;" id="flagAlertDriver">👤 —</div>
     <div style="font-family:var(--font-mono);font-size:30px;font-weight:700;color:white;margin-bottom:8px;" id="flagAlertPlate">—</div>
     <div style="font-family:var(--font-mono);font-size:44px;font-weight:700;color:#FFD700;" id="flagAlertOdo">—</div>
     <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:8px;" id="flagAlertTime"></div>
@@ -4306,6 +4328,7 @@ function showNotifPopup(rows){
     document.getElementById('popupBatchView').style.display='none';
     document.getElementById('popupPlate').textContent=rec.plate||'—';
     document.getElementById('popupOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-US')+' km':'—';
+    document.getElementById('popupDriver').textContent='👤 '+(rec.driver_name||'—');
     document.getElementById('popupTime').textContent='Submitted: '+fmtDDMMYYYY(rec.created_at)+' at '+fmtTimeHM(rec.created_at);
     const photoWrap=document.getElementById('popupPhotoWrap');
     if(rec.photo_url){document.getElementById('popupPhoto').src=rec.photo_url;photoWrap.style.display='block';}
@@ -4326,9 +4349,9 @@ function showNotifPopup(rows){
     _currentPopupRecord=null;
     document.getElementById('popupSingleView').style.display='none';
     document.getElementById('popupBatchView').style.display='block';
-    document.getElementById('popupBatchCount').textContent=`${rows.length} new submissions — click to view`;
+    document.getElementById('popupBatchCount').textContent=`${rows.length} new readings — click to view`;
     const mismatches=rows.filter(r=>r.ai_odometer!=null&&Math.abs(r.odometer-r.ai_odometer)>25);
-    const plateList=rows.map(r=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate)}</span><span style="font-family:var(--font-mono);">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span></div>`).join('');
+    const plateList=rows.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="font-weight:700;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">👤 ${escapeHtml(r.driver_name||'—')}</span><span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate)}</span><span style="font-family:var(--font-mono);">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span></div>`).join('');
     const mismatchWarn=mismatches.length>0
       ?`<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);font-weight:700;margin-top:12px;">⚠️ ${mismatches.length} submission${mismatches.length!==1?'s have':' has'} an odometer mismatch — ${escapeHtml(mismatches.map(m=>m.plate).join(', '))}</div>`
       :'';
@@ -4381,6 +4404,7 @@ async function approveSubmission(){
 }
 
 function showFlagAlert(rec){
+  document.getElementById('flagAlertDriver').textContent='👤 '+(rec.driver_name||'—');
   document.getElementById('flagAlertPlate').textContent=rec.plate||'—';
   document.getElementById('flagAlertOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-US')+' km':'—';
   document.getElementById('flagAlertTime').textContent=fmtDDMMYYYY(rec.created_at)+' at '+fmtTimeHM(rec.created_at);
