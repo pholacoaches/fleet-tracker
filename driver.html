@@ -70,6 +70,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   text-align: center; box-shadow: var(--shadow); transition: all 0.12s;
 }
 .plate-row:active, .plate-row:hover { border-color: var(--accent); color: var(--accent); background: #E7F5FF; }
+.plate-row .pr-fleet { display: block; font-family: var(--font); font-size: 26px; letter-spacing: 1px; }
+.plate-row .pr-plate-sub { display: block; font-size: 13px; letter-spacing: 1.5px; color: var(--text3); margin-top: 4px; }
+.plate-row:active .pr-plate-sub, .plate-row:hover .pr-plate-sub { color: var(--accent); }
 .plate-none { text-align: center; color: var(--text3); font-size: 14px; font-style: italic; padding: 20px 0; }
 
 /* ── Confirm ── */
@@ -80,6 +83,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   border: 3px solid var(--accent); border-radius: 14px; padding: 22px 18px;
   width: 100%; word-break: break-all; box-shadow: var(--shadow);
 }
+.confirm-fleet { font-family: var(--font); font-size: 20px; font-weight: 700; color: var(--text2); letter-spacing: 1px; margin-bottom: -12px; }
 .confirm-q { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.5; }
 .confirm-btns { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 
@@ -206,7 +210,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 <div id="plateScreen" class="screen">
   <div class="main">
     <div class="step-title">Which vehicle are you driving?</div>
-    <input type="text" class="search-input" id="plateSearch" placeholder="🔍 Search plate..." oninput="renderPlateList()" autocomplete="off">
+    <input type="text" class="search-input" id="plateSearch" placeholder="🔍 Bus number or plate..." oninput="renderPlateList()" autocomplete="off">
     <div class="plate-list" id="plateList"><div class="plate-none">Loading vehicles...</div></div>
   </div>
 </div>
@@ -215,6 +219,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 <div id="confirmScreen" class="screen">
   <div class="main">
     <div class="confirm-wrap">
+      <div class="confirm-fleet" id="confirmFleet" style="display:none;">—</div>
       <div class="confirm-plate" id="confirmPlate">—</div>
       <div class="confirm-q">Is this the vehicle you are driving?</div>
       <div class="confirm-btns">
@@ -293,8 +298,9 @@ const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
 const SB_HEADERS={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`};
 
 let driver=null;          // {name, personal_code}
-let vehiclePlates=[];     // active plates from the vehicles table
+let vehicleList=[];       // [{plate, fleet_no}] active vehicles
 let currentPlate='';
+let currentFleetNo='';    // fleet/bus number of the picked vehicle ('' when not set)
 let photoBlob=null;       // compressed JPEG ready for upload
 let photoBase64='';
 let aiDetectedOdometer=null;
@@ -339,31 +345,53 @@ async function checkDuplicateToday(){
 
 async function loadVehicles(){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?select=plate&active=is.true&order=plate.asc`,{headers:SB_HEADERS});
-    if(res.ok)vehiclePlates=(await res.json()).map(v=>v.plate);
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?select=plate,fleet_no&active=is.true&order=plate.asc`,{headers:SB_HEADERS});
+    if(res.ok){
+      vehicleList=await res.json();
+      // Buses with fleet numbers first (drivers know those best), sorted numerically
+      vehicleList.sort((a,b)=>{
+        if(a.fleet_no&&!b.fleet_no)return -1;
+        if(!a.fleet_no&&b.fleet_no)return 1;
+        if(a.fleet_no&&b.fleet_no)return a.fleet_no.localeCompare(b.fleet_no,undefined,{numeric:true});
+        return a.plate.localeCompare(b.plate);
+      });
+    }
   }catch(err){console.error('[FleetDesk] vehicles load failed:',err);}
   renderPlateList();
 }
 
 function renderPlateList(){
   const q=(document.getElementById('plateSearch').value||'').toUpperCase().replace(/\s+/g,'');
-  const list=vehiclePlates.filter(p=>p.toUpperCase().replace(/\s+/g,'').includes(q));
+  const list=vehicleList.filter(v=>
+    v.plate.toUpperCase().replace(/\s+/g,'').includes(q)||
+    (v.fleet_no||'').toUpperCase().replace(/\s+/g,'').includes(q));
   const el=document.getElementById('plateList');
-  if(vehiclePlates.length===0){el.innerHTML='<div class="plate-none">No vehicles available — please contact the office.</div>';return;}
+  if(vehicleList.length===0){el.innerHTML='<div class="plate-none">No vehicles available — please contact the office.</div>';return;}
   el.innerHTML=list.length
-    ?list.map(p=>`<button class="plate-row" onclick="pickPlate('${p.replace(/'/g,"\\'")}')">${p}</button>`).join('')
-    :'<div class="plate-none">No plates match your search.</div>';
+    ?list.map(v=>{
+      const arg=`'${v.plate.replace(/'/g,"\\'")}'`;
+      return v.fleet_no
+        ?`<button class="plate-row" onclick="pickPlate(${arg})"><span class="pr-fleet">🚌 Bus ${v.fleet_no}</span><span class="pr-plate-sub">${v.plate}</span></button>`
+        :`<button class="plate-row" onclick="pickPlate(${arg})">${v.plate}</button>`;
+    }).join('')
+    :'<div class="plate-none">No vehicles match your search.</div>';
 }
 
 function pickPlate(plate){
+  const v=vehicleList.find(x=>x.plate===plate);
   currentPlate=plate;
+  currentFleetNo=(v&&v.fleet_no)||'';
+  const fleetEl=document.getElementById('confirmFleet');
+  fleetEl.textContent=currentFleetNo?`🚌 Bus ${currentFleetNo}`:'';
+  fleetEl.style.display=currentFleetNo?'block':'none';
   document.getElementById('confirmPlate').textContent=plate;
   showScreen('confirmScreen');
 }
 
 function confirmVehicle(){
-  document.getElementById('formPlate').textContent=currentPlate;
-  document.getElementById('successPlate').textContent=currentPlate;
+  const label=currentFleetNo?`Bus ${currentFleetNo} · ${currentPlate}`:currentPlate;
+  document.getElementById('formPlate').textContent=label;
+  document.getElementById('successPlate').textContent=label;
   showScreen('formScreen');
 }
 
