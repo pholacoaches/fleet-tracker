@@ -577,6 +577,17 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .notif-item-notes { font-size:11px; color:var(--amber); margin-top:3px; font-style:italic; }
 .notif-empty { padding:24px; text-align:center; color:var(--text3); font-size:13px; font-style:italic; }
 
+/* ODOMETER PHOTO THUMBNAILS (signed-URL display) */
+.odo-thumb { width:64px; height:48px; border:1px solid var(--border); border-radius:6px; background:#F1F3F5; display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:pointer; margin-top:4px; }
+.odo-thumb img { width:100%; height:100%; object-fit:cover; image-orientation:from-image; display:block; }
+.odo-thumb-msg { font-size:9px; color:var(--text3); text-align:center; padding:2px 4px; line-height:1.3; }
+.odo-thumb-none { cursor:default; font-size:9px; color:var(--text3); font-style:italic; }
+.odo-thumb-err { border-color:var(--red); background:#FFF5F5; }
+.odo-thumb-err .odo-thumb-msg { color:var(--red); font-weight:700; }
+.odo-thumb-lg { width:100%; height:auto; min-height:80px; max-height:220px; margin-top:0; }
+.odo-thumb-lg img { max-height:220px; object-fit:contain; background:#000; }
+.odo-thumb-lg .odo-thumb-msg { font-size:12px; padding:12px; }
+
 /* DISC RENEWAL TAB */
 .disc-summary-strip { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
 .disc-summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 20px; box-shadow:var(--shadow); flex:1; min-width:140px; position:relative; overflow:hidden; }
@@ -2014,7 +2025,8 @@ function renderVehicleBlock(v,vi){
   const multiSource=(currentReport?.sources||[]).length>1;
   const rows=v.transactions.map(tx=>{
     const srcTag=multiSource?(tx.source==='Engen'?'<span style="font-size:9px;color:#1971C2;font-weight:600;margin-left:4px;">[ENGEN]</span>':tx.source==='Freight'?'<span style="font-size:9px;color:#2F9E44;font-weight:600;margin-left:4px;">[FREIGHT]</span>':''):'';
-    return`<tr><td class="td-date">${tx.date}</td><td class="td-merchant">${tx.merchant}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
+    const photoThumb=tx.driverSubmission?odoThumbHtml(tx.photoPath):'';
+    return`<tr><td class="td-date">${tx.date}</td><td class="td-merchant">${tx.merchant}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
   }).join('');
 
   const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn"><span>⚠</span><span>Odometer query: one or more readings are lower than the previous entry. Please verify with Engen or the driver — may be a data capture error.</span></div>`:'';
@@ -2259,6 +2271,106 @@ function authToken(){
   const t=localStorage.getItem(AUTH_TOKEN_KEY);
   return t || SUPABASE_KEY;
 }
+
+// ── ODOMETER PHOTOS (private bucket, signed URLs) ─────────────────────────────
+const ODO_PHOTO_BUCKET='odometer-photos';
+const ODO_PHOTO_TTL=5400; // seconds (90 min)
+const _signedUrlCache={}; // photo_path -> {url, expires(ms)}
+
+// photo_path rows are stored as "odometer-photos/<file>.jpg" — the sign endpoint
+// wants the path WITHIN the bucket, so strip the bucket prefix if present.
+async function getSignedPhotoUrl(photoPath){
+  if(!photoPath)return null;
+  const cached=_signedUrlCache[photoPath];
+  if(cached&&Date.now()<cached.expires)return cached.url;
+  const objectPath=photoPath.replace(new RegExp('^'+ODO_PHOTO_BUCKET+'/'),'').split('/').map(encodeURIComponent).join('/');
+  const res=await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${ODO_PHOTO_BUCKET}/${objectPath}`,{
+    method:'POST',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json'},
+    body:JSON.stringify({expiresIn:ODO_PHOTO_TTL})
+  });
+  if(!res.ok)throw new Error('Signed URL request failed: '+res.status);
+  const data=await res.json();
+  if(!data.signedURL)throw new Error('No signedURL in sign response');
+  const url=`${SUPABASE_URL}/storage/v1${data.signedURL}`;
+  _signedUrlCache[photoPath]={url,expires:Date.now()+(ODO_PHOTO_TTL-300)*1000};
+  return url;
+}
+
+// Returns placeholder HTML and schedules hydration once it's in the DOM.
+// variant 'lg' = full-width (popup); default = small table thumbnail.
+let _odoThumbSeq=0;
+function odoThumbHtml(photoPath,variant){
+  const cls='odo-thumb'+(variant==='lg'?' odo-thumb-lg':'');
+  if(!photoPath)return`<div class="${cls} odo-thumb-none">No photo</div>`;
+  const id='odoThumb-'+(++_odoThumbSeq);
+  setTimeout(()=>hydrateOdoThumb(id),0);
+  return`<div class="${cls}" id="${id}" data-path="${escapeHtml(photoPath)}"><span class="odo-thumb-msg">Loading…</span></div>`;
+}
+
+async function hydrateOdoThumb(id){
+  const el=document.getElementById(id);
+  if(!el||!el.dataset.path)return;
+  const path=el.dataset.path;
+  el.classList.remove('odo-thumb-err');
+  el.innerHTML='<span class="odo-thumb-msg">Loading…</span>';
+  el.onclick=null;
+  let done=false;
+  const fail=()=>{
+    if(done)return;
+    done=true;
+    el.classList.add('odo-thumb-err');
+    el.innerHTML='<span class="odo-thumb-msg">Photo unavailable — tap to retry</span>';
+    el.onclick=e=>{e.stopPropagation();hydrateOdoThumb(id);};
+  };
+  const timer=setTimeout(fail,10000);
+  try{
+    const url=await getSignedPhotoUrl(path);
+    if(done)return;
+    const img=new Image();
+    img.alt='Odometer photo';
+    img.onload=()=>{
+      if(done)return;
+      done=true;
+      clearTimeout(timer);
+      el.innerHTML='';
+      el.appendChild(img);
+      el.onclick=e=>{e.stopPropagation();openOdoPhotoOverlay(path);};
+    };
+    img.onerror=()=>{clearTimeout(timer);fail();};
+    img.src=url;
+  }catch(err){
+    clearTimeout(timer);
+    fail();
+  }
+}
+
+async function openOdoPhotoOverlay(photoPath){
+  const ov=document.getElementById('odoPhotoOverlay');
+  const img=document.getElementById('odoPhotoOverlayImg');
+  const msg=document.getElementById('odoPhotoOverlayMsg');
+  if(!ov)return;
+  ov.style.display='flex';
+  img.style.display='none';
+  img.src='';
+  msg.textContent='Loading photo…';
+  msg.style.display='block';
+  try{
+    const url=await getSignedPhotoUrl(photoPath);
+    img.onload=()=>{msg.style.display='none';img.style.display='block';};
+    img.onerror=()=>{msg.textContent='Photo unavailable';};
+    img.src=url;
+  }catch(err){
+    msg.textContent='Photo unavailable';
+  }
+}
+function closeOdoPhotoOverlay(){
+  const ov=document.getElementById('odoPhotoOverlay');
+  if(!ov)return;
+  ov.style.display='none';
+  document.getElementById('odoPhotoOverlayImg').src='';
+}
+
 let notifOpen=false;
 let lastNotifCheck=0;
 let notifData=[];
@@ -2298,9 +2410,13 @@ function autoApplyOdometerReadings(){
           isCompetitor:false,
           source:'Driver',
           driverSubmission:true,
+          photoPath:submission.photo_path||null,
           notes:submission.notes||''
         });
         vehicle.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
+        updated=true;
+      }else if(!existing.photoPath&&submission.photo_path){
+        existing.photoPath=submission.photo_path;
         updated=true;
       }
     }
@@ -4278,7 +4394,7 @@ initApp();
       <div id="popupDriver" style="font-size:13px;font-weight:700;color:var(--text2);margin:-8px 0 16px;">👤 —</div>
       <div id="popupPhotoWrap" style="display:none;margin-bottom:16px;">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Odometer Photo</div>
-        <img id="popupPhoto" src="" alt="Odometer photo" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:220px;object-fit:cover;">
+        <div id="popupPhotoBox"></div>
       </div>
       <div id="popupMismatch" style="display:none;background:#E7F5FF;border:2px solid #1971C2;border-radius:8px;padding:10px 12px;font-size:12px;color:#1971C2;font-weight:700;margin-bottom:16px;line-height:1.6;"></div>
       <div id="popupNotes" style="display:none;background:var(--amber-light);border:1px solid #FFE066;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:16px;"></div>
@@ -4314,6 +4430,13 @@ initApp();
   <button onclick="closeFlagAlert()" style="padding:14px 40px;background:white;color:var(--red);border:none;border-radius:10px;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;">Acknowledged — Dismiss</button>
 </div>
 
+<!-- ODOMETER PHOTO FULL-SCREEN VIEWER -->
+<div id="odoPhotoOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:10002;align-items:center;justify-content:center;padding:24px;" onclick="event.stopPropagation();closeOdoPhotoOverlay();">
+  <button onclick="event.stopPropagation();closeOdoPhotoOverlay();" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.15);border:none;border-radius:8px;color:white;font-size:24px;width:40px;height:40px;cursor:pointer;line-height:1;">×</button>
+  <div id="odoPhotoOverlayMsg" style="color:rgba(255,255,255,0.85);font-size:14px;font-weight:700;">Loading photo…</div>
+  <img id="odoPhotoOverlayImg" src="" alt="Odometer photo" style="display:none;max-width:100%;max-height:100%;border-radius:8px;image-orientation:from-image;object-fit:contain;">
+</div>
+
 <script>
 let _currentPopupRecord=null;
 
@@ -4331,8 +4454,11 @@ function showNotifPopup(rows){
     document.getElementById('popupDriver').textContent='👤 '+(rec.driver_name||'—');
     document.getElementById('popupTime').textContent='Submitted: '+fmtDDMMYYYY(rec.created_at)+' at '+fmtTimeHM(rec.created_at);
     const photoWrap=document.getElementById('popupPhotoWrap');
-    if(rec.photo_url){document.getElementById('popupPhoto').src=rec.photo_url;photoWrap.style.display='block';}
-    else{photoWrap.style.display='none';}
+    const photoBox=document.getElementById('popupPhotoBox');
+    photoWrap.style.display='block';
+    if(rec.photo_path)photoBox.innerHTML=odoThumbHtml(rec.photo_path,'lg');
+    else if(rec.photo_url)photoBox.innerHTML=`<img src="${escapeHtml(rec.photo_url)}" alt="Odometer photo" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:220px;object-fit:cover;image-orientation:from-image;">`;
+    else photoBox.innerHTML='<div class="odo-thumb odo-thumb-lg odo-thumb-none">No photo</div>';
     const notesEl=document.getElementById('popupNotes');
     if(rec.notes){notesEl.textContent='📝 '+rec.notes;notesEl.style.display='block';}
     else{notesEl.style.display='none';}
