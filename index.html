@@ -357,6 +357,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   transition: max-height 0.4s ease;
 }
 .vc.open .vc-body { max-height: 2000px; }
+.tx-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .tx-table { width: 100%; border-collapse: collapse; }
 .tx-table thead tr { background: var(--bg); }
 .tx-table th {
@@ -2033,7 +2034,7 @@ function renderVehicleBlock(v,vi){
   const highNote=v.isHighSpend?`<div class="vc-note note-high"><span>🔴</span><span>High spend alert: this vehicle's fuel cost is significantly above the fleet average for this period. Please review.</span></div>`:'';
   const chevron=`<svg class="vc-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 8 10 13 15 8"/></svg>`;
 
-  return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${plate}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary"><span class="vc-stat">Last odo: <strong>${lastOdo}</strong></span><span class="vc-stat">Avg km/L: <strong>${v.avgKmPerLitre||'—'}</strong></span><span class="vc-stat">Fills: <strong>${v.transactions.length}</strong></span></div></button><div class="vc-body"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table><div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${v.totalLitres.toFixed(2)} L</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>${odoNote}${highNote}${svcRowHtml}</div></div>`;
+  return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${plate}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary"><span class="vc-stat">Last odo: <strong>${lastOdo}</strong></span><span class="vc-stat">Avg km/L: <strong>${v.avgKmPerLitre||'—'}</strong></span><span class="vc-stat">Fills: <strong>${v.transactions.length}</strong></span></div></button><div class="vc-body"><div class="tx-table-wrap"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table></div><div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${v.totalLitres.toFixed(2)} L</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>${odoNote}${highNote}${svcRowHtml}</div></div>`;
 }
 
 function renderVehicleTable(vehicles){
@@ -2395,30 +2396,28 @@ function autoApplyOdometerReadings(){
     if(!submission.plate||!submission.odometer)return;
     const vehicle=currentReport.vehicles.find(v=>v.plate===submission.plate);
     if(!vehicle)return;
-    const lastTx=vehicle.transactions[vehicle.transactions.length-1];
-    const currentOdo=lastTx?lastTx.odometer:0;
-    if(submission.odometer>currentOdo){
-      // Add a synthetic transaction with the driver submitted odometer
-      const existing=vehicle.transactions.find(t=>t.driverSubmission&&t.odometer===submission.odometer);
-      if(!existing){
-        vehicle.transactions.push({
-          date:fmtDDMMYYYY(submission.created_at),
-          merchant:'Driver Submission'+(submission.driver_name?' — '+submission.driver_name:''),
-          odometer:submission.odometer,
-          litres:0,
-          amount:0,
-          isCompetitor:false,
-          source:'Driver',
-          driverSubmission:true,
-          photoPath:submission.photo_path||null,
-          notes:submission.notes||''
-        });
-        vehicle.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
-        updated=true;
-      }else if(!existing.photoPath&&submission.photo_path){
-        existing.photoPath=submission.photo_path;
-        updated=true;
-      }
+    // Add a synthetic transaction with the driver submitted odometer.
+    // No lower-bound check against the last fuel odometer: a reading below it
+    // must still show as a row — computeVehicleStats flags the decrease (⚠).
+    const existing=vehicle.transactions.find(t=>t.driverSubmission&&t.odometer===submission.odometer);
+    if(!existing){
+      vehicle.transactions.push({
+        date:fmtDDMMYYYY(submission.created_at),
+        merchant:'Driver Submission'+(submission.driver_name?' — '+submission.driver_name:''),
+        odometer:submission.odometer,
+        litres:0,
+        amount:0,
+        isCompetitor:false,
+        source:'Driver',
+        driverSubmission:true,
+        photoPath:submission.photo_path||null,
+        notes:submission.notes||''
+      });
+      vehicle.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
+      updated=true;
+    }else if(!existing.photoPath&&submission.photo_path){
+      existing.photoPath=submission.photo_path;
+      updated=true;
     }
   });
   if(updated){
