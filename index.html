@@ -2501,7 +2501,7 @@ function updateNotifBadge(){
   const badge=document.getElementById('notifBadge');
   const btn=document.getElementById('notifBtn');
   if(!badge||!btn)return;
-  const count=notifData.length;
+  const count=notifData.filter(n=>!n.status||n.status==='pending').length;
   if(count>0){
     badge.textContent=count>99?'99+':count;
     badge.style.display='flex';
@@ -4612,6 +4612,7 @@ async function updateSubmissionStatus(id,status){
     }
     const item=notifData.find(n=>n.id===id);
     if(item)item.status=status;
+    updateNotifBadge();
     return true;
   }catch(err){
     console.error('[FleetDesk] Status update error:',err);
