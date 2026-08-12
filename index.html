@@ -2230,7 +2230,7 @@ async function renderBackupsList(){
 function exportCSV(){
   if(!currentReport){alert('No report loaded.');return;}
   const rows=[['Plate','Date','Merchant','Odometer','Litres','Amount','km/L','R/km','Competitor','Odometer Flag']];
-  currentReport.vehicles.forEach(v=>{v.transactions.forEach(tx=>{rows.push([v.plate,tx.date,tx.merchant,tx.odometer||'',tx.litres,tx.amount,tx.kmPerLitre||'',tx.costPerKm||'',tx.isCompetitor?'Yes':'No',tx.odometerFlag?'Yes':'No']);});});
+  vehiclesWithDriverSubmissions().forEach(v=>{v.transactions.forEach(tx=>{rows.push([v.plate,tx.date,tx.merchant,tx.odometer||'',tx.litres,tx.amount,tx.kmPerLitre||'',tx.costPerKm||'',tx.isCompetitor?'Yes':'No',tx.odometerFlag?'Yes':'No']);});});
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
@@ -3394,7 +3394,7 @@ async function fetchMaintData(){
 }
 
 function latestOdoFromReport(plate){
-  const v=currentReport?currentReport.vehicles.find(v=>v.plate===plate):null;
+  const v=vehiclesWithDriverSubmissions().find(v=>v.plate===plate)||null;
   if(v&&v.transactions.length>0){
     const last=v.transactions[v.transactions.length-1];
     if(last.odometer)return last.odometer;
@@ -4149,6 +4149,10 @@ async function generateReport(){
   const periodVal=document.getElementById('repPeriod').value;
   const reports=periodVal==='__all__'?state.reports.map((r,i)=>({r,i})):[{r:state.reports[+periodVal],i:+periodVal}];
   const filterVeh=vs=>vehFilter==='__all__'?vs:vs.filter(v=>v.plate===vehFilter);
+  // Approved driver submissions live in the DB, not in stored reports — merge
+  // them into the ACTIVE report at export time (same view as the vehicle
+  // blocks). Older reports export exactly as stored.
+  const repVeh=r=>r===currentReport?vehiclesWithDriverSubmissions():r.vehicles;
 
   // Fetch only what the selected sections need
   if(sections.includes('compliance'))await fetchCompliance();
@@ -4161,7 +4165,7 @@ async function generateReport(){
   let glanceHtml='';
   {
     let gSpend=0,gLitres=0;const gPlates=new Set();
-    reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{gSpend+=v.totalAmount;gLitres+=v.totalLitres;gPlates.add(v.plate);}));
+    reports.forEach(({r})=>filterVeh(repVeh(r)).forEach(v=>{gSpend+=v.totalAmount;gLitres+=v.totalLitres;gPlates.add(v.plate);}));
     const gCPL=gLitres>0?gSpend/gLitres:0;
     const s1=`Total fuel spend of <strong>${fmtRand(gSpend)}</strong> across <strong>${gPlates.size}</strong> vehicle${gPlates.size===1?'':'s'} — ${fmtLitres(gLitres)} at an average of ${fmtRand(gCPL)} per litre.`;
     const attention=[];
@@ -4187,7 +4191,7 @@ async function generateReport(){
   if(vehFilter!=='__all__'){
     let vSpend=0,vLitres=0,vFills=0;
     const kmlVals=[];let firstOdo=null,lastOdo=null;
-    reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{
+    reports.forEach(({r})=>filterVeh(repVeh(r)).forEach(v=>{
       vSpend+=v.totalAmount;vLitres+=v.totalLitres;vFills+=v.transactions.length;
       v.transactions.forEach(tx=>{
         if(tx.kmPerLitre)kmlVals.push(tx.kmPerLitre);
@@ -4214,7 +4218,7 @@ async function generateReport(){
   // ── Fuel spend summary ──
   if(sections.includes('fuel')){
     let spend=0,litres=0,fills=0;
-    reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{spend+=v.totalAmount;litres+=v.totalLitres;fills+=v.transactions.length;}));
+    reports.forEach(({r})=>filterVeh(repVeh(r)).forEach(v=>{spend+=v.totalAmount;litres+=v.totalLitres;fills+=v.transactions.length;}));
     const avgCPL=litres>0?spend/litres:0;
     body.push({title:'Fuel Spend Summary',html:repTiles(
       [['Total fuel spend',fmtRand(spend)],
@@ -4230,7 +4234,7 @@ async function generateReport(){
   if(sections.includes('blocks')){
     let html='';
     reports.forEach(({r})=>{
-      const vs=filterVeh(r.vehicles);
+      const vs=filterVeh(repVeh(r));
       if(vs.length===0)return;
       html+=`<div class="rep-subhead">${escapeHtml(r.scheduleDate||'Report')}</div>`;
       vs.forEach(v=>{
@@ -4252,7 +4256,7 @@ async function generateReport(){
   // ── Odometer alerts ──
   if(sections.includes('odo')){
     const rows=[];
-    reports.forEach(({r})=>filterVeh(r.vehicles).filter(v=>v.hasOdometerIssue).forEach(v=>{
+    reports.forEach(({r})=>filterVeh(repVeh(r)).filter(v=>v.hasOdometerIssue).forEach(v=>{
       v.transactions.filter(t=>t.odometerFlag).forEach(t=>rows.push([v.plate,r.scheduleDate||'—',t.date,t.odometer?t.odometer.toLocaleString('en-US'):'—']));
     }));
     body.push({title:'Odometer Alerts',html:rows.length?repTable(['Vehicle','Period','Date','Flagged Odometer'],rows,[3]):'<p class="rep-empty">No odometer anomalies found. ✓</p>'});
@@ -4261,7 +4265,7 @@ async function generateReport(){
   // ── High spend vehicles: top-5 total-spend bar chart (spend + litres per bar) ──
   if(sections.includes('highspend')){
     const agg={};
-    reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{const a=agg[v.plate]||(agg[v.plate]={spend:0,litres:0});a.spend+=v.totalAmount;a.litres+=v.totalLitres;}));
+    reports.forEach(({r})=>filterVeh(repVeh(r)).forEach(v=>{const a=agg[v.plate]||(agg[v.plate]={spend:0,litres:0});a.spend+=v.totalAmount;a.litres+=v.totalLitres;}));
     const top=Object.entries(agg).sort((a,b)=>b[1].spend-a[1].spend).slice(0,5);
     const maxSpend=top.length?top[0][1].spend:0;
     const shades=['#0D2B4E','#14508A','#1971C2','#3E8FD4','#74C0FC'];
@@ -4273,7 +4277,7 @@ async function generateReport(){
   // ── Cost per km per vehicle ──
   if(sections.includes('cpk')){
     const agg={};
-    reports.forEach(({r})=>filterVeh(r.vehicles).forEach(v=>{
+    reports.forEach(({r})=>filterVeh(repVeh(r)).forEach(v=>{
       const a=agg[v.plate]||(agg[v.plate]={cpk:[],kml:[]});
       v.transactions.forEach(t=>{if(t.costPerKm)a.cpk.push(t.costPerKm);if(t.kmPerLitre)a.kml.push(t.kmPerLitre);});
     }));
