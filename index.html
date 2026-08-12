@@ -1495,6 +1495,28 @@ function saveVehicleService(plate){
 }
 
 let state=loadStorage();
+
+// One-time cleanup: earlier versions copied driver submissions into localStorage
+// as persisted transactions. The database (odometer_readings) is now the single
+// source of truth — strip any stale persisted copies and re-save cleaned state.
+(function stripPersistedDriverSubmissions(){
+  let changed=false;
+  (state.reports||[]).forEach(r=>(r.vehicles||[]).forEach(v=>{
+    if(!v.transactions)return;
+    const kept=v.transactions.filter(t=>!t.driverSubmission);
+    if(kept.length!==v.transactions.length){v.transactions=kept;changed=true;}
+  }));
+  if(changed){
+    (state.reports||[]).forEach(r=>{
+      if(!r.vehicles||r.vehicles.length===0)return;
+      const fa=r.vehicles.reduce((s,v)=>s+v.totalAmount,0)/r.vehicles.length;
+      r.vehicles=r.vehicles.map(v=>computeVehicleStats(v,fa));
+    });
+    saveStorage(state);
+    console.log('[FleetDesk] Stripped stale persisted driver submissions from localStorage');
+  }
+})();
+
 let activeReportIndex=state.reports.length-1;
 let currentView='grid';
 let currentReport=null;
@@ -1968,7 +1990,7 @@ function filterVehicles(){
   if(!currentReport)return;
   const search=(document.getElementById('searchInput')?.value||'').toLowerCase();
   const sort=document.getElementById('sortSelect')?.value||'spend';
-  let vehicles=[...currentReport.vehicles];
+  let vehicles=vehiclesWithDriverSubmissions();
   if(search)vehicles=vehicles.filter(v=>v.plate.toLowerCase().includes(search));
   if(sort==='spend')vehicles.sort((a,b)=>b.totalAmount-a.totalAmount);
   else if(sort==='litres')vehicles.sort((a,b)=>b.totalLitres-a.totalLitres);
@@ -2453,24 +2475,38 @@ async function fetchSubmissions(){
     if(response.ok){
       notifData=await response.json();
       updateNotifBadge();
-      autoApplyOdometerReadings();
+      filterVehicles();
     }
   }catch(err){console.error('Notif fetch failed:',err);}
 }
 
-function autoApplyOdometerReadings(){
-  if(!currentReport||!notifData||notifData.length===0)return;
-  let updated=false;
-  notifData.forEach(submission=>{
-    if(!submission.plate||!submission.odometer)return;
-    const vehicle=currentReport.vehicles.find(v=>v.plate===submission.plate);
-    if(!vehicle)return;
-    // Add a synthetic transaction with the driver submitted odometer.
-    // No lower-bound check against the last fuel odometer: a reading below it
-    // must still show as a row — computeVehicleStats flags the decrease (⚠).
-    const existing=vehicle.transactions.find(t=>t.driverSubmission&&t.odometer===submission.odometer);
-    if(!existing){
-      vehicle.transactions.push({
+// Render-time merge: returns COPIES of currentReport.vehicles with APPROVED
+// driver submissions (from notifData, i.e. the odometer_readings table) added
+// as synthetic transactions. Pure — never mutates currentReport or the
+// persisted state, and never touches localStorage: the DB is the single
+// source of truth, so deleting/rejecting a reading removes it on next render.
+function vehiclesWithDriverSubmissions(){
+  if(!currentReport)return[];
+  const approved=(notifData||[]).filter(n=>n.status==='approved'&&n.plate&&n.odometer);
+  const byPlate={};
+  approved.forEach(s=>{(byPlate[s.plate]=byPlate[s.plate]||[]).push(s);});
+  const fa=currentReport.vehicles.reduce((s,v)=>s+v.totalAmount,0)/currentReport.vehicles.length;
+  return currentReport.vehicles.map(v=>{
+    const subs=byPlate[v.plate];
+    if(!subs)return v;
+    // Copy the vehicle + its transactions so computeVehicleStats works on the
+    // merged view without writing flags back into the persisted report.
+    const merged={...v,transactions:v.transactions.map(t=>({...t}))};
+    subs.forEach(submission=>{
+      // Add a synthetic transaction with the driver submitted odometer.
+      // No lower-bound check against the last fuel odometer: a reading below it
+      // must still show as a row — computeVehicleStats flags the decrease (⚠).
+      const existing=merged.transactions.find(t=>t.driverSubmission&&t.odometer===submission.odometer);
+      if(existing){
+        if(!existing.photoPath&&submission.photo_path)existing.photoPath=submission.photo_path;
+        return;
+      }
+      merged.transactions.push({
         date:fmtDDMMYYYY(submission.created_at),
         merchant:'Driver Submission'+(submission.driver_name?' — '+submission.driver_name:''),
         odometer:submission.odometer,
@@ -2482,19 +2518,10 @@ function autoApplyOdometerReadings(){
         photoPath:submission.photo_path||null,
         notes:submission.notes||''
       });
-      vehicle.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
-      updated=true;
-    }else if(!existing.photoPath&&submission.photo_path){
-      existing.photoPath=submission.photo_path;
-      updated=true;
-    }
+    });
+    merged.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
+    return computeVehicleStats(merged,fa);
   });
-  if(updated){
-    const fa=currentReport.vehicles.reduce((s,v)=>s+v.totalAmount,0)/currentReport.vehicles.length;
-    currentReport.vehicles=currentReport.vehicles.map(v=>computeVehicleStats(v,fa));
-    saveStorage(state);
-    filterVehicles();
-  }
 }
 
 function updateNotifBadge(){
@@ -2618,7 +2645,7 @@ async function pollForNewSubmissions(){
       pollTimestamp=rec.created_at;
     });
     updateNotifBadge();
-    autoApplyOdometerReadings();
+    filterVehicles();
     if(notifOpen)renderNotifPanel();
     console.log('[FleetDesk]',rows.length,'row(s) added to batch. Total in window:',batchRows.length);
 
@@ -4613,6 +4640,7 @@ async function updateSubmissionStatus(id,status){
     const item=notifData.find(n=>n.id===id);
     if(item)item.status=status;
     updateNotifBadge();
+    filterVehicles();
     return true;
   }catch(err){
     console.error('[FleetDesk] Status update error:',err);
