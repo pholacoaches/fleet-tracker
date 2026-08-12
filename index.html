@@ -2376,6 +2376,71 @@ function closeOdoPhotoOverlay(){
   document.getElementById('odoPhotoOverlayImg').src='';
 }
 
+// ── INVOICE ATTACHMENTS (same private bucket, signed URLs) ────────────────────
+// invoice_url rows may hold a legacy full public URL ("/object/public/odometer-photos/<file>")
+// or a plain object path ("odometer-photos/<file>") — normalise to the path within the bucket.
+function invoiceObjectPath(invoiceUrl){
+  if(!invoiceUrl)return null;
+  const m=invoiceUrl.match(/\/object\/(?:public|sign)\/odometer-photos\/([^?]+)/);
+  if(m)return decodeURIComponent(m[1]);
+  return invoiceUrl.replace(/^odometer-photos\//,'');
+}
+
+// Placeholder link that hydrates itself with a signed URL (same 90-min TTL +
+// cache as odometer photos). Works for images and PDFs — both open in a new tab.
+let _invLinkSeq=0;
+function invoiceLinkHtml(invoiceUrl,label){
+  if(!invoiceUrl)return'';
+  const id='invLink-'+(++_invLinkSeq);
+  setTimeout(()=>hydrateInvoiceLink(id),0);
+  return`<a class="tyre-invoice-link" id="${id}" data-inv="${escapeHtml(invoiceUrl)}" data-label="${escapeHtml(label||'View')}">📄 Loading…</a>`;
+}
+
+async function hydrateInvoiceLink(id){
+  const el=document.getElementById(id);
+  if(!el||!el.dataset.inv)return;
+  el.textContent='📄 Loading…';
+  el.removeAttribute('href');
+  el.onclick=null;
+  try{
+    const url=await getSignedPhotoUrl(invoiceObjectPath(el.dataset.inv));
+    el.href=url;
+    el.target='_blank';
+    el.rel='noopener';
+    el.textContent='📄 '+el.dataset.label;
+  }catch(err){
+    el.textContent='⚠️ Invoice unavailable — tap to retry';
+    el.onclick=e=>{e.preventDefault();hydrateInvoiceLink(id);};
+  }
+}
+
+// Shared uploader for tyre + maintenance invoices. Returns the stored object
+// path on success; THROWS on any failure so callers never save a record that
+// pretends the invoice was attached.
+const INVOICE_MAX_BYTES=10*1024*1024;
+function invoiceFileProblem(file){
+  const isPdf=file.type==='application/pdf'||/\.pdf$/i.test(file.name);
+  const isImage=/^image\//.test(file.type);
+  if(!isPdf&&!isImage)return'That file type is not supported — please attach a photo or a PDF.';
+  if(file.size>INVOICE_MAX_BYTES)return'That file is larger than 10 MB — please attach a smaller photo or PDF.';
+  return null;
+}
+async function uploadInvoiceFile(file,prefix,plate){
+  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+  const filename=`${prefix}_${plate.replace(/\s+/g,'_')}_${Date.now()}.${ext}`;
+  const res=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
+    method:'POST',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},
+    body:file
+  });
+  if(!res.ok){
+    const body=await res.text().catch(()=>'');
+    console.error('[FleetDesk] Invoice upload failed:',res.status,body);
+    throw new Error('Invoice upload failed: '+res.status);
+  }
+  return`odometer-photos/${filename}`;
+}
+
 let notifOpen=false;
 let lastNotifCheck=0;
 let notifData=[];
@@ -3046,6 +3111,7 @@ function renderTyreVehiclePanel(){
           ${t.is_retread?'<span class="tyre-retread-badge">Retread</span>':''}
         </div>
         <div class="tyre-card-body">
+          ${t.invoice_url?`<div class="tyre-info-row"><span class="tyre-info-label">Invoice</span>${invoiceLinkHtml(t.invoice_url,'View')}</div>`:''}
           <div class="tyre-info-row"><span class="tyre-info-label">Brand</span><span class="tyre-info-val">${escapeHtml(t.brand)||'—'}${t.model?' '+escapeHtml(t.model):''}</span></div>
           <div class="tyre-info-row"><span class="tyre-info-label">Size</span><span class="tyre-info-val mono">${escapeHtml(t.size)||'—'}</span></div>
           <div class="tyre-info-row"><span class="tyre-info-label">Cost</span><span class="tyre-info-val mono">${t.cost!=null?'R'+Number(t.cost).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</span></div>
@@ -3053,7 +3119,6 @@ function renderTyreVehiclePanel(){
           <div class="tyre-info-row"><span class="tyre-info-label">Date Fitted</span><span class="tyre-info-val mono">${t.date_fitted||'—'}</span></div>
           ${t.supplier?`<div class="tyre-info-row"><span class="tyre-info-label">Supplier</span><span class="tyre-info-val">${escapeHtml(t.supplier)}</span></div>`:''}
           ${t.serial_dot?`<div class="tyre-info-row"><span class="tyre-info-label">Serial / DOT</span><span class="tyre-info-val mono">${escapeHtml(t.serial_dot)}</span></div>`:''}
-          ${t.invoice_url?`<div class="tyre-info-row"><span class="tyre-info-label">Invoice</span><a class="tyre-invoice-link" href="${escapeHtml(t.invoice_url)}" target="_blank">📄 View</a></div>`:''}
           ${t.notes?`<div class="tyre-info-row"><span class="tyre-info-label">Notes</span><span class="tyre-info-val">${escapeHtml(t.notes)}</span></div>`:''}
         </div>
       </div>`).join('')}</div>`;
@@ -3087,8 +3152,8 @@ function renderTyreVehiclePanel(){
         <div class="tf-field"><label>Notes</label><input type="text" id="tf-notes" placeholder="Optional"></div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <label class="tf-file-btn" for="tf-invoice">📄 <span id="tfInvoiceLabel">Attach invoice photo (optional)</span></label>
-        <input type="file" id="tf-invoice" accept="image/*,.pdf" onchange="tyreInvoiceChosen(this)">
+        <label class="tf-file-btn" for="tf-invoice">📄 <span id="tfInvoiceLabel">Attach invoice — photo or PDF (optional)</span></label>
+        <input type="file" id="tf-invoice" accept="image/*,application/pdf,.pdf" onchange="tyreInvoiceChosen(this)">
         <button class="def-save" id="tfSaveBtn" onclick="submitTyre()">💾 Save Tyre</button>
         <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="toggleAddTyreForm()">Cancel</button>
       </div>
@@ -3135,23 +3200,29 @@ function tyreBrandChanged(sel){
 }
 
 function tyreInvoiceChosen(input){
-  tyreInvoiceFile=input.files&&input.files[0]?input.files[0]:null;
-  document.getElementById('tfInvoiceLabel').textContent=tyreInvoiceFile?tyreInvoiceFile.name:'Attach invoice photo (optional)';
+  const errEl=document.getElementById('tyreFormErr');
+  const file=input.files&&input.files[0]?input.files[0]:null;
+  if(file){
+    const problem=invoiceFileProblem(file);
+    if(problem){
+      input.value='';
+      tyreInvoiceFile=null;
+      document.getElementById('tfInvoiceLabel').textContent='Attach invoice — photo or PDF (optional)';
+      errEl.textContent=problem;
+      errEl.classList.add('show');
+      return;
+    }
+    errEl.classList.remove('show');
+  }
+  tyreInvoiceFile=file;
+  document.getElementById('tfInvoiceLabel').textContent=file?file.name:'Attach invoice — photo or PDF (optional)';
 }
 
+// Throws on failure — submitTyre aborts the save so a record is never stored
+// pretending its invoice was attached.
 async function uploadTyreInvoice(plate){
   if(!tyreInvoiceFile)return null;
-  try{
-    const ext=(tyreInvoiceFile.name.split('.').pop()||'jpg').toLowerCase();
-    const filename=`tyre-invoice_${plate.replace(/\s+/g,'_')}_${Date.now()}.${ext}`;
-    const res=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
-      method:'POST',
-      headers:{'Authorization':`Bearer ${authToken()}`,'Content-Type':tyreInvoiceFile.type,'x-upsert':'true'},
-      body:tyreInvoiceFile
-    });
-    if(res.ok)return`${SUPABASE_URL}/storage/v1/object/public/odometer-photos/${filename}`;
-  }catch(err){console.error('[FleetDesk] Invoice upload failed:',err);}
-  return null;
+  return uploadInvoiceFile(tyreInvoiceFile,'tyre-invoice',plate);
 }
 
 async function submitTyre(){
@@ -3188,7 +3259,17 @@ async function submitTyre(){
   btn.disabled=true;
   btn.textContent='Saving...';
   try{
-    const invoiceUrl=await uploadTyreInvoice(plate);
+    let invoiceUrl=null;
+    try{
+      invoiceUrl=await uploadTyreInvoice(plate);
+    }catch(upErr){
+      console.error('[FleetDesk] Tyre invoice upload failed:',upErr);
+      errEl.textContent='Invoice upload failed — the tyre was NOT saved. Please try again (photo or PDF, max 10 MB).';
+      errEl.classList.add('show');
+      btn.disabled=false;
+      btn.textContent='💾 Save Tyre';
+      return;
+    }
     const body={
       plate,position,brand,size,
       model:model||null,
@@ -3519,7 +3600,7 @@ function renderMaintJobCard(j,i){
       ${j.notes?`<div style="font-size:11px;color:var(--amber);font-style:italic;margin-top:8px;">📝 ${escapeHtml(j.notes)}</div>`:''}
     </div>
     <div class="maint-job-footer">
-      <span>${j.invoice_url?`<a class="tyre-invoice-link" href="${escapeHtml(j.invoice_url)}" target="_blank">📄 View Invoice</a>`:''}</span>
+      <span>${j.invoice_url?invoiceLinkHtml(j.invoice_url,'View Invoice'):''}</span>
       ${open?`<button class="def-save" style="background:var(--green);" onclick="markJobDone('${j.id}')">✓ Back in service</button>`:''}
     </div>
   </div>`;
@@ -3574,8 +3655,8 @@ function renderMaintVehiclePanel(){
         <button class="btn btn-outline" style="font-size:11px;padding:5px 12px;margin-top:4px;" onclick="addMaintPartRow()">＋ Add Part</button>
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <label class="tf-file-btn" for="mf-invoice">📄 <span id="mfInvoiceLabel">Attach invoice photo (optional)</span></label>
-        <input type="file" id="mf-invoice" accept="image/*,.pdf" onchange="maintInvoiceChosen(this)">
+        <label class="tf-file-btn" for="mf-invoice">📄 <span id="mfInvoiceLabel">Attach invoice — photo or PDF (optional)</span></label>
+        <input type="file" id="mf-invoice" accept="image/*,application/pdf,.pdf" onchange="maintInvoiceChosen(this)">
         <button class="def-save" id="mfSaveBtn" onclick="submitMaintJob()">💾 Save Job</button>
         <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="toggleAddJobForm()">Cancel</button>
       </div>
@@ -3617,23 +3698,29 @@ async function toggleAddJobForm(){
 }
 
 function maintInvoiceChosen(input){
-  maintInvoiceFile=input.files&&input.files[0]?input.files[0]:null;
-  document.getElementById('mfInvoiceLabel').textContent=maintInvoiceFile?maintInvoiceFile.name:'Attach invoice photo (optional)';
+  const errEl=document.getElementById('maintFormErr');
+  const file=input.files&&input.files[0]?input.files[0]:null;
+  if(file){
+    const problem=invoiceFileProblem(file);
+    if(problem){
+      input.value='';
+      maintInvoiceFile=null;
+      document.getElementById('mfInvoiceLabel').textContent='Attach invoice — photo or PDF (optional)';
+      errEl.textContent=problem;
+      errEl.classList.add('show');
+      return;
+    }
+    errEl.classList.remove('show');
+  }
+  maintInvoiceFile=file;
+  document.getElementById('mfInvoiceLabel').textContent=file?file.name:'Attach invoice — photo or PDF (optional)';
 }
 
+// Throws on failure — submitMaintJob aborts the save so a record is never
+// stored pretending its invoice was attached.
 async function uploadMaintInvoice(plate){
   if(!maintInvoiceFile)return null;
-  try{
-    const ext=(maintInvoiceFile.name.split('.').pop()||'jpg').toLowerCase();
-    const filename=`maint-invoice_${plate.replace(/\s+/g,'_')}_${Date.now()}.${ext}`;
-    const res=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
-      method:'POST',
-      headers:{'Authorization':`Bearer ${authToken()}`,'Content-Type':maintInvoiceFile.type,'x-upsert':'true'},
-      body:maintInvoiceFile
-    });
-    if(res.ok)return`${SUPABASE_URL}/storage/v1/object/public/odometer-photos/${filename}`;
-  }catch(err){console.error('[FleetDesk] Maint invoice upload failed:',err);}
-  return null;
+  return uploadInvoiceFile(maintInvoiceFile,'maint-invoice',plate);
 }
 
 async function submitMaintJob(){
@@ -3685,7 +3772,17 @@ async function submitMaintJob(){
   btn.disabled=true;
   btn.textContent='Saving...';
   try{
-    const invoiceUrl=await uploadMaintInvoice(plate);
+    let invoiceUrl=null;
+    try{
+      invoiceUrl=await uploadMaintInvoice(plate);
+    }catch(upErr){
+      console.error('[FleetDesk] Maint invoice upload failed:',upErr);
+      errEl.textContent='Invoice upload failed — the job was NOT saved. Please try again (photo or PDF, max 10 MB).';
+      errEl.classList.add('show');
+      btn.disabled=false;
+      btn.textContent='💾 Save Job';
+      return;
+    }
     const jobBody={
       plate,category,component,description,
       odometer:odo,date_in:dateIn,date_out:dateOut,
