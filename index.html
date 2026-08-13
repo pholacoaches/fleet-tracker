@@ -1991,6 +1991,9 @@ function filterVehicles(){
   const search=(document.getElementById('searchInput')?.value||'').toLowerCase();
   const sort=document.getElementById('sortSelect')?.value||'spend';
   let vehicles=vehiclesWithDriverSubmissions();
+  // Count reflects displayed blocks, incl. readings-only plates not in the report
+  const countEl=document.getElementById('vehicleCount');
+  if(countEl)countEl.textContent=`${vehicles.length} vehicles`;
   if(search)vehicles=vehicles.filter(v=>v.plate.toLowerCase().includes(search));
   if(sort==='spend')vehicles.sort((a,b)=>b.totalAmount-a.totalAmount);
   else if(sort==='litres')vehicles.sort((a,b)=>b.totalLitres-a.totalLitres);
@@ -2040,6 +2043,7 @@ function renderVehicleBlock(v,vi){
   svcRowHtml+=`<div class="vc-service-form" id="vsf-${id}"><div class="vsf-row"><div><label>Last service odometer (km)</label><input type="number" id="vs-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000"></div><div><label>Service interval (km)</label><input type="number" id="vs-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000"></div></div><button class="vsf-save" onclick="saveVehicleService('${plate}')">Save</button></div>`;
 
   const badges=[];
+  if(v.readingsOnly)badges.push('<span class="badge badge-comp">Readings only</span>');
   if(v.hasOdometerIssue)badges.push('<span class="badge badge-warn">Odo anomaly</span>');
   if(v.isHighSpend)badges.push('<span class="badge badge-high">High spend</span>');
   if(v.hasCompetitor)badges.push('<span class="badge badge-comp">Competitor fill</span>');
@@ -2056,11 +2060,22 @@ function renderVehicleBlock(v,vi){
   const highNote=v.isHighSpend?`<div class="vc-note note-high"><span>🔴</span><span>High spend alert: this vehicle's fuel cost is significantly above the fleet average for this period. Please review.</span></div>`:'';
   const chevron=`<svg class="vc-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 8 10 13 15 8"/></svg>`;
 
-  return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${plate}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary"><span class="vc-stat">Last odo: <strong>${lastOdo}</strong></span><span class="vc-stat">Avg km/L: <strong>${v.avgKmPerLitre||'—'}</strong></span><span class="vc-stat">Fills: <strong>${v.transactions.length}</strong></span></div></button><div class="vc-body"><div class="tx-table-wrap"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table></div><div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${v.totalLitres.toFixed(2)} L</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>${odoNote}${highNote}${svcRowHtml}</div></div>`;
+  // Readings-only blocks (plate not in this period's fuel report): show the
+  // readings, but the fuel summary/footer must say so — not R0.00 / 0 L.
+  const summaryStats=v.readingsOnly
+    ?`<span class="vc-stat">Last odo: <strong>${lastOdo}</strong></span><span class="vc-stat">Readings: <strong>${v.transactions.length}</strong></span>`
+    :`<span class="vc-stat">Last odo: <strong>${lastOdo}</strong></span><span class="vc-stat">Avg km/L: <strong>${v.avgKmPerLitre||'—'}</strong></span><span class="vc-stat">Fills: <strong>${v.transactions.length}</strong></span>`;
+  const footerHtml=v.readingsOnly
+    ?`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat" style="font-style:italic;color:var(--text3);">No fuel data this period</span></div></div>`
+    :`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${v.totalLitres.toFixed(2)} L</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>`;
+
+  return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${plate}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary">${summaryStats}</div></button><div class="vc-body"><div class="tx-table-wrap"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table></div>${footerHtml}${odoNote}${highNote}${svcRowHtml}</div></div>`;
 }
 
 function renderVehicleTable(vehicles){
-  const rows=vehicles.map(v=>`<tr><td class="vtd-plate">${v.plate}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${v.totalLitres.toFixed(2)} L</td><td class="vtd-num r">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
+  const rows=vehicles.map(v=>v.readingsOnly
+    ?`<tr><td class="vtd-plate">${v.plate}</td><td colspan="5" style="font-style:italic;color:var(--text3);">No fuel data this period — ${v.transactions.length} approved reading${v.transactions.length!==1?'s':''}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''}</td></tr>`
+    :`<tr><td class="vtd-plate">${v.plate}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${v.totalLitres.toFixed(2)} L</td><td class="vtd-num r">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
   return`<table class="vehicles-table"><thead><tr><th>Plate</th><th>Fills</th><th>Total Litres</th><th>Total Spend</th><th>Avg Litres/Fill</th><th>Avg km/L</th><th>Flags</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -2465,15 +2480,38 @@ async function uploadInvoiceFile(file,prefix,plate){
 
 let notifOpen=false;
 let lastNotifCheck=0;
-let notifData=[];
+let notifData=[];      // merged panel view: all pending + recent approved, newest first
+let pendingData=[];    // ALL pending submissions — badge and popups need the full set
+let approvedData=[];   // last 10 APPROVED per vehicle (RPC) — feeds blocks, CSV, reports
+
+function rebuildNotifData(){
+  const seen=new Set();
+  notifData=[...pendingData,...approvedData]
+    .filter(r=>!seen.has(r.id)&&seen.add(r.id))
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+}
 
 async function fetchSubmissions(){
   try{
-    const response=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=*&order=created_at.desc&limit=50`,{
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
-    });
-    if(response.ok){
-      notifData=await response.json();
+    const headers={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`};
+    // Pending is fetched in full (no limit): with ~50 drivers a flat 50-row cap
+    // ages approved readings out of the vehicle blocks within a week, and the
+    // bell badge must count every pending submission. Approved readings come
+    // from the approved_readings_per_vehicle RPC — last 10 per plate.
+    const[pendRes,apprRes]=await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=*&or=(status.is.null,status.eq.pending)&order=created_at.desc`,{headers}),
+      fetch(`${SUPABASE_URL}/rest/v1/rpc/approved_readings_per_vehicle`,{
+        method:'POST',
+        headers:{...headers,'Content-Type':'application/json'},
+        body:JSON.stringify({p_limit:10})
+      })
+    ]);
+    if(pendRes.ok)pendingData=await pendRes.json();
+    else console.error('[FleetDesk] Pending fetch failed:',pendRes.status,await pendRes.text().catch(()=>''));
+    if(apprRes.ok)approvedData=await apprRes.json();
+    else console.error('[FleetDesk] Approved RPC failed:',apprRes.status,await apprRes.text().catch(()=>''));
+    if(pendRes.ok||apprRes.ok){
+      rebuildNotifData();
       updateNotifBadge();
       filterVehicles();
     }
@@ -2481,54 +2519,71 @@ async function fetchSubmissions(){
 }
 
 // Render-time merge: returns COPIES of currentReport.vehicles with APPROVED
-// driver submissions (from notifData, i.e. the odometer_readings table) added
-// as synthetic transactions. Pure — never mutates currentReport or the
-// persisted state, and never touches localStorage: the DB is the single
-// source of truth, so deleting/rejecting a reading removes it on next render.
+// driver submissions (from approvedData — last 10 per vehicle via RPC) added
+// as synthetic transactions. Plates with approved readings but NO vehicle in
+// the active fuel report get a readings-only block (readingsOnly:true — the
+// fuel section renders "No fuel data this period"), on every period tab.
+// Pure — never mutates currentReport or the persisted state, and never touches
+// localStorage: the DB is the single source of truth, so deleting/rejecting a
+// reading removes it on next render.
+function driverSubmissionTx(submission){
+  // Synthetic transaction with the driver submitted odometer.
+  // No lower-bound check against the last fuel odometer: a reading below it
+  // must still show as a row — computeVehicleStats flags the decrease (⚠).
+  return{
+    date:fmtDDMMYYYY(submission.created_at),
+    merchant:'Driver Submission'+(submission.driver_name?' — '+submission.driver_name:''),
+    odometer:submission.odometer,
+    litres:0,
+    amount:0,
+    isCompetitor:false,
+    source:'Driver',
+    driverSubmission:true,
+    photoPath:submission.photo_path||null,
+    notes:submission.notes||''
+  };
+}
+function addSubmissionTx(transactions,submission){
+  const existing=transactions.find(t=>t.driverSubmission&&t.odometer===submission.odometer);
+  if(existing){
+    if(!existing.photoPath&&submission.photo_path)existing.photoPath=submission.photo_path;
+    return;
+  }
+  transactions.push(driverSubmissionTx(submission));
+}
 function vehiclesWithDriverSubmissions(){
   if(!currentReport)return[];
-  const approved=(notifData||[]).filter(n=>n.status==='approved'&&n.plate&&n.odometer);
+  const approved=(approvedData||[]).filter(n=>n.status==='approved'&&n.plate&&n.odometer);
   const byPlate={};
   approved.forEach(s=>{(byPlate[s.plate]=byPlate[s.plate]||[]).push(s);});
   const fa=currentReport.vehicles.reduce((s,v)=>s+v.totalAmount,0)/currentReport.vehicles.length;
-  return currentReport.vehicles.map(v=>{
+  const result=currentReport.vehicles.map(v=>{
     const subs=byPlate[v.plate];
     if(!subs)return v;
     // Copy the vehicle + its transactions so computeVehicleStats works on the
     // merged view without writing flags back into the persisted report.
     const merged={...v,transactions:v.transactions.map(t=>({...t}))};
-    subs.forEach(submission=>{
-      // Add a synthetic transaction with the driver submitted odometer.
-      // No lower-bound check against the last fuel odometer: a reading below it
-      // must still show as a row — computeVehicleStats flags the decrease (⚠).
-      const existing=merged.transactions.find(t=>t.driverSubmission&&t.odometer===submission.odometer);
-      if(existing){
-        if(!existing.photoPath&&submission.photo_path)existing.photoPath=submission.photo_path;
-        return;
-      }
-      merged.transactions.push({
-        date:fmtDDMMYYYY(submission.created_at),
-        merchant:'Driver Submission'+(submission.driver_name?' — '+submission.driver_name:''),
-        odometer:submission.odometer,
-        litres:0,
-        amount:0,
-        isCompetitor:false,
-        source:'Driver',
-        driverSubmission:true,
-        photoPath:submission.photo_path||null,
-        notes:submission.notes||''
-      });
-    });
+    subs.forEach(submission=>addSubmissionTx(merged.transactions,submission));
     merged.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
     return computeVehicleStats(merged,fa);
   });
+  // Readings-only blocks: union of fuel-report plates + plates that only exist
+  // in approved driver submissions (e.g. a bus not in this period's report).
+  const reportPlates=new Set(currentReport.vehicles.map(v=>v.plate));
+  Object.keys(byPlate).filter(p=>!reportPlates.has(p)).sort().forEach(plate=>{
+    const veh={plate,readingsOnly:true,transactions:[]};
+    byPlate[plate].forEach(submission=>addSubmissionTx(veh.transactions,submission));
+    veh.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
+    result.push(computeVehicleStats(veh,fa));
+  });
+  return result;
 }
 
 function updateNotifBadge(){
   const badge=document.getElementById('notifBadge');
   const btn=document.getElementById('notifBtn');
   if(!badge||!btn)return;
-  const count=notifData.filter(n=>!n.status||n.status==='pending').length;
+  const count=pendingData.filter(n=>!n.status||n.status==='pending').length;
   if(count>0){
     badge.textContent=count>99?'99+':count;
     badge.style.display='flex';
@@ -2642,6 +2697,10 @@ async function pollForNewSubmissions(){
     rows.forEach(rec=>{
       batchRows.push(rec);
       notifData.unshift(rec);
+      // Keep the split arrays in sync — the badge counts pendingData, and
+      // blocks read approvedData.
+      if(!rec.status||rec.status==='pending')pendingData.unshift(rec);
+      else if(rec.status==='approved')approvedData.unshift(rec);
       pollTimestamp=rec.created_at;
     });
     updateNotifBadge();
@@ -4643,6 +4702,15 @@ async function updateSubmissionStatus(id,status){
     }
     const item=notifData.find(n=>n.id===id);
     if(item)item.status=status;
+    // Keep the split arrays in sync: the record leaves the pending set, and an
+    // approval moves it into approvedData so the vehicle blocks pick it up
+    // immediately (a flagged record simply drops out of both).
+    const pIdx=pendingData.findIndex(n=>n.id===id);
+    const rec=pIdx>=0?pendingData.splice(pIdx,1)[0]:item;
+    if(status==='approved'&&rec&&!approvedData.some(n=>n.id===id)){
+      rec.status='approved';
+      approvedData.unshift(rec);
+    }
     updateNotifBadge();
     filterVehicles();
     return true;
