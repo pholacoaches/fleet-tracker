@@ -2540,9 +2540,23 @@ function driverSubmissionTx(submission){
     isCompetitor:false,
     source:'Driver',
     driverSubmission:true,
+    createdAt:submission.created_at,
     photoPath:submission.photo_path||null,
     notes:submission.notes||''
   };
+}
+// Fuel rows only carry a date (DD.MM.YYYY) so ordering is day-granular; driver
+// submissions keep their full created_at (createdAt) as a same-day tiebreaker,
+// otherwise multiple readings on one day sort arbitrarily and trigger false
+// odometer-decrease flags. Rows without timestamps keep their relative order.
+function compareTxDate(a,b){
+  const d=parseDateStr(a.date)-parseDateStr(b.date);
+  if(d!==0)return d;
+  // No-timestamp rows count as start of day: they sort ahead of same-day
+  // driver readings (as today) and the comparator stays a total order.
+  const ta=a.createdAt?+new Date(a.createdAt):0;
+  const tb=b.createdAt?+new Date(b.createdAt):0;
+  return ta-tb;
 }
 function addSubmissionTx(transactions,submission){
   const existing=transactions.find(t=>t.driverSubmission&&t.odometer===submission.odometer);
@@ -2565,7 +2579,7 @@ function vehiclesWithDriverSubmissions(){
     // merged view without writing flags back into the persisted report.
     const merged={...v,transactions:v.transactions.map(t=>({...t}))};
     subs.forEach(submission=>addSubmissionTx(merged.transactions,submission));
-    merged.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
+    merged.transactions.sort(compareTxDate);
     return computeVehicleStats(merged,fa);
   });
   // Readings-only blocks: union of fuel-report plates + plates that only exist
@@ -2574,7 +2588,7 @@ function vehiclesWithDriverSubmissions(){
   Object.keys(byPlate).filter(p=>!reportPlates.has(p)).sort().forEach(plate=>{
     const veh={plate,readingsOnly:true,transactions:[]};
     byPlate[plate].forEach(submission=>addSubmissionTx(veh.transactions,submission));
-    veh.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date));
+    veh.transactions.sort(compareTxDate);
     result.push(computeVehicleStats(veh,fa));
   });
   return result;
