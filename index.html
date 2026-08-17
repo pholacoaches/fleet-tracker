@@ -1012,6 +1012,7 @@ input[type=file] { display: none; }
           <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="openDriverForm('add')">＋ Add Driver</button>
         </div>
       </div>
+      <div id="driverWatchdog"></div>
       <div class="tyre-add-form" id="driverForm"></div>
       <div id="driversList"><p class="tyre-empty">Loading drivers...</p></div>
     </div>
@@ -2712,12 +2713,18 @@ async function pollForNewSubmissions(){
     if(!batchTimer){
       console.log('[FleetDesk] 30s batch window opened');
       batchTimer=setTimeout(()=>{
-        const toShow=[...batchRows];
+        // Drop rows already approved/flagged during the window — look the status
+        // up by id (notifData may hold a fresher copy than the batched object).
+        const stillPending=r=>{
+          const cur=notifData.find(n=>n.id===r.id)||r;
+          return !cur.status||cur.status==='pending';
+        };
+        const toShow=[...batchRows].filter(stillPending);
         lastSeenTimestamp=pollTimestamp;
         batchRows=[];
         batchTimer=null;
-        console.log('[FleetDesk] Batch window closed — showing',toShow.length,'submission(s)');
-        showNotifPopup(toShow);
+        console.log('[FleetDesk] Batch window closed —',toShow.length,'still-pending submission(s)');
+        if(toShow.length>0)showNotifPopup(toShow);
       },30000);
     }
   }catch(err){
@@ -3943,18 +3950,25 @@ async function fetchDrivers(){
 async function renderDriversTab(){
   const ok=await fetchDrivers();
   const el=document.getElementById('driversList');
-  if(!ok){el.innerHTML='<p class="tyre-empty">Could not load drivers. Please check your connection and that you are logged in.</p>';return;}
+  const wd=document.getElementById('driverWatchdog');
+  if(!ok){
+    if(wd)wd.innerHTML='';
+    el.innerHTML='<p class="tyre-empty">Could not load drivers. Please check your connection and that you are logged in.</p>';
+    return;
+  }
   if(driversData.length===0){
+    if(wd)wd.innerHTML='';
     el.innerHTML='<p class="tyre-empty">No drivers yet. Click "＋ Add Driver" to create the first driver profile.</p>';
     return;
   }
+  renderDriverWatchdog();
   // Active drivers first (A–Z from the fetch), deactivated greyed out at the bottom
   const sorted=[...driversData.filter(d=>d.active),...driversData.filter(d=>!d.active)];
   el.innerHTML=`<div class="drivers-table-wrap"><table class="drivers-table">
     <thead><tr><th>Name</th><th>Phone</th><th>Code</th><th>Licence Expiry</th><th>PrDP Expiry</th><th>Personal Link</th><th>Status</th><th></th></tr></thead>
     <tbody>${sorted.map(d=>`
       <tr class="${d.active?'':'driver-row-inactive'}">
-        <td style="font-weight:700;">${escapeHtml(d.name)}</td>
+        <td style="font-weight:700;"><span onclick="openDriverHistory('${d.id}')" title="View submission history" style="cursor:pointer;color:var(--accent);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${escapeHtml(d.name)}</span></td>
         <td>${d.phone?escapeHtml(d.phone):'<span class="drv-exp-blank">—</span>'}</td>
         <td><span class="drv-code">${escapeHtml(d.personal_code)}</span></td>
         <td>${driverExpiryCell(d.licence_expiry)}</td>
@@ -3966,6 +3980,148 @@ async function renderDriversTab(){
           <button class="drv-action-btn" onclick="toggleDriverActive('${d.id}',${d.active?'false':'true'})">${d.active?'Deactivate':'Reactivate'}</button>
         </td>
       </tr>`).join('')}</tbody></table></div>`;
+}
+
+// ── "NO READING THIS WEEK" WATCHDOG ──────────────────────────────────────────
+// A driver counts as submitted if they have ANY odometer_readings row this
+// calendar week (Monday 00:00 local onwards) regardless of status — the
+// watchdog tracks silence, not approval. Active drivers only.
+let watchdogOpen=false;
+
+function weekStartISO(){
+  const now=new Date();
+  const monday=new Date(now.getFullYear(),now.getMonth(),now.getDate()-((now.getDay()+6)%7));
+  return monday.toISOString();
+}
+
+// wa.me needs an international number: 082… → 2782…; keeps +27/27 as-is.
+function whatsappLink(phone){
+  const digits=String(phone||'').replace(/\D/g,'');
+  if(digits.length===10&&digits.startsWith('0'))return'https://wa.me/27'+digits.slice(1);
+  if(digits.length===11&&digits.startsWith('27'))return'https://wa.me/'+digits;
+  return null;
+}
+
+async function renderDriverWatchdog(){
+  const wd=document.getElementById('driverWatchdog');
+  if(!wd)return;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=driver_code&created_at=gte.${encodeURIComponent(weekStartISO())}`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
+    });
+    if(!res.ok){console.error('[FleetDesk] Watchdog fetch failed:',res.status,await res.text().catch(()=>''));wd.innerHTML='';return;}
+    const rows=await res.json();
+    const submitted=new Set(rows.map(r=>r.driver_code).filter(Boolean));
+    const missing=driversData.filter(d=>d.active&&!submitted.has(d.personal_code));
+    if(missing.length===0){
+      watchdogOpen=false;
+      wd.innerHTML='<div style="background:#EBFBEE;border:1.5px solid #2F9E44;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;font-weight:700;color:#2F9E44;">✅ All active drivers have submitted a reading this week</div>';
+      return;
+    }
+    const listRows=missing.map(d=>{
+      const wa=whatsappLink(d.phone);
+      const phoneHtml=d.phone
+        ?(wa?`<a href="${wa}" target="_blank" rel="noopener" style="color:#2F9E44;font-weight:700;text-decoration:none;">💬 ${escapeHtml(d.phone)}</a>`:escapeHtml(d.phone))
+        :'<span style="color:var(--text3);">no phone on file</span>';
+      return`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0;border-top:1px solid #FFE066;font-size:12px;">
+        <span style="font-weight:700;color:var(--text);">${escapeHtml(d.name)}</span>
+        <span style="font-family:var(--font-mono);">${phoneHtml}</span>
+      </div>`;
+    }).join('');
+    wd.innerHTML=`<div style="background:var(--amber-light);border:1.5px solid var(--amber);border-radius:10px;padding:12px 16px;margin-bottom:14px;">
+      <div onclick="toggleWatchdogList()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;font-weight:700;color:var(--amber);">
+        <span>⚠ ${missing.length} driver${missing.length!==1?'s have':' has'} not submitted this week</span>
+        <span id="watchdogArrow" style="font-size:11px;">${watchdogOpen?'▲ Hide':'▼ Show'}</span>
+      </div>
+      <div id="watchdogList" style="display:${watchdogOpen?'block':'none'};margin-top:8px;">${listRows}</div>
+    </div>`;
+  }catch(err){console.error('[FleetDesk] Watchdog error:',err);wd.innerHTML='';}
+}
+
+function toggleWatchdogList(){
+  watchdogOpen=!watchdogOpen;
+  const list=document.getElementById('watchdogList');
+  const arrow=document.getElementById('watchdogArrow');
+  if(list)list.style.display=watchdogOpen?'block':'none';
+  if(arrow)arrow.textContent=watchdogOpen?'▲ Hide':'▼ Show';
+}
+
+// ── PER-DRIVER SUBMISSION HISTORY (paged, DB only — never localStorage) ──────
+const DRIVER_HISTORY_PAGE=20;
+let _dhCode=null,_dhRows=[],_dhBusy=false;
+
+async function openDriverHistory(id){
+  const d=driversData.find(x=>x.id===id);
+  if(!d)return;
+  _dhCode=d.personal_code;
+  _dhRows=[];
+  document.getElementById('dhTitle').textContent=`📖 ${d.name} — ${d.personal_code}`;
+  document.getElementById('dhList').innerHTML='<div class="notif-empty">Loading history…</div>';
+  document.getElementById('dhMoreBtn').style.display='none';
+  document.getElementById('dhFootNote').textContent='';
+  document.getElementById('driverHistoryModal').style.display='flex';
+  await loadDriverHistoryPage();
+}
+
+async function loadDriverHistoryPage(){
+  if(_dhBusy||!_dhCode)return;
+  _dhBusy=true;
+  const btn=document.getElementById('dhMoreBtn');
+  btn.disabled=true;btn.textContent='Loading…';
+  try{
+    const res=await fetch(
+      `${SUPABASE_URL}/rest/v1/odometer_readings?select=id,plate,odometer,status,created_at&driver_code=eq.${encodeURIComponent(_dhCode)}&order=created_at.desc&limit=${DRIVER_HISTORY_PAGE}&offset=${_dhRows.length}`,
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}}
+    );
+    if(!res.ok){
+      console.error('[FleetDesk] Driver history fetch failed:',res.status,await res.text().catch(()=>''));
+      document.getElementById('dhList').innerHTML='<div class="notif-empty">Could not load history. Please check your connection and try again.</div>';
+      return;
+    }
+    const page=await res.json();
+    // Dedup by id: a submission arriving between page loads shifts the offset
+    const seen=new Set(_dhRows.map(r=>r.id));
+    _dhRows=_dhRows.concat(page.filter(r=>!seen.has(r.id)));
+    renderDriverHistoryList(page.length===DRIVER_HISTORY_PAGE);
+  }catch(err){
+    console.error('[FleetDesk] Driver history error:',err);
+    document.getElementById('dhList').innerHTML='<div class="notif-empty">Could not load history. Please check your connection and try again.</div>';
+  }finally{
+    _dhBusy=false;
+    btn.disabled=false;btn.textContent='Show more';
+  }
+}
+
+function renderDriverHistoryList(hasMore){
+  const list=document.getElementById('dhList');
+  const btn=document.getElementById('dhMoreBtn');
+  const note=document.getElementById('dhFootNote');
+  if(_dhRows.length===0){
+    list.innerHTML='<div class="notif-empty">No submissions from this driver yet</div>';
+    btn.style.display='none';
+    note.textContent='';
+    return;
+  }
+  list.innerHTML=_dhRows.map(r=>{
+    const badge=r.status==='approved'
+      ?'<span style="font-size:10px;font-weight:700;background:#EBFBEE;color:#2F9E44;border-radius:20px;padding:2px 8px;">✅ Approved</span>'
+      :r.status==='flagged'
+      ?'<span style="font-size:10px;font-weight:700;background:#FFF5F5;color:#C92A2A;border-radius:20px;padding:2px 8px;">🚩 Flagged</span>'
+      :'<span style="font-size:10px;font-weight:700;background:#E7F5FF;color:#1971C2;border-radius:20px;padding:2px 8px;">Pending</span>';
+    return`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px;">
+      <span style="color:var(--text3);white-space:nowrap;">${fmtDDMMYYYY(r.created_at)} ${fmtTimeHM(r.created_at)}</span>
+      <span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate||'—')}</span>
+      <span style="font-family:var(--font-mono);font-weight:700;">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span>
+      ${badge}
+    </div>`;
+  }).join('');
+  btn.style.display=hasMore?'block':'none';
+  note.textContent=hasMore?`Showing latest ${_dhRows.length}`:`All ${_dhRows.length} submission${_dhRows.length!==1?'s':''} shown`;
+}
+
+function closeDriverHistory(){
+  document.getElementById('driverHistoryModal').style.display='none';
+  _dhCode=null;_dhRows=[];
 }
 
 function driverExpiryCell(dateStr){
@@ -4594,11 +4750,26 @@ initApp();
         <button id="popupFlagBtn" onclick="flagSubmission()" style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">🚩 Flag</button>
       </div>
     </div>
-    <!-- BATCH SUBMISSIONS VIEW -->
-    <div id="popupBatchView" style="display:none;padding:22px;">
+    <!-- BATCH SUBMISSIONS VIEW — whole view is clickable and opens the bell panel -->
+    <div id="popupBatchView" style="display:none;padding:22px;cursor:pointer;" onclick="closeSubmissionModal();openNotifPanel();">
       <div id="popupBatchCount" style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:14px;"></div>
       <div id="popupBatchList" style="margin-bottom:18px;"></div>
       <button onclick="event.stopPropagation();closeSubmissionModal();openNotifPanel();" style="width:100%;padding:12px;background:var(--accent);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">🔔 Open Submissions</button>
+    </div>
+  </div>
+</div>
+
+<!-- DRIVER SUBMISSION HISTORY MODAL -->
+<div id="driverHistoryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10000;align-items:center;justify-content:center;padding:20px;" onclick="closeDriverHistory()">
+  <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.45);overflow:hidden;animation:fadeUp 0.25s ease both;" onclick="event.stopPropagation()">
+    <div style="background:#1971C2;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div id="dhTitle" style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;">📖 Submission History</div>
+      <button onclick="closeDriverHistory()" style="background:rgba(255,255,255,0.2);border:none;border-radius:6px;color:white;font-size:18px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
+    </div>
+    <div id="dhList" style="overflow-y:auto;padding:10px 22px;"></div>
+    <div style="padding:12px 22px;border-top:1px solid var(--border);flex-shrink:0;">
+      <button id="dhMoreBtn" onclick="loadDriverHistoryPage()" style="display:none;width:100%;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px;">Show more</button>
+      <div id="dhFootNote" style="font-size:11px;color:var(--text3);text-align:center;"></div>
     </div>
   </div>
 </div>
@@ -4637,6 +4808,7 @@ function showNotifPopup(rows){
     const rec=rows[0];
     _currentPopupRecord=rec;
     // Single view
+    document.getElementById('popupHeaderTitle').textContent='🔔 New Driver Submission';
     document.getElementById('popupSingleView').style.display='block';
     document.getElementById('popupBatchView').style.display='none';
     document.getElementById('popupPlate').textContent=rec.plate||'—';
@@ -4661,11 +4833,12 @@ function showNotifPopup(rows){
       mismatchEl.style.display='none';
     }
   }else{
-    // Batch view
+    // Batch view — one grouped popup; clicking anywhere on it opens the bell panel
     _currentPopupRecord=null;
+    document.getElementById('popupHeaderTitle').textContent='🔔 New Driver Submissions';
     document.getElementById('popupSingleView').style.display='none';
     document.getElementById('popupBatchView').style.display='block';
-    document.getElementById('popupBatchCount').textContent=`${rows.length} new readings — click to view`;
+    document.getElementById('popupBatchCount').textContent=`${rows.length} new submission${rows.length!==1?'s':''} — click to view`;
     const mismatches=rows.filter(r=>r.ai_odometer!=null&&Math.abs(r.odometer-r.ai_odometer)>25);
     const plateList=rows.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="font-weight:700;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">👤 ${escapeHtml(r.driver_name||'—')}</span><span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate)}</span><span style="font-family:var(--font-mono);">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span></div>`).join('');
     const mismatchWarn=mismatches.length>0
