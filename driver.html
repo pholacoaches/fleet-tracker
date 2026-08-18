@@ -316,48 +316,38 @@ async function init(){
   // Old ?id=PLATE links (flow removed) and missing/malformed codes all land here
   if(!code||!/^[A-Z]{3}-[0-9]{4}$/.test(code)){showScreen('invalidScreen');return;}
   try{
-    // RLS: anon sees active drivers only, and only name/personal_code/active columns
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?select=name,personal_code&personal_code=eq.${encodeURIComponent(code)}&active=is.true&limit=1`,{headers:SB_HEADERS});
-    const rows=res.ok?await res.json():[];
-    if(!rows.length){showScreen('invalidScreen');return;}
-    driver=rows[0];
+    // Single anon entry point: the SECURITY DEFINER RPC returns the driver's
+    // name, whether they already submitted today (Africa/Johannesburg), and
+    // their own company's active vehicles. Anon has no direct read access to
+    // drivers/vehicles/odometer_readings; an unknown or inactive code → null.
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/driver_page_init`,{
+      method:'POST',
+      headers:{...SB_HEADERS,'Content-Type':'application/json'},
+      body:JSON.stringify({p_code:code})
+    });
+    const data=res.ok?await res.json():null;
+    if(!data){showScreen('invalidScreen');return;}
+    driver={name:data.name,personal_code:code};
+    vehicleList=data.vehicles||[];
+    // Buses with fleet numbers first (drivers know those best), sorted numerically
+    vehicleList.sort((a,b)=>{
+      if(a.fleet_no&&!b.fleet_no)return -1;
+      if(!a.fleet_no&&b.fleet_no)return 1;
+      if(a.fleet_no&&b.fleet_no)return a.fleet_no.localeCompare(b.fleet_no,undefined,{numeric:true});
+      return a.plate.localeCompare(b.plate);
+    });
+    renderPlateList();
     document.getElementById('greetName').textContent='Hi '+driver.name.split(' ')[0];
     document.getElementById('formDriverName').textContent=driver.name.split(' ')[0]+' ·';
-    checkDuplicateToday();   // fire-and-forget; shows the banner if found
-    loadVehicles();          // fetch plates in the background while the driver reads the greeting
+    if(data.submitted_today){
+      document.getElementById('dupBanner').style.display='block';
+      document.getElementById('startBtn').textContent='Continue anyway';
+    }
     showScreen('greetScreen');
   }catch(err){
     console.error('[FleetDesk] code lookup failed:',err);
     showScreen('invalidScreen');
   }
-}
-
-async function checkDuplicateToday(){
-  try{
-    const today=new Date();today.setHours(0,0,0,0);
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=id&driver_code=eq.${encodeURIComponent(driver.personal_code)}&created_at=gte.${today.toISOString()}&limit=1`,{headers:SB_HEADERS});
-    if(res.ok&&(await res.json()).length>0){
-      document.getElementById('dupBanner').style.display='block';
-      document.getElementById('startBtn').textContent='Continue anyway';
-    }
-  }catch(err){console.error('[FleetDesk] duplicate check failed:',err);}
-}
-
-async function loadVehicles(){
-  try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?select=plate,fleet_no&active=is.true&order=plate.asc`,{headers:SB_HEADERS});
-    if(res.ok){
-      vehicleList=await res.json();
-      // Buses with fleet numbers first (drivers know those best), sorted numerically
-      vehicleList.sort((a,b)=>{
-        if(a.fleet_no&&!b.fleet_no)return -1;
-        if(!a.fleet_no&&b.fleet_no)return 1;
-        if(a.fleet_no&&b.fleet_no)return a.fleet_no.localeCompare(b.fleet_no,undefined,{numeric:true});
-        return a.plate.localeCompare(b.plate);
-      });
-    }
-  }catch(err){console.error('[FleetDesk] vehicles load failed:',err);}
-  renderPlateList();
 }
 
 function renderPlateList(){
