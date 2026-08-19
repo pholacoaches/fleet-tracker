@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FleetDesk — Phola Coaches</title>
+<title>FleetDesk</title>
 <link rel="icon" type="image/svg+xml" href="fleetdesk-icon-final.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="fleetdesk-icon-final-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="fleetdesk-icon-final-180.png">
@@ -27,6 +27,7 @@
   --accent: #1971C2;
   --accent-light: #E7F5FF;
   --accent2: #0C5A99;
+  --accent-deep: #155A8A;
   --green: #2F9E44;
   --green-light: #EBFBEE;
   --amber: #E67700;
@@ -108,7 +109,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   letter-spacing: 0.3px;
 }
 .hero-upload-btn:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
-.hero-upload-btn.primary { background: #1971C2; color: white; border: none; }
+.hero-upload-btn.primary { background: var(--accent); color: white; border: none; }
 .hero-upload-btn.primary:hover { background: #155A9C; }
 .hero-upload-btn.subtle { background: rgba(255,255,255,0.14); color: white; border: none; }
 .hero-upload-btn.subtle:hover { background: rgba(255,255,255,0.22); }
@@ -485,6 +486,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 
 /* LOGIN */
 #loginScreen { min-height:100vh; display:flex; align-items:center; justify-content:center; background:#0a2a4a; padding:24px; position:relative; overflow:hidden; }
+/* Logged-out screens are tenant-neutral (build #4a): FleetDesk gradient, no tenant photo */
+#loginScreen .hero-bg { background-image:linear-gradient(150deg,#0D2B4E 0%,#155A8A 55%,#1971C2 100%); }
 .login-card {
   background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
   box-shadow:var(--shadow-lg); padding:40px 36px; width:100%; max-width:420px; text-align:center;
@@ -809,8 +812,8 @@ input[type=file] { display: none; }
 <div id="loginScreen">
 <div class="hero-bg"></div>
   <div class="login-card" id="loginCard">
-    <div class="login-logo">Phola Coaches</div>
-    <div class="login-sub">FleetDesk</div>
+    <div class="login-logo">FleetDesk</div>
+    <div class="login-sub">Fleet Management</div>
     <label class="login-label" for="loginEmail">Email address</label>
     <input class="login-input" type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
     <label class="login-label" for="loginPassword">Password</label>
@@ -830,8 +833,8 @@ input[type=file] { display: none; }
 
   <!-- FORGOT PASSWORD CARD -->
   <div class="login-card hidden" id="forgotCard">
-    <div class="login-logo">Phola Coaches</div>
-    <div class="login-sub">FleetDesk</div>
+    <div class="login-logo">FleetDesk</div>
+    <div class="login-sub">Fleet Management</div>
     <div id="forgotForm">
       <div class="login-card-title">Reset your password</div>
       <div class="login-card-text">Enter your email address and we'll send you a link to reset your password.</div>
@@ -849,8 +852,8 @@ input[type=file] { display: none; }
 
   <!-- SET NEW PASSWORD CARD (password recovery) -->
   <div class="login-card hidden" id="resetCard">
-    <div class="login-logo">Phola Coaches</div>
-    <div class="login-sub">FleetDesk</div>
+    <div class="login-logo">FleetDesk</div>
+    <div class="login-sub">Fleet Management</div>
     <div id="resetForm">
       <div class="login-card-title">Set a new password</div>
       <div class="login-card-text">Choose a new password for your account.</div>
@@ -874,7 +877,7 @@ input[type=file] { display: none; }
   <div class="hero-bg"></div>
   <div style="position:relative;z-index:2;width:100%;padding:32px 36px;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;">
     <div class="hero-title">Fleet<span>Desk</span></div>
-    <div class="hero-sub" style="margin-top:8px;">Phola Coaches &middot; Fleet Management</div>
+    <div class="hero-sub" id="heroSubBrand" style="margin-top:8px;">&nbsp;</div>
     <div style="display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;align-items:center;justify-content:center;">
       <button class="hero-upload-btn primary" onclick="document.getElementById('fileInput').click()">&#8679; Upload Report</button>
       <button class="hero-upload-btn subtle" onclick="exportCSV()">&#8595; Export CSV</button>
@@ -891,7 +894,7 @@ input[type=file] { display: none; }
   <div class="loading-sub" id="loadingSub">This may take a few moments</div>
 </div>
 
-<div id="heroStatsStrip" style="display:none;background:#155A8A;border-bottom:1px solid rgba(255,255,255,0.1);position:sticky;top:0;z-index:99;">
+<div id="heroStatsStrip" style="display:none;background:var(--accent-deep);border-bottom:1px solid rgba(255,255,255,0.1);position:sticky;top:0;z-index:99;">
   <div style="max-width:1320px;margin:0 auto;padding:0 28px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;width:100%;">
 <div></div>
 <div style="display:flex;align-items:stretch;gap:0;">
@@ -1172,6 +1175,86 @@ const AUTH_REFRESH_KEY='fleet_auth_refresh';
 const AUTH_TIME_KEY='fleet_auth_time';
 const AUTH_TTL=24*60*60*1000;
 
+// ── TENANT (build #4a) ────────────────────────────────────────────────────────
+// After login the tenant's branding row (RLS: each user reads only their own
+// tenants row) drives titles, hero and accent colours, and namespaces every
+// data key in localStorage as key+':'+tenant_id so two tenants sharing a
+// browser never see each other's locally-stored data.
+const TENANT_CACHE_KEY='fleet_tenant_v1'; // last-known tenant for the active session (fast paint + offline)
+// All local data written before build #4a belongs to Phola — the only tenant
+// that existed. Migrate it into Phola's namespace once, and only on a Phola login.
+const LEGACY_TENANT_ID='afbde0fd-e952-4064-a3e7-dca1187e8e68';
+const LEGACY_LOCAL_KEYS=['fleet_tracker_v2','fleet_service_v1','fleet_upload_ids_v1','fleet_discs_v2'];
+let TENANT=null; // {id, display_name, tagline, logo_url, hero_image_url, accent_color}
+
+function nsKey(base){return TENANT?base+':'+TENANT.id:base;}
+
+function hexToRgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function rgbToHex(r,g,b){return'#'+[r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0').toUpperCase()).join('');}
+function shadeHex(h,f){const[r,g,b]=hexToRgb(h);return rgbToHex(r*(1+f),g*(1+f),b*(1+f));} // f<0 darkens
+function tintHex(h,f){const[r,g,b]=hexToRgb(h);return rgbToHex(r+(255-r)*f,g+(255-g)*f,b+(255-b)*f);}
+
+async function initTenant(){
+  // Cached tenant paints instantly (and covers a network blip on reload);
+  // logout clears the cache, so it always belongs to the active session's user.
+  try{const c=JSON.parse(localStorage.getItem(TENANT_CACHE_KEY));if(c&&c.id){TENANT=c;applyBranding();}}catch{}
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/tenants?select=id,display_name,tagline,logo_url,hero_image_url,accent_color`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+    });
+    if(res.ok){
+      const rows=await res.json();
+      if(rows.length===1){
+        TENANT=rows[0];
+        localStorage.setItem(TENANT_CACHE_KEY,JSON.stringify(TENANT));
+        applyBranding();
+      }
+    }
+  }catch{/* offline — cached tenant (same user) stays in effect */}
+  if(!TENANT)return false;
+  migrateLegacyLocalData();
+  reloadTenantState();
+  return true;
+}
+
+function migrateLegacyLocalData(){
+  if(TENANT.id!==LEGACY_TENANT_ID)return;
+  LEGACY_LOCAL_KEYS.forEach(k=>{
+    const bare=localStorage.getItem(k);
+    if(bare===null)return;
+    if(localStorage.getItem(k+':'+TENANT.id)===null)localStorage.setItem(k+':'+TENANT.id,bare);
+    localStorage.removeItem(k);
+  });
+}
+
+// Storage was read at parse time (before the tenant was known) — re-read it
+// from the tenant's namespace now, then let renderDashboard rebuild the view.
+function reloadTenantState(){
+  state=loadStorage();
+  activeReportIndex=state.reports.length-1;
+  currentReport=null;
+}
+
+function applyBranding(){
+  const b=TENANT;if(!b)return;
+  document.title='FleetDesk — '+(b.display_name||'');
+  document.getElementById('heroSubBrand').textContent=(b.display_name||'')+' · '+(b.tagline||'Fleet Management');
+  const hb=document.querySelector('#appContent .hero-bg');
+  if(hb&&b.hero_image_url)hb.style.backgroundImage=`url('${encodeURI(b.hero_image_url).replace(/['"()]/g,'')}')`;
+  const rs=document.documentElement.style;
+  if(b.accent_color&&/^#[0-9a-fA-F]{6}$/.test(b.accent_color)&&b.accent_color.toUpperCase()!=='#1971C2'){
+    rs.setProperty('--accent',b.accent_color);
+    rs.setProperty('--accent2',shadeHex(b.accent_color,-0.26));
+    rs.setProperty('--accent-deep',shadeHex(b.accent_color,-0.14));
+    rs.setProperty('--accent-light',tintHex(b.accent_color,0.90));
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content',b.accent_color);
+  }else{
+    // Default palette (Phola keeps its exact current look)
+    ['--accent','--accent2','--accent-deep','--accent-light'].forEach(v=>rs.removeProperty(v));
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content','#1971C2');
+  }
+}
+
 
 async function checkAuth(){
   try{
@@ -1206,9 +1289,16 @@ async function initApp(){
   if(authed){showDashboard();}else{showLogin();}
 }
 
-function showDashboard(){
+async function showDashboard(){
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
+  // Tenant (branding + storage namespace) must be known before anything renders
+  const ok=await initTenant();
+  if(!ok){
+    showLogin();
+    document.getElementById('loginErr').textContent='Could not load your company profile. Please check your connection and try again.';
+    return;
+  }
   recomputeAllStats();
   renderDashboard();
   fetchSubmissions().then(()=>startRealtimeListener());
@@ -1234,6 +1324,9 @@ function logout(){
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_REFRESH_KEY);
   localStorage.removeItem(AUTH_TIME_KEY);
+  // Drop the tenant cache so the next login can never inherit this tenant
+  localStorage.removeItem(TENANT_CACHE_KEY);
+  TENANT=null;
   if(typeof stopRealtimeListener==='function')stopRealtimeListener();
   showLogin();
 }
@@ -1470,13 +1563,16 @@ function switchDashTab(tab){
   if(tab==='reports')renderReportsTab();
 }
 
+// Data keys are namespaced per tenant via nsKey() once the tenant is known
+// (before that, at parse time, they read the bare key — replaced by
+// reloadTenantState() before anything tenant-specific renders).
 const STORAGE_KEY='fleet_tracker_v2';
-function loadStorage(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{reports:[]};}catch{return{reports:[]};}}
-function saveStorage(d){localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}
+function loadStorage(){try{return JSON.parse(localStorage.getItem(nsKey(STORAGE_KEY)))||{reports:[]};}catch{return{reports:[]};}}
+function saveStorage(d){localStorage.setItem(nsKey(STORAGE_KEY),JSON.stringify(d));}
 
 const SERVICE_KEY='fleet_service_v1';
-function loadServiceData(){try{return JSON.parse(localStorage.getItem(SERVICE_KEY))||{};}catch{return{};}}
-function saveServiceData(d){localStorage.setItem(SERVICE_KEY,JSON.stringify(d));}
+function loadServiceData(){try{return JSON.parse(localStorage.getItem(nsKey(SERVICE_KEY)))||{};}catch{return{};}}
+function saveServiceData(d){localStorage.setItem(nsKey(SERVICE_KEY),JSON.stringify(d));}
 
 function editVehicleService(plate){
   const form=document.getElementById('vsf-'+plate.replace(/\s+/g,'_'));
@@ -1523,8 +1619,8 @@ let currentView='grid';
 let currentReport=null;
 
 const UPLOAD_IDS_KEY='fleet_upload_ids_v1';
-function loadUploadIds(){try{return JSON.parse(localStorage.getItem(UPLOAD_IDS_KEY))||{engen:[],freight:[]};}catch{return{engen:[],freight:[]};}}
-function saveUploadIds(d){localStorage.setItem(UPLOAD_IDS_KEY,JSON.stringify(d));}
+function loadUploadIds(){try{return JSON.parse(localStorage.getItem(nsKey(UPLOAD_IDS_KEY)))||{engen:[],freight:[]};}catch{return{engen:[],freight:[]};}}
+function saveUploadIds(d){localStorage.setItem(nsKey(UPLOAD_IDS_KEY),JSON.stringify(d));}
 function checkEngenDuplicates(ids){const s=new Set(loadUploadIds().engen||[]);return ids.filter(i=>s.has(i));}
 function checkFreightDuplicates(nums){const s=new Set(loadUploadIds().freight||[]);return nums.filter(n=>s.has(n));}
 
@@ -1626,7 +1722,8 @@ async function parseFreightExcel(file){
     if(typeof XLSX==='undefined')throw new Error('SheetJS library not loaded. Please check your internet connection and refresh.');
     const buf=await file.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array',cellDates:true});
-    let wsName=wb.SheetNames.find(n=>n.trim().toLowerCase()==='phola coaches');
+    const tenantSheetName=(TENANT?.display_name||'').trim().toLowerCase();
+    let wsName=tenantSheetName?wb.SheetNames.find(n=>n.trim().toLowerCase()===tenantSheetName):undefined;
     if(!wsName){
       wsName=wb.SheetNames.find(n=>{
         const s=wb.Sheets[n];
@@ -1635,7 +1732,7 @@ async function parseFreightExcel(file){
         return hdrStr.some(c=>c.includes('reg nr')||c.includes('transaction date'));
       });
     }
-    if(!wsName)throw new Error(`Could not find the data sheet. Available sheets: ${wb.SheetNames.join(', ')}. Expected a sheet named "Phola Coaches" or one with "Reg Nr" / "Transaction Date" in its header row.`);
+    if(!wsName)throw new Error(`Could not find the data sheet. Available sheets: ${wb.SheetNames.join(', ')}. Expected a sheet named "${TENANT?.display_name||'your company'}" or one with "Reg Nr" / "Transaction Date" in its header row.`);
     const ws=wb.Sheets[wsName];
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
     function parseNum(v){return parseFloat(String(v).replace(/[R,\s]/g,''))||0;}
@@ -1689,7 +1786,7 @@ async function parseFreightExcel(file){
     }
     if(!scheduleDate)scheduleDate=fmtDDMMYYYY(new Date());
 
-    finaliseAndSave({scheduleDate,customer:'Phola Coaches',accountNo:'—',fleetNo:'—',filename:file.name,sources:['Freight'],vehicles:Object.values(vehicleMap)},[],orderNums);
+    finaliseAndSave({scheduleDate,customer:TENANT?.display_name||'—',accountNo:'—',fleetNo:'—',filename:file.name,sources:['Freight'],vehicles:Object.values(vehicleMap)},[],orderNums);
 
   }catch(err){
     hideLoading();
@@ -1793,7 +1890,7 @@ async function extractWithAI(base64Data,filename){
 
     finaliseAndSave({
       scheduleDate:headerData?.scheduleDate||'',
-      customer:headerData?.customer||'Phola Coaches',
+      customer:headerData?.customer||TENANT?.display_name||'—',
       accountNo:headerData?.accountNo||'—',
       fleetNo:headerData?.fleetNo||'—',
       scheduleTotal:combinedTotal,
@@ -2282,7 +2379,7 @@ function showErrorBanner(msg){
         <div style="font-size:13px;font-weight:700;color:#C92A2A;margin-bottom:6px;">Upload Failed</div>
         <div style="font-size:12px;color:#862e2e;line-height:1.6;white-space:pre-line;">${msg}</div>
         <div style="display:flex;gap:8px;margin-top:12px;">
-          <button onclick="document.getElementById('fileInput').click();document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:#1971C2;color:white;border:none;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">Try Again</button>
+          <button onclick="document.getElementById('fileInput').click();document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:var(--accent);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">Try Again</button>
           <button onclick="document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:transparent;border:1.5px solid #CED4DA;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;color:#495057;">Dismiss</button>
         </div>
       </div>
@@ -2640,7 +2737,7 @@ function renderNotifPanel(){
       ?'<span style="font-size:10px;font-weight:700;background:#EBFBEE;color:#2F9E44;border-radius:20px;padding:2px 8px;">✅ Approved</span>'
       :n.status==='flagged'
       ?'<span style="font-size:10px;font-weight:700;background:#FFF5F5;color:#C92A2A;border-radius:20px;padding:2px 8px;">🚩 Flagged</span>'
-      :'<span style="font-size:10px;font-weight:700;background:#E7F5FF;color:#1971C2;border-radius:20px;padding:2px 8px;">New</span>';
+      :'<span style="font-size:10px;font-weight:700;background:var(--accent-light);color:var(--accent);border-radius:20px;padding:2px 8px;">New</span>';
     const mismatchBadge=n.ai_odometer!=null&&Math.abs(n.odometer-n.ai_odometer)>25
       ?'<span style="font-size:10px;font-weight:700;background:#C92A2A;color:white;border-radius:20px;padding:2px 8px;">⚠ Odo Mismatch</span>'
       :'';
@@ -2795,7 +2892,9 @@ async function fetchCompliance(){
 // One-time: carry old localStorage disc entries (DD.MM.YYYY) into Supabase
 async function migrateLocalDiscData(){
   let old={};
-  try{old=JSON.parse(localStorage.getItem('fleet_discs_v2'))||{};}catch{old={};}
+  // Namespaced read: another tenant's legacy Phola disc data must never be
+  // migrated into this tenant's vehicle_compliance rows
+  try{old=JSON.parse(localStorage.getItem(nsKey('fleet_discs_v2')))||{};}catch{old={};}
   const toIso=s=>{const p=String(s||'').split('.');return p.length===3?`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`:null;};
   const rows=Object.entries(old)
     .filter(([,d])=>d&&(d.expiryDate||d.licenceNo||d.makeModel))
@@ -4121,7 +4220,7 @@ function renderDriverHistoryList(hasMore){
       ?'<span style="font-size:10px;font-weight:700;background:#EBFBEE;color:#2F9E44;border-radius:20px;padding:2px 8px;">✅ Approved</span>'
       :r.status==='flagged'
       ?'<span style="font-size:10px;font-weight:700;background:#FFF5F5;color:#C92A2A;border-radius:20px;padding:2px 8px;">🚩 Flagged</span>'
-      :'<span style="font-size:10px;font-weight:700;background:#E7F5FF;color:#1971C2;border-radius:20px;padding:2px 8px;">Pending</span>';
+      :'<span style="font-size:10px;font-weight:700;background:var(--accent-light);color:var(--accent);border-radius:20px;padding:2px 8px;">Pending</span>';
     return`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px;">
       <span style="color:var(--text3);white-space:nowrap;">${fmtDDMMYYYY(r.created_at)} ${fmtTimeHM(r.created_at)}</span>
       <span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate||'—')}</span>
@@ -4685,8 +4784,9 @@ async function generateReport(){
   <div class="rep-toolbar"><button class="rep-print-btn" onclick="window.print()">🖨 Print / Save as PDF</button></div>
   <div class="rep-header">
     <div class="rep-header-left">
-      <div class="rep-title-main">Phola Coaches</div>
+      <div class="rep-title-main">${escapeHtml(TENANT?.display_name||'FleetDesk')}</div>
       <div class="rep-title-type">${escapeHtml(reportTitle)}</div>
+      ${TENANT?.tagline?`<div class="rep-sub">${escapeHtml(TENANT.tagline)}</div>`:''}
       <div class="rep-sub">${scopeLine}</div>
       <div class="rep-sub">Generated ${escapeHtml(dateStr)}</div>
     </div>
@@ -4738,7 +4838,7 @@ initApp();
 <!-- SUBMISSION POPUP MODAL -->
 <div id="submissionModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10000;align-items:center;justify-content:center;padding:20px;">
   <div style="background:#fff;border-radius:16px;padding:0;max-width:460px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,0.45);overflow:hidden;animation:fadeUp 0.25s ease both;">
-    <div style="background:#1971C2;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="background:var(--accent);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;">
       <div id="popupHeaderTitle" style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;">🔔 New Driver Submission</div>
       <button onclick="closeSubmissionModal()" style="background:rgba(255,255,255,0.2);border:none;border-radius:6px;color:white;font-size:18px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
     </div>
@@ -4756,7 +4856,7 @@ initApp();
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Odometer Photo</div>
         <div id="popupPhotoBox"></div>
       </div>
-      <div id="popupMismatch" style="display:none;background:#E7F5FF;border:2px solid #1971C2;border-radius:8px;padding:10px 12px;font-size:12px;color:#1971C2;font-weight:700;margin-bottom:16px;line-height:1.6;"></div>
+      <div id="popupMismatch" style="display:none;background:var(--accent-light);border:2px solid var(--accent);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--accent);font-weight:700;margin-bottom:16px;line-height:1.6;"></div>
       <div id="popupNotes" style="display:none;background:var(--amber-light);border:1px solid #FFE066;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:16px;"></div>
       <div id="popupTime" style="font-size:11px;color:var(--text3);margin-bottom:18px;"></div>
       <div style="display:flex;gap:10px;">
@@ -4776,7 +4876,7 @@ initApp();
 <!-- DRIVER SUBMISSION HISTORY MODAL -->
 <div id="driverHistoryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10000;align-items:center;justify-content:center;padding:20px;" onclick="closeDriverHistory()">
   <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.45);overflow:hidden;animation:fadeUp 0.25s ease both;" onclick="event.stopPropagation()">
-    <div style="background:#1971C2;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <div style="background:var(--accent);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
       <div id="dhTitle" style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;">📖 Submission History</div>
       <button onclick="closeDriverHistory()" style="background:rgba(255,255,255,0.2);border:none;border-radius:6px;color:white;font-size:18px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
     </div>

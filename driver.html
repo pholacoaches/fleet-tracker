@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Phola Coaches — Odometer Submission</title>
+<title>Odometer Submission</title>
 <style>
 @font-face { font-family: 'Century Gothic'; src: local('Century Gothic'), local('CenturyGothic'); }
 :root {
-  --accent: #1971C2; --accent2: #0C5A99; --green: #2F9E44; --red: #C92A2A;
+  --accent: #1971C2; --accent2: #0C5A99; --accent-light: #E7F5FF;
+  --accent-glow: rgba(25,113,194,0.3); --green: #2F9E44; --red: #C92A2A;
   --amber: #E67700; --bg: #F8F9FA; --surface: #FFFFFF; --border: #DEE2E6;
   --text: #212529; --text2: #495057; --text3: #868E96;
   --font: 'Century Gothic', 'Trebuchet MS', sans-serif;
@@ -46,7 +47,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   width: 100%; padding: 18px; background: var(--accent); color: white;
   border: none; border-radius: var(--radius); font-family: var(--font);
   font-size: 17px; font-weight: 700; cursor: pointer; letter-spacing: 0.3px;
-  box-shadow: 0 4px 12px rgba(25,113,194,0.3); transition: background 0.15s;
+  box-shadow: 0 4px 12px var(--accent-glow); transition: background 0.15s;
 }
 .big-btn:active, .big-btn:hover { background: var(--accent2); }
 .big-btn.green { background: var(--green); box-shadow: 0 4px 12px rgba(47,158,68,0.3); }
@@ -69,7 +70,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   font-weight: 700; letter-spacing: 2px; color: var(--text); cursor: pointer;
   text-align: center; box-shadow: var(--shadow); transition: all 0.12s;
 }
-.plate-row:active, .plate-row:hover { border-color: var(--accent); color: var(--accent); background: #E7F5FF; }
+.plate-row:active, .plate-row:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
 .plate-row .pr-fleet { display: block; font-family: var(--font); font-size: 26px; letter-spacing: 1px; }
 .plate-row .pr-plate-sub { display: block; font-size: 13px; letter-spacing: 1.5px; color: var(--text3); margin-top: 4px; }
 .plate-row:active .pr-plate-sub, .plate-row:hover .pr-plate-sub { color: var(--accent); }
@@ -144,7 +145,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   display: none; padding: 10px 14px; border-radius: 8px;
   font-size: 12px; font-weight: 700; text-align: center; margin-top: 10px;
 }
-.ai-status.reading { display: block; background: #E7F5FF; color: var(--accent); }
+.ai-status.reading { display: block; background: var(--accent-light); color: var(--accent); }
 .ai-status.success { display: block; background: #EBFBEE; color: var(--green); }
 .ai-status.error { display: block; background: #FFF5F5; color: var(--red); }
 
@@ -179,7 +180,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 <body>
 
 <div class="header">
-  <div class="header-logo">Phola Coaches</div>
+  <div class="header-logo" id="headerLogo">FleetDesk</div>
   <div class="header-sub">Odometer Submission</div>
 </div>
 
@@ -310,6 +311,29 @@ function showScreen(id){
   window.scrollTo({top:0});
 }
 
+// ── Tenant branding (build #4a): driver_page_init returns the driver's
+// tenant's branding row — apply name + accent. Default palette stays for Phola.
+function hexToRgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function rgbToHex(r,g,b){return'#'+[r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0').toUpperCase()).join('');}
+function shadeHex(h,f){const[r,g,b]=hexToRgb(h);return rgbToHex(r*(1+f),g*(1+f),b*(1+f));}
+function tintHex(h,f){const[r,g,b]=hexToRgb(h);return rgbToHex(r+(255-r)*f,g+(255-g)*f,b+(255-b)*f);}
+
+function applyDriverBranding(b){
+  if(!b)return;
+  if(b.display_name){
+    document.title=b.display_name+' — Odometer Submission';
+    document.getElementById('headerLogo').textContent=b.display_name;
+  }
+  if(b.accent_color&&/^#[0-9a-fA-F]{6}$/.test(b.accent_color)&&b.accent_color.toUpperCase()!=='#1971C2'){
+    const rs=document.documentElement.style;
+    rs.setProperty('--accent',b.accent_color);
+    rs.setProperty('--accent2',shadeHex(b.accent_color,-0.26));
+    rs.setProperty('--accent-light',tintHex(b.accent_color,0.90));
+    const[r,g,bl]=hexToRgb(b.accent_color);
+    rs.setProperty('--accent-glow',`rgba(${r},${g},${bl},0.3)`);
+  }
+}
+
 async function init(){
   const params=new URLSearchParams(window.location.search);
   const code=(params.get('d')||'').trim().toUpperCase();
@@ -328,6 +352,7 @@ async function init(){
     const data=res.ok?await res.json():null;
     if(!data){showScreen('invalidScreen');return;}
     driver={name:data.name,personal_code:code};
+    applyDriverBranding(data.branding);
     vehicleList=data.vehicles||[];
     // Buses with fleet numbers first (drivers know those best), sorted numerically
     vehicleList.sort((a,b)=>{
