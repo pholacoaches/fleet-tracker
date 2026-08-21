@@ -63,6 +63,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   content: ""; position: absolute; inset: 0; z-index: 1;
   background: rgba(0,0,0,0.55);
 }
+/* Tenant-supplied hero photos are often darker than the default — lighter overlay */
+.hero-header.custom-hero::after { background: rgba(0,0,0,0.30); }
 .hero-bg {
   position: absolute; inset: 0; z-index: 0;
   background-image: url('hero.jpg');
@@ -875,6 +877,11 @@ input[type=file] { display: none; }
 
 <div class="hero-header" id="heroHeader">
   <div class="hero-bg"></div>
+  <!-- Account/logout must stay reachable when there are no reports (stats strip hidden) -->
+  <div id="heroAccountBtns" style="position:absolute;top:16px;right:20px;z-index:2;display:flex;gap:8px;">
+    <button class="logout-btn" onclick="openAccountPanel()">👤 Account</button>
+    <button class="logout-btn" onclick="logout()">⎋ Log out</button>
+  </div>
   <div style="position:relative;z-index:2;width:100%;padding:32px 36px;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;">
     <div class="hero-title">Fleet<span>Desk</span></div>
     <div class="hero-sub" id="heroSubBrand" style="margin-top:8px;">&nbsp;</div>
@@ -1240,7 +1247,13 @@ function applyBranding(){
   document.title='FleetDesk — '+(b.display_name||'');
   document.getElementById('heroSubBrand').textContent=(b.display_name||'')+' · '+(b.tagline||'Fleet Management');
   const hb=document.querySelector('#appContent .hero-bg');
-  if(hb&&b.hero_image_url)hb.style.backgroundImage=`url('${encodeURI(b.hero_image_url).replace(/['"()]/g,'')}')`;
+  const hh=document.getElementById('heroHeader');
+  if(hb&&b.hero_image_url){
+    hb.style.backgroundImage=`url('${encodeURI(b.hero_image_url).replace(/['"()]/g,'')}')`;
+    hh?.classList.add('custom-hero');
+  }else{
+    hh?.classList.remove('custom-hero');
+  }
   const rs=document.documentElement.style;
   if(b.accent_color&&/^#[0-9a-fA-F]{6}$/.test(b.accent_color)&&b.accent_color.toUpperCase()!=='#1971C2'){
     rs.setProperty('--accent',b.accent_color);
@@ -1982,6 +1995,8 @@ function renderDashboard(){
   if(state.reports.length===0){
     document.getElementById('emptyState').classList.remove('hidden');
     document.getElementById('dashboard').classList.add('hidden');
+    document.getElementById('heroStatsStrip').style.display='none';
+    document.getElementById('heroAccountBtns').style.display='flex';
     return;
   }
   document.getElementById('emptyState').classList.add('hidden');
@@ -1990,6 +2005,7 @@ function renderDashboard(){
   const r=currentReport;
 
   document.getElementById('heroStatsStrip').style.display='block';
+  document.getElementById('heroAccountBtns').style.display='none';
   const _hTotal=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
   const _hLitres=r.vehicles.reduce((s,v)=>s+v.totalLitres,0);
   document.getElementById('heroSpend').textContent='R'+Math.round(_hTotal/1000)+'k';
@@ -2280,6 +2296,7 @@ async function clearAllData(){
   document.getElementById('emptyState').classList.remove('hidden');
   document.getElementById('dashboard').classList.add('hidden');
   document.getElementById('heroStatsStrip').style.display='none';
+  document.getElementById('heroAccountBtns').style.display='flex';
   alert('✓ Data cleared.\n\nCloud backup saved as:\n'+cloudName);
 }
 
