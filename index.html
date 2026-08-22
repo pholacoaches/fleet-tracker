@@ -1343,15 +1343,22 @@ function showLogin(){
   document.getElementById('loginErr').textContent='';
 }
 
-function logout(){
+async function logout(){
+  // Revoke the session server-side (best-effort — an offline logout must still work)
+  try{
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+    });
+  }catch{}
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_REFRESH_KEY);
   localStorage.removeItem(AUTH_TIME_KEY);
   // Drop the tenant cache so the next login can never inherit this tenant
   localStorage.removeItem(TENANT_CACHE_KEY);
-  TENANT=null;
-  if(typeof stopRealtimeListener==='function')stopRealtimeListener();
-  showLogin();
+  // Full reload wipes all in-memory state — timers, poll intervals, per-tenant
+  // globals — that an in-page showLogin() would leave running.
+  window.location.reload();
 }
 
 function togglePasswordVisibility(){
