@@ -1,7 +1,7 @@
 {
   "name": "FleetDesk",
   "short_name": "FleetDesk",
-  "description": "Fleet management dashboard for Phola Coaches",
+  "description": "FleetDesk — fleet management dashboard",
   "start_url": "/fleet-tracker/",
   "display": "standalone",
   "theme_color": "#1971C2",

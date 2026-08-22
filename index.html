@@ -1742,12 +1742,12 @@ function handleFileUpload(event){
   }else if(ext==='xlsx'){
     parseFreightExcel(file);
   }else{
-    alert('Unsupported file type. Please upload a PDF (Engen report) or XLSX (Freight report).');
+    alert('Unsupported file type. Please upload a PDF or XLSX fuel statement.');
   }
 }
 
 async function parseFreightExcel(file){
-  showLoading('Reading Excel file...','Parsing Freight report');
+  showLoading('Reading Excel file...','Parsing Excel report');
   try{
     if(typeof XLSX==='undefined')throw new Error('SheetJS library not loaded. Please check your internet connection and refresh.');
     const buf=await file.arrayBuffer();
@@ -1825,7 +1825,7 @@ async function parseFreightExcel(file){
     if(!navigator.onLine){
       msg='No internet connection detected.\n\nPlease check your connection and try again.';
     }else if(err.message&&err.message.includes('sheet')){
-      msg='Could not find the correct sheet in this Excel file.\n\nPlease make sure this is a Freight fuel report.';
+      msg='Could not find the correct sheet in this Excel file.\n\nPlease make sure this is a supported Excel fuel statement.';
     }else if(err.message&&err.message.includes('No valid')){
       msg='No valid fuel rows were found in this Excel file.\n\nPlease check the file format and try again.';
     }else{
@@ -1920,7 +1920,7 @@ async function extractWithAI(base64Data,filename){
 
     finaliseAndSave({
       scheduleDate:headerData?.scheduleDate||'',
-      customer:headerData?.customer||TENANT?.display_name||'—',
+      customer:TENANT?.display_name||'—',
       accountNo:headerData?.accountNo||'—',
       fleetNo:headerData?.fleetNo||'—',
       scheduleTotal:combinedTotal,
@@ -2187,7 +2187,7 @@ function renderVehicleBlock(v,vi){
     return`<tr><td class="td-date">${tx.date}</td><td class="td-merchant">${tx.merchant}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
   }).join('');
 
-  const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn"><span>⚠</span><span>Odometer query: one or more readings are lower than the previous entry. Please verify with Engen or the driver — may be a data capture error.</span></div>`:'';
+  const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn"><span>⚠</span><span>Odometer query: one or more readings are lower than the previous entry. Please verify with the fuel supplier or the driver — may be a data capture error.</span></div>`:'';
   const highNote=v.isHighSpend?`<div class="vc-note note-high"><span>🔴</span><span>High spend alert: this vehicle's fuel cost is significantly above the fleet average for this period. Please review.</span></div>`:'';
   const chevron=`<svg class="vc-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 8 10 13 15 8"/></svg>`;
 
