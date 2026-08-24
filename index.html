@@ -413,10 +413,17 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .history-section { margin-top: 0; }
 .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 14px; }
 .history-card {
+  position: relative;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
   padding: 14px 16px; cursor: pointer; transition: all 0.15s; box-shadow: var(--shadow);
 }
 .history-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.history-del {
+  position: absolute; top: 5px; right: 5px; width: 22px; height: 22px;
+  border: none; border-radius: 6px; background: transparent; color: var(--text3);
+  font-size: 12px; line-height: 1; cursor: pointer;
+}
+.history-del:hover { background: #FFF5F5; color: #C92A2A; }
 .history-card.active { border-color: var(--accent); background: var(--accent-light); }
 .history-period { font-weight: 700; font-size: 13px; margin-bottom: 3px; }
 .history-meta { font-size: 11px; color: var(--text3); }
@@ -1323,7 +1330,8 @@ async function showDashboard(){
     return;
   }
   recomputeAllStats();
-  renderDashboard();
+  renderDashboard();          // fast paint from the local cache
+  syncFuelReports();          // then the DB (source of truth) takes over
   fetchSubmissions().then(()=>startRealtimeListener());
   fetchCompliance().then(()=>{updateDiscTabBadge();renderAlertBanner();});
 }
@@ -1354,6 +1362,13 @@ async function logout(){
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_REFRESH_KEY);
   localStorage.removeItem(AUTH_TIME_KEY);
+  // Build #4b: wipe the tenant's business data from this device — the DB is
+  // the source of truth, so nothing is lost. Bare (pre-#4a) leftovers of the
+  // same keys are removed too.
+  [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY].forEach(k=>{
+    localStorage.removeItem(nsKey(k));
+    localStorage.removeItem(k);
+  });
   // Drop the tenant cache so the next login can never inherit this tenant
   localStorage.removeItem(TENANT_CACHE_KEY);
   // Full reload wipes all in-memory state — timers, poll intervals, per-tenant
@@ -1600,6 +1615,108 @@ const STORAGE_KEY='fleet_tracker_v2';
 function loadStorage(){try{return JSON.parse(localStorage.getItem(nsKey(STORAGE_KEY)))||{reports:[]};}catch{return{reports:[]};}}
 function saveStorage(d){localStorage.setItem(nsKey(STORAGE_KEY),JSON.stringify(d));}
 
+// ── FUEL REPORTS ↔ DATABASE (build #4b) ──────────────────────────────────────
+// fuel_reports is the source of truth: one row per tenant per period, soft
+// delete via deleted_at (app never issues DELETE — restore is a support-side
+// SQL action). localStorage (fleet_tracker_v2) is only a cache for fast paint
+// and offline viewing. DB writes happen at the mutation points — upload,
+// per-report delete, Clear Data — never on render.
+const FUEL_MIGRATED_KEY='fleet_fuel_migrated_v1';
+const FUEL_DIRTY_KEY='fleet_fuel_dirty_v1';
+
+// A report's logical key, matching the merge key used by finaliseAndSave.
+// Reports with no scheduleDate fall back to their local numeric id.
+function reportPeriod(r){return getPeriod(r.scheduleDate)||String(r.id||'unknown');}
+
+// Periods whose latest local version hasn't reached the DB yet. Flushed on the
+// next sync so a failed write-through can't be silently overwritten by the
+// DB copy on the next load.
+function loadDirtyPeriods(){try{return JSON.parse(localStorage.getItem(nsKey(FUEL_DIRTY_KEY)))||[];}catch{return[];}}
+function saveDirtyPeriods(a){localStorage.setItem(nsKey(FUEL_DIRTY_KEY),JSON.stringify(a));}
+function markPeriodDirty(p){const a=loadDirtyPeriods();if(!a.includes(p)){a.push(p);saveDirtyPeriods(a);}}
+function clearPeriodDirty(p){saveDirtyPeriods(loadDirtyPeriods().filter(x=>x!==p));}
+
+async function upsertFuelReportToDb(report){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?on_conflict=tenant_id,period`,{
+    method:'POST',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+    // deleted_at:null resurrects the period if it was previously soft-deleted
+    body:JSON.stringify({period:reportPeriod(report),report,deleted_at:null})
+  });
+  if(!res.ok)throw new Error('HTTP '+res.status+' — '+await res.text().catch(()=>''));
+}
+
+async function pushFuelReport(report){
+  const p=reportPeriod(report);
+  markPeriodDirty(p);
+  await upsertFuelReportToDb(report);
+  clearPeriodDirty(p);
+}
+
+async function flushDirtyFuelReports(){
+  for(const p of loadDirtyPeriods()){
+    const r=(state.reports||[]).find(x=>reportPeriod(x)===p);
+    if(!r){clearPeriodDirty(p);continue;}
+    await upsertFuelReportToDb(r);
+    clearPeriodDirty(p);
+  }
+}
+
+// One-time per tenant: push local-only reports up to the DB. A period already
+// in the DB — live OR soft-deleted — counts as existing and is never
+// re-uploaded (so a support restore can't be clobbered and a deleted period
+// doesn't resurrect itself). Safe to run twice: the existence check plus
+// ignore-duplicates make a re-run a no-op, and the flag is only set once
+// every upload has succeeded.
+async function migrateLocalFuelReportsOnce(){
+  if(localStorage.getItem(nsKey(FUEL_MIGRATED_KEY)))return;
+  const local=loadStorage().reports||[];
+  if(local.length){
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?select=period`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const existing=new Set((await res.json()).map(r=>r.period));
+    for(const r of local.filter(r=>!existing.has(reportPeriod(r)))){
+      const ins=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?on_conflict=tenant_id,period`,{
+        method:'POST',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'resolution=ignore-duplicates,return=minimal'},
+        body:JSON.stringify({period:reportPeriod(r),report:r})
+      });
+      if(!ins.ok)throw new Error('HTTP '+ins.status);
+    }
+    console.log('[FleetDesk] Local fuel reports migrated to the database');
+  }
+  localStorage.setItem(nsKey(FUEL_MIGRATED_KEY),new Date().toISOString());
+}
+
+// DB → state: live rows only, ordered chronologically by period (MM.YYYY).
+async function fetchFuelReportsFromDb(){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?select=period,report&deleted_at=is.null`,{
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+  });
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  const rows=await res.json();
+  const key=p=>{const parts=String(p).split('.');return(+parts[1]||0)*100+(+parts[0]||0);};
+  return rows.map(x=>x.report).sort((a,b)=>key(reportPeriod(a))-key(reportPeriod(b)));
+}
+
+// Once after login: migrate-once, flush unsynced local changes, then make the
+// DB version the live state. On any network failure the cached copy stays in
+// effect and everything retries on the next load.
+async function syncFuelReports(){
+  try{
+    await migrateLocalFuelReportsOnce();
+    await flushDirtyFuelReports();
+    state.reports=await fetchFuelReportsFromDb();
+    activeReportIndex=state.reports.length-1;
+    currentReport=null;
+    renderDashboard(); // recomputes stats + refreshes the localStorage cache
+  }catch(err){
+    console.warn('[FleetDesk] Fuel report sync failed — showing cached data:',err);
+  }
+}
+
 const SERVICE_KEY='fleet_service_v1';
 function loadServiceData(){try{return JSON.parse(localStorage.getItem(nsKey(SERVICE_KEY)))||{};}catch{return{};}}
 function saveServiceData(d){localStorage.setItem(nsKey(SERVICE_KEY),JSON.stringify(d));}
@@ -1725,6 +1842,13 @@ function finaliseAndSave(reportData,newEngenIds,newFreightIds){
   ids.freight=[...(ids.freight||[]),...newFreightIds];
   saveUploadIds(ids);
   saveStorage(state);
+  // Write-through to the DB. On failure the period stays marked dirty and is
+  // re-pushed by the next syncFuelReports(), so the DB copy can't silently
+  // overwrite this newer local version on the next load.
+  pushFuelReport(state.reports[activeReportIndex]).catch(err=>{
+    console.error('[FleetDesk] Cloud save of the fuel report failed:',err);
+    alert('⚠️ The report was saved on this device but could NOT be saved to the cloud yet.\n\nIt will sync automatically the next time the app loads with a connection. Until then it will not appear on other devices.');
+  });
   hideLoading();
   renderDashboard();
 }
@@ -2242,8 +2366,35 @@ function renderTrendChart(elId,points,unit,color){
 function renderHistory(){
   document.getElementById('historyGrid').innerHTML=state.reports.map((r,i)=>{
     const total=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
-    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><div class="history-period">${r.scheduleDate||'Report '+(i+1)}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">R${total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`;
+    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">✕</button><div class="history-period">${r.scheduleDate||'Report '+(i+1)}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">R${total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`;
   }).join('');
+}
+
+// Soft-deletes one period (UPDATE deleted_at — never a real DELETE). Restore
+// is a support-side SQL action; there is deliberately no restore UI.
+async function deleteReport(i){
+  const r=state.reports[i];
+  if(!r)return;
+  const period=reportPeriod(r);
+  if(!confirm(`Delete the ${period} report for ${TENANT?.display_name||'your company'}? It can be restored by support within 30 days.`))return;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?period=eq.${encodeURIComponent(period)}&deleted_at=is.null`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({deleted_at:new Date().toISOString()})
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+  }catch(err){
+    console.error('[FleetDesk] Report delete failed:',err);
+    alert('Could not delete the report. Please check your connection and try again.');
+    return;
+  }
+  clearPeriodDirty(period);
+  state.reports.splice(i,1);
+  if(activeReportIndex>=state.reports.length)activeReportIndex=state.reports.length-1;
+  currentReport=null;
+  saveStorage(state);
+  renderDashboard();
 }
 
 function renderComparison(){
@@ -2273,10 +2424,12 @@ function backupTimestamp(){
   return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
-// Upload the backup JSON to the private Supabase "backups" bucket. Returns the
-// stored filename, or throws so the caller can abort the clear.
+// Upload the backup JSON to the private Supabase "backups" bucket, under the
+// tenant's prefix (build #4b: storage policies only allow a tenant's own
+// prefix). Returns the stored object path, or throws so the caller can abort
+// the clear.
 async function uploadBackupToSupabase(json){
-  const filename='fleetdesk-backup-'+backupTimestamp()+'.json';
+  const filename=`${TENANT.id}/fleetdesk-backup-${backupTimestamp()}.json`;
   const res=await fetch(`${SUPABASE_URL}/storage/v1/object/${BACKUPS_BUCKET}/${filename}`,{
     method:'POST',
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','x-upsert':'false'},
@@ -2290,7 +2443,12 @@ async function uploadBackupToSupabase(json){
 }
 
 async function clearAllData(){
-  if(!confirm('This will clear all reports and data.\n\nA JSON backup will be downloaded to your computer AND saved to your Supabase cloud backups first. Data is only cleared once the cloud backup succeeds.'))return;
+  // Build #4b: typed confirmation, then a SOFT delete of every report in the
+  // DB (deleted_at=now()) — restorable by support, never a real DELETE.
+  const who=TENANT?.display_name||'your company';
+  const typed=prompt(`⚠️ This deletes ALL fuel reports for ${who} on every device. Type DELETE to confirm. Reports can be restored by support within 30 days.\n\n(A JSON backup is also downloaded to your computer and saved to your cloud backups first.)`);
+  if(typed===null)return;
+  if(typed.trim()!=='DELETE'){alert('Nothing was deleted — you must type DELETE (in capitals) to confirm.');return;}
   const backup={exportedAt:new Date().toISOString(),data:state,uploadIds:loadUploadIds()};
   const json=JSON.stringify(backup,null,2);
   // 1) Download the local backup first (existing behaviour)
@@ -2306,40 +2464,67 @@ async function clearAllData(){
     alert('⚠️ Cloud backup failed — your data has NOT been cleared.\n\n'+(err.message||err)+'\n\n(The local JSON file was still downloaded. Please try again, or keep that file safe.)');
     return;
   }
-  // 3) Both backups succeeded — now clear everything
+  // 3) Soft-delete every live report in the DB — must also succeed first
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?deleted_at=is.null`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({deleted_at:new Date().toISOString()})
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+  }catch(err){
+    alert('⚠️ Could not clear the cloud data — nothing has been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.');
+    return;
+  }
+  // 4) All good — clear the local cache
   state={reports:[]};saveStorage(state);
+  saveDirtyPeriods([]);
   saveUploadIds({engen:[],freight:[]});
   activeReportIndex=-1;currentReport=null;
   document.getElementById('emptyState').classList.remove('hidden');
   document.getElementById('dashboard').classList.add('hidden');
   document.getElementById('heroStatsStrip').style.display='none';
   document.getElementById('heroAccountBtns').style.display='flex';
-  alert('✓ Data cleared.\n\nCloud backup saved as:\n'+cloudName);
+  alert('✓ Data cleared.\n\nCloud backup saved as:\n'+cloudName.split('/').pop());
 }
 
-// List stored backups, newest first (filenames are timestamped so name-desc = newest-first).
+// List stored backups, newest first (filenames are timestamped so name-desc =
+// newest-first). Build #4b: backups live under the tenant's prefix; the
+// pre-multi-tenant root-level files remain visible to Phola only (the storage
+// policy has a matching grandfather clause), so Phola also lists the root.
 async function listSupabaseBackups(){
-  const res=await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BACKUPS_BUCKET}`,{
-    method:'POST',
-    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json'},
-    body:JSON.stringify({prefix:'',limit:200,sortBy:{column:'name',order:'desc'}})
-  });
-  if(!res.ok)throw new Error('HTTP '+res.status);
-  const items=await res.json();
-  return (items||[]).filter(o=>o&&o.name&&o.name.endsWith('.json'));
+  async function listPrefix(prefix){
+    const res=await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BACKUPS_BUCKET}`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json'},
+      body:JSON.stringify({prefix,limit:200,sortBy:{column:'name',order:'desc'}})
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const items=await res.json();
+    // The list endpoint returns names relative to the prefix — keep the full
+    // object path for downloads, the bare filename for display.
+    return (items||[]).filter(o=>o&&o.name&&o.name.endsWith('.json'))
+      .map(o=>({name:o.name,path:(prefix?prefix+'/':'')+o.name}));
+  }
+  const items=await listPrefix(TENANT.id);
+  if(TENANT.id===LEGACY_TENANT_ID){
+    try{items.push(...await listPrefix(''));}catch{/* legacy root list is best-effort */}
+  }
+  return items.sort((a,b)=>b.name.localeCompare(a.name));
 }
 
 // Pull a single backup from Supabase and save it to the user's computer.
-async function downloadBackupFromSupabase(filename){
+async function downloadBackupFromSupabase(objectPath){
   try{
-    const res=await fetch(`${SUPABASE_URL}/storage/v1/object/${BACKUPS_BUCKET}/${encodeURIComponent(filename)}`,{
+    const encoded=objectPath.split('/').map(encodeURIComponent).join('/');
+    const res=await fetch(`${SUPABASE_URL}/storage/v1/object/${BACKUPS_BUCKET}/${encoded}`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
     const blob=await res.blob();
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
-    a.href=url;a.download=filename;a.click();
+    a.href=url;a.download=objectPath.split('/').pop();a.click();
     setTimeout(()=>URL.revokeObjectURL(url),2000);
   }catch(err){
     alert('Could not download backup: '+(err.message||err));
@@ -2367,7 +2552,7 @@ async function renderBackupsList(){
           <div class="backup-date">${escapeHtml(prettyBackupDate(o.name))}</div>
           <div class="backup-name">${escapeHtml(o.name)}</div>
         </div>
-        <button class="btn btn-outline backup-dl" style="font-size:11px;padding:6px 12px;" onclick="downloadBackupFromSupabase('${o.name.replace(/'/g,"\\'")}')">⬇ Download</button>
+        <button class="btn btn-outline backup-dl" style="font-size:11px;padding:6px 12px;" onclick="downloadBackupFromSupabase('${o.path.replace(/'/g,"\\'")}')">⬇ Download</button>
       </div>`).join('');
   }catch(err){
     el.innerHTML='<p class="backups-empty">Could not load backups ('+escapeHtml(String(err.message||err))+'). The “backups” bucket may need a Storage policy that allows the app to list it.</p>';
@@ -2437,9 +2622,19 @@ const SUPABASE_URL='https://wlwwzbyuchsonwugqhww.supabase.co';
 const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
 // Stage 3: send the logged-in user's session JWT in Authorization (apikey stays the
 // publishable key, as Supabase requires).
+// Build #4b: no silent anon-key fallback. Without a session token no data call
+// may fire — fail loudly and send the user back to the login screen instead.
 function authToken(){
   const t=localStorage.getItem(AUTH_TOKEN_KEY);
-  return t || SUPABASE_KEY;
+  if(!t){
+    console.warn('[FleetDesk] API call attempted without a session — redirecting to login');
+    try{stopRealtimeListener();}catch{}
+    // Only switch screens if the app is still showing — never wipe a login
+    // form the user may already be typing into (the 10s poll also lands here).
+    try{if(!document.getElementById('appContent').classList.contains('hidden'))showLogin();}catch{}
+    throw new Error('Not signed in');
+  }
+  return t;
 }
 
 // ── ODOMETER PHOTOS (private bucket, signed URLs) ─────────────────────────────
@@ -2596,7 +2791,9 @@ function invoiceFileProblem(file){
 }
 async function uploadInvoiceFile(file,prefix,plate){
   const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
-  const filename=`${prefix}_${plate.replace(/\s+/g,'_')}_${Date.now()}.${ext}`;
+  // Build #4b: objects live under the tenant's prefix — the storage policies
+  // only allow reading/writing a tenant's own folder.
+  const filename=`${TENANT.id}/${prefix}_${plate.replace(/\s+/g,'_')}_${Date.now()}.${ext}`;
   const res=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
     method:'POST',
     headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},

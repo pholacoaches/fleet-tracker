@@ -351,7 +351,8 @@ async function init(){
     });
     const data=res.ok?await res.json():null;
     if(!data){showScreen('invalidScreen');return;}
-    driver={name:data.name,personal_code:code};
+    // tenant_id namespaces the photo upload path (build #4b bucket scoping)
+    driver={name:data.name,personal_code:code,tenant_id:data.tenant_id||null};
     applyDriverBranding(data.branding);
     vehicleList=data.vehicles||[];
     // Buses with fleet numbers first (drivers know those best), sorted numerically
@@ -505,7 +506,10 @@ async function uploadPhoto(){
   if(!photoBlob)return null;
   const plateClean=currentPlate.replace(/[^A-Za-z0-9]/g,'');
   const filename=`${plateClean}_${driver.personal_code}_${Date.now()}.jpg`;
-  const response=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${filename}`,{
+  // Build #4b: photos live under the tenant's prefix so the office app (whose
+  // storage read policy is scoped to its own tenant folder) can sign them.
+  const objectPath=driver.tenant_id?`${driver.tenant_id}/${filename}`:filename;
+  const response=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${objectPath}`,{
     method:'POST',
     headers:{...SB_HEADERS,'Content-Type':'image/jpeg'},
     body:photoBlob
@@ -514,7 +518,7 @@ async function uploadPhoto(){
     console.error('[FleetDesk] photo upload failed:',response.status,await response.text());
     return null;
   }
-  return`odometer-photos/${filename}`;
+  return`odometer-photos/${objectPath}`;
 }
 
 async function submitReading(){
