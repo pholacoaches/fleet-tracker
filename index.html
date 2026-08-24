@@ -1708,7 +1708,29 @@ async function syncFuelReports(){
   try{
     await migrateLocalFuelReportsOnce();
     await flushDirtyFuelReports();
-    state.reports=await fetchFuelReportsFromDb();
+    const dbReports=await fetchFuelReportsFromDb();
+    // Safety check: the DB says "no reports" but this device still holds some
+    // AND migration claims to have already run. If those cached periods are
+    // missing from the DB entirely (not soft-deleted — that would just mean
+    // Clear Data ran on another device), something is wrong: keep the cached
+    // reports on screen and warn instead of silently rendering empty.
+    if(dbReports.length===0&&localStorage.getItem(nsKey(FUEL_MIGRATED_KEY))){
+      const cached=loadStorage().reports||[];
+      if(cached.length){
+        const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?select=period`,{
+          headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+        });
+        if(!res.ok)throw new Error('HTTP '+res.status);
+        const known=new Set((await res.json()).map(r=>r.period));
+        const missing=cached.filter(r=>!known.has(reportPeriod(r))).map(reportPeriod);
+        if(missing.length){
+          console.error('[FleetDesk] Safety stop: local reports not in the cloud:',missing.join(', '));
+          alert('⚠️ This device has fuel reports ('+missing.join(', ')+') that are NOT in the cloud.\n\nThey will stay visible on this device — please contact support before clearing any data.');
+          return; // cached state stays on screen, nothing overwritten
+        }
+      }
+    }
+    state.reports=dbReports;
     activeReportIndex=state.reports.length-1;
     currentReport=null;
     renderDashboard(); // recomputes stats + refreshes the localStorage cache
