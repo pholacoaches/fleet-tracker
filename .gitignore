@@ -35,6 +35,9 @@ Odo/
 .claude/
 .wrangler/
 
+# ── Local test seed data (business data — never commit) ─────────
+seed.json
+
 # ── Design drafts (not part of the app) ─────────────────────────
 logo-concepts.html
 fleetdesk-icon.svg

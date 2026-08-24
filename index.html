@@ -1628,6 +1628,20 @@ const FUEL_DIRTY_KEY='fleet_fuel_dirty_v1';
 // Reports with no scheduleDate fall back to their local numeric id.
 function reportPeriod(r){return getPeriod(r.scheduleDate)||String(r.id||'unknown');}
 
+// Unlike loadStorage() (which must always hand the render path a usable
+// object), this distinguishes "no local data" from "local data present but
+// unreadable" — the migration and the safety check must never mistake
+// corruption for nothing-to-migrate.
+function rawLocalReportsState(){
+  const raw=localStorage.getItem(nsKey(STORAGE_KEY));
+  if(raw===null)return{status:'absent',reports:[]};
+  try{
+    const d=JSON.parse(raw);
+    if(!d||!Array.isArray(d.reports))return{status:'corrupt',reports:[]};
+    return{status:'ok',reports:d.reports};
+  }catch{return{status:'corrupt',reports:[]};}
+}
+
 // Periods whose latest local version hasn't reached the DB yet. Flushed on the
 // next sync so a failed write-through can't be silently overwritten by the
 // DB copy on the next load.
@@ -1670,7 +1684,15 @@ async function flushDirtyFuelReports(){
 // every upload has succeeded.
 async function migrateLocalFuelReportsOnce(){
   if(localStorage.getItem(nsKey(FUEL_MIGRATED_KEY)))return;
-  const local=loadStorage().reports||[];
+  const localState=rawLocalReportsState();
+  if(localState.status==='corrupt'){
+    // Corruption is NOT "nothing to migrate": leave the flag unset (so this
+    // retries every load) and warn instead of silently marking as done.
+    console.error('[FleetDesk] Local fuel data exists but cannot be read — NOT marking as migrated');
+    alert('⚠️ The fuel report data stored on this device could not be read, so it was NOT uploaded to the cloud.\n\nNothing has been changed — please contact support before clearing any data.');
+    return;
+  }
+  const local=localState.reports;
   if(local.length){
     const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?select=period`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
@@ -1715,7 +1737,13 @@ async function syncFuelReports(){
     // Clear Data ran on another device), something is wrong: keep the cached
     // reports on screen and warn instead of silently rendering empty.
     if(dbReports.length===0&&localStorage.getItem(nsKey(FUEL_MIGRATED_KEY))){
-      const cached=loadStorage().reports||[];
+      const localState=rawLocalReportsState();
+      if(localState.status==='corrupt'){
+        console.error('[FleetDesk] Safety stop: local fuel data present but unreadable, and the cloud is empty');
+        alert('⚠️ This device holds fuel report data that could not be read, and the cloud has no reports.\n\nNothing has been overwritten — please contact support before clearing any data.');
+        return;
+      }
+      const cached=localState.reports;
       if(cached.length){
         const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?select=period`,{
           headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
