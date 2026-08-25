@@ -469,15 +469,15 @@ async function readOdometerWithAI(base64){
   status.textContent='🤖 AI is reading your odometer...';
   result.classList.remove('show');
   try{
-    const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/',{
+    // Audit fix #1: the Worker validates the driver code (X-Driver-Code) via
+    // driver_page_init and pins the model, max_tokens AND the prompt itself —
+    // only the photo is sent.
+    const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/ai/driver',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','X-Driver-Code':driver.personal_code},
       body:JSON.stringify({
-        model:'claude-sonnet-4-6',
-        max_tokens:100,
         messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},
-          {type:'text',text:'This is a photo of a vehicle odometer. Read the odometer number and return ONLY the numeric value with no text, no units, no spaces. Just the digits. Example: 145823'}
+          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}}
         ]}]
       })
     });

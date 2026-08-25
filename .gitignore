@@ -34,9 +34,14 @@ Odo/
 # ── Local tooling ───────────────────────────────────────────────
 .claude/
 .wrangler/
+worker/.dev.vars
+worker/node_modules/
 
 # ── Local test seed data (business data — never commit) ─────────
 seed.json
+
+# ── Audit reports (local only) ─────────────────────────────────
+audit-*.md
 
 # ── Design drafts (not part of the app) ─────────────────────────
 logo-concepts.html

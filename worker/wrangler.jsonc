@@ -1,0 +1,30 @@
+/**
+ * fleet-proxy — Cloudflare Worker config (audit fix #1, 2026-08-25).
+ * Deploy from this folder:  wrangler deploy
+ * Secrets are NOT declared here; ANTHROPIC_API_KEY already exists on the
+ * Worker and is kept across deploys. See README.md for the one-time cleanup
+ * of the six legacy secrets.
+ */
+{
+  "$schema": "https://developers.cloudflare.com/schemas/wrangler.json",
+  "name": "fleet-proxy",
+  "main": "worker.js",
+  "compatibility_date": "2026-07-29",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+
+  // Non-secret configuration. The publishable key is already public in the
+  // page source; the Worker uses it to call Supabase Auth / the RPC.
+  "vars": {
+    "SUPABASE_URL": "https://wlwwzbyuchsonwugqhww.supabase.co",
+    "SUPABASE_ANON_KEY": "sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5"
+  }
+
+  // OPTIONAL — per-driver-code throttle for /ai/driver (Workers Rate Limiting
+  // binding, no extra cost). Uncomment to enable; worker.js uses it when
+  // present and works without it. 20 AI reads per minute per code is far
+  // above real use (a driver submits once a day).
+  // ,"ratelimits": [
+  //   { "name": "DRIVER_RATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } }
+  // ]
+}
