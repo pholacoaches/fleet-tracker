@@ -3264,13 +3264,13 @@ function renderAlertBanner(){
 }
 
 function toggleComplianceEdit(plate){
-  const id=plate.replace(/\s+/g,'_');
+  const id=plateDomId(plate);
   const form=document.getElementById('cef-'+id);
   if(form)form.classList.toggle('open');
 }
 
 async function saveComplianceEdit(plate){
-  const id=plate.replace(/\s+/g,'_');
+  const id=plateDomId(plate);
   const g=f=>{const el=document.getElementById('ce-'+f+'-'+id);return el?el.value.trim():'';};
   const num=v=>v&&!isNaN(parseFloat(v))?parseFloat(v):null;
   const row={
@@ -3427,7 +3427,7 @@ function renderDiscCards(plates){
 
   document.getElementById('discsGrid').innerHTML=list.map((v,vi)=>{
     const{plate,rec,worst}=v;
-    const id=plate.replace(/\s+/g,'_');
+    const id=plateDomId(plate);
     const cardClass=worst==='expired'||worst==='urgent'?'dc-red':worst==='warn'?'dc-amber':worst==='ok'?'dc-green':'';
     const badgeClass=worst==='expired'||worst==='urgent'?'dcb-expired':worst==='warn'?'dcb-warn':worst==='ok'?'dcb-ok':'';
     const badgeText=worst==='expired'?'Expired':worst==='urgent'?'Urgent':worst==='warn'?'Due Soon':worst==='ok'?'All Valid':'Not Set';
@@ -3437,7 +3437,7 @@ function renderDiscCards(plates){
       const st=complianceStatus(exp);
       const chipClass='cc-'+st.status;
       const chipText=st.status==='expired'?`${Math.abs(st.days)}d over`:st.status==='unknown'?'Not set':st.status==='ok'?`${st.days}d`:`${st.days}d left`;
-      const renewBtn=it.renewMonths?`<button class="comp-renew-btn" onclick="renewComplianceItem('${plate.replace(/'/g,"\\'")}','${it.key}')">✓ Renewed</button>`:'';
+      const renewBtn=it.renewMonths?`<button class="comp-renew-btn" onclick="renewComplianceItem(${escAttr(JSON.stringify(plate))},'${it.key}')">✓ Renewed</button>`:'';
       return`<div class="comp-row">
         <span class="comp-item-label">${it.icon} ${it.label}</span>
         <span class="comp-date">${exp?fmtDDMMYYYY(exp):'—'}</span>
@@ -3456,7 +3456,7 @@ function renderDiscCards(plates){
         ${rec.make_model?`<div class="disc-info-row" style="margin-top:4px;"><span class="disc-info-label">Make / Model</span><span class="disc-info-val">${escapeHtml(rec.make_model)}</span></div>`:''}
         ${rec.notes?`<div style="font-size:11px;color:var(--amber);font-style:italic;margin-top:4px;">📝 ${escapeHtml(rec.notes)}</div>`:''}
       </div>
-      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleComplianceEdit('${plate.replace(/'/g,"\\'")}')">✎ Edit Details</button></div>
+      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleComplianceEdit(${escAttr(JSON.stringify(plate))})">✎ Edit Details</button></div>
       <div class="disc-edit-form" id="cef-${id}">
         <div class="def-row">
           <div><label>Make / Model</label><input type="text" id="ce-make-${id}" value="${escapeHtml(rec.make_model||'')}" placeholder="e.g. Yutong ZK6122H"></div>
@@ -3476,7 +3476,7 @@ function renderDiscCards(plates){
           <div><label>Op. Licence Cost (R)</label><input type="number" id="ce-ocost-${id}" min="0" step="0.01" value="${rec.operating_licence_cost||''}"></div>
         </div>
         <div><label>Notes</label><input type="text" id="ce-notes-${id}" value="${escapeHtml(rec.notes||'')}" placeholder="Optional"></div>
-        <button class="def-save" onclick="saveComplianceEdit('${plate.replace(/'/g,"\\'")}')">💾 Save</button>
+        <button class="def-save" onclick="saveComplianceEdit(${escAttr(JSON.stringify(plate))})">💾 Save</button>
       </div>
     </div>`;
   }).join('');
@@ -3499,7 +3499,7 @@ function renderDiscBulk(plates){
       <thead><tr><th>Plate</th><th>Make / Model</th><th>💿 Disc Expiry</th><th>Disc No.</th><th>🛠 COF Expiry</th><th>🚏 Op. Lic. Expiry</th><th>Op. Lic. No.</th></tr></thead>
       <tbody>${list.map(p=>{
         const r=complianceData[p]||{};
-        const id=p.replace(/\s+/g,'_');
+        const id=plateDomId(p);
         return`<tr data-plate="${escapeHtml(p)}">
           <td class="bp">${escapeHtml(p)}</td>
           <td><input type="text" id="bk-make-${id}" value="${escapeHtml(r.make_model||'')}"></td>
@@ -3518,7 +3518,7 @@ async function saveDiscBulk(){
   btn.disabled=true;btn.textContent='Saving...';
   const rows=[...document.querySelectorAll('#discBulkWrap tbody tr')].map(tr=>{
     const plate=tr.dataset.plate;
-    const id=plate.replace(/\s+/g,'_');
+    const id=plateDomId(plate);
     const g=f=>{const el=document.getElementById('bk-'+f+'-'+id);return el?el.value.trim():'';};
     return{
       plate,
@@ -3578,7 +3578,7 @@ async function renderTyresTab(){
 function renderTyrePlateStrip(plates){
   document.getElementById('tyrePlateStrip').innerHTML=plates.map(p=>{
     const count=tyresData.filter(t=>t.plate===p).length;
-    return`<button class="tyre-plate-chip ${p===selectedTyrePlate?'active':''}" onclick="selectTyrePlate('${p.replace(/'/g,"\\'")}')">${p}<span class="tyre-chip-count">${count}</span></button>`;
+    return`<button class="tyre-plate-chip ${p===selectedTyrePlate?'active':''}" onclick="selectTyrePlate(${escAttr(JSON.stringify(p))})">${escapeHtml(p)}<span class="tyre-chip-count">${count}</span></button>`;
   }).join('');
 }
 
@@ -3623,17 +3623,17 @@ function renderTyreVehiclePanel(){
 
   panel.innerHTML=`
     <div class="section-header">
-      <div class="section-title" style="font-size:15px;">🚌 ${plate} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
+      <div class="section-title" style="font-size:15px;">🚌 ${escapeHtml(plate)} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
       <div class="section-actions">
         <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddTyreForm()">＋ Add Tyre</button>
       </div>
     </div>
     ${cards}
     <div class="tyre-add-form" id="tyreAddForm">
-      <div class="tyre-form-title">＋ Add Tyre — ${plate}</div>
+      <div class="tyre-form-title">＋ Add Tyre — ${escapeHtml(plate)}</div>
       <div class="tyre-form-err" id="tyreFormErr"></div>
       <div class="tf-grid">
-        <div class="tf-field"><label>Vehicle Plate</label><input type="text" id="tf-plate" value="${plate}" readonly style="background:var(--surface2);"></div>
+        <div class="tf-field"><label>Vehicle Plate</label><input type="text" id="tf-plate" value="${escAttr(plate)}" readonly style="background:var(--surface2);"></div>
         <div class="tf-field"><label>Position *</label><select id="tf-position">${TYRE_POSITIONS.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div>
         <div class="tf-field"><label>Brand *</label>
           <select id="tf-brand" onchange="tyreBrandChanged(this)">${TYRE_BRANDS.map(b=>`<option value="${b}">${b}</option>`).join('')}</select>
@@ -4057,7 +4057,7 @@ function renderMaintPlateStrip(plates){
   document.getElementById('maintPlateStrip').innerHTML=plates.map(p=>{
     const count=maintJobs.filter(j=>j.plate===p).length;
     const hasFlag=maintFlags.some(f=>f.plate===p&&f.severity==='red');
-    return`<button class="tyre-plate-chip ${p===selectedMaintPlate?'active':''}" onclick="selectMaintPlate('${p.replace(/'/g,"\\'")}')">${hasFlag?'🚩 ':''}${escapeHtml(p)}<span class="tyre-chip-count">${count}</span></button>`;
+    return`<button class="tyre-plate-chip ${p===selectedMaintPlate?'active':''}" onclick="selectMaintPlate(${escAttr(JSON.stringify(p))})">${hasFlag?'🚩 ':''}${escapeHtml(p)}<span class="tyre-chip-count">${count}</span></button>`;
   }).join('');
 }
 
