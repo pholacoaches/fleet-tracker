@@ -1772,11 +1772,11 @@ function loadServiceData(){try{return JSON.parse(localStorage.getItem(nsKey(SERV
 function saveServiceData(d){localStorage.setItem(nsKey(SERVICE_KEY),JSON.stringify(d));}
 
 function editVehicleService(plate){
-  const form=document.getElementById('vsf-'+plate.replace(/\s+/g,'_'));
+  const form=document.getElementById('vsf-'+plateDomId(plate));
   if(form)form.classList.toggle('open');
 }
 function saveVehicleService(plate){
-  const id=plate.replace(/\s+/g,'_');
+  const id=plateDomId(plate);
   const odo=parseInt(document.getElementById('vs-odo-'+id)?.value,10);
   const interval=parseInt(document.getElementById('vs-int-'+id)?.value,10);
   if(!odo||!interval||odo<=0||interval<=0){alert('Please enter a valid odometer and interval.');return;}
@@ -1850,6 +1850,9 @@ function escapeHtml(s){
 function escAttr(s){
   return String(s??'').replace(/[&<>"'`=]/g,c=>'&#'+c.charCodeAt(0)+';');
 }
+// Plate → DOM-id fragment: [A-Za-z0-9_-] only, so a plate-derived id can never
+// carry markup. Writer and readers of an id must both use this.
+function plateDomId(p){return String(p??'').replace(/[^A-Za-z0-9_-]/g,'_');}
 
 function computeVehicleStats(v,fleetAvg){
   const txs=v.transactions;
@@ -2333,7 +2336,7 @@ function toggleVehicleCard(btn){ btn.closest('.vc').classList.toggle('open'); }
 
 function renderVehicleBlock(v,vi){
   const plate=v.plate;
-  const id=plate.replace(/\s+/g,'_');
+  const id=plateDomId(plate);
   const lastTx=v.transactions[v.transactions.length-1];
   const lastOdo=lastTx&&lastTx.odometer?lastTx.odometer.toLocaleString('en-US')+' km':'—';
   const currentOdo=lastTx&&lastTx.odometer?lastTx.odometer:null;
@@ -2342,7 +2345,7 @@ function renderVehicleBlock(v,vi){
   let svcHeaderClass='';
   let svcRowHtml='';
   if(!svc||!svc.lastServiceOdo||!svc.interval){
-    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val" style="color:var(--text3);font-style:italic;font-family:var(--font);">Not set up</span></div><button class="vc-svc-btn" onclick="editVehicleService('${plate}')">＋ Set up service</button></div>`;
+    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val" style="color:var(--text3);font-style:italic;font-family:var(--font);">Not set up</span></div><button class="vc-svc-btn" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">＋ Set up service</button></div>`;
   }else{
     const kmUsed=currentOdo?currentOdo-svc.lastServiceOdo:0;
     const kmRemaining=svc.interval-kmUsed;
@@ -2351,9 +2354,9 @@ function renderVehicleBlock(v,vi){
     else if(kmRemaining<=500){svcHeaderClass='svc-urgent';valClass='sv-red';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
     else if(kmRemaining<=2000){svcHeaderClass='svc-warn';valClass='sv-yellow';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
     else{valClass='sv-green';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
-    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val ${valClass}">${svcText}</span></div><button class="vc-svc-btn" onclick="editVehicleService('${plate}')">✎ Edit</button></div>`;
+    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val ${valClass}">${svcText}</span></div><button class="vc-svc-btn" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">✎ Edit</button></div>`;
   }
-  svcRowHtml+=`<div class="vc-service-form" id="vsf-${id}"><div class="vsf-row"><div><label>Last service odometer (km)</label><input type="number" id="vs-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000"></div><div><label>Service interval (km)</label><input type="number" id="vs-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000"></div></div><button class="vsf-save" onclick="saveVehicleService('${plate}')">Save</button></div>`;
+  svcRowHtml+=`<div class="vc-service-form" id="vsf-${id}"><div class="vsf-row"><div><label>Last service odometer (km)</label><input type="number" id="vs-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000"></div><div><label>Service interval (km)</label><input type="number" id="vs-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000"></div></div><button class="vsf-save" onclick="saveVehicleService(${escAttr(JSON.stringify(plate))})">Save</button></div>`;
 
   const badges=[];
   if(v.readingsOnly)badges.push('<span class="badge badge-comp">Readings only</span>');
@@ -2366,7 +2369,7 @@ function renderVehicleBlock(v,vi){
   const rows=v.transactions.map(tx=>{
     const srcTag=multiSource?(tx.source==='Engen'?'<span style="font-size:9px;color:#1971C2;font-weight:600;margin-left:4px;">[ENGEN]</span>':tx.source==='Freight'?'<span style="font-size:9px;color:#2F9E44;font-weight:600;margin-left:4px;">[FREIGHT]</span>':''):'';
     const photoThumb=tx.driverSubmission?odoThumbHtml(tx.photoPath):'';
-    return`<tr><td class="td-date">${tx.date}</td><td class="td-merchant">${tx.merchant}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
+    return`<tr><td class="td-date">${escapeHtml(tx.date)}</td><td class="td-merchant">${escapeHtml(tx.merchant)}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
   }).join('');
 
   const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn"><span>⚠</span><span>Odometer query: one or more readings are lower than the previous entry. Please verify with the fuel supplier or the driver — may be a data capture error.</span></div>`:'';
@@ -2382,13 +2385,13 @@ function renderVehicleBlock(v,vi){
     ?`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat" style="font-style:italic;color:var(--text3);">No fuel data this period</span></div></div>`
     :`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${v.totalLitres.toFixed(2)} L</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>`;
 
-  return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${plate}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary">${summaryStats}</div></button><div class="vc-body"><div class="tx-table-wrap"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table></div>${footerHtml}${odoNote}${highNote}${svcRowHtml}</div></div>`;
+  return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${escapeHtml(plate)}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary">${summaryStats}</div></button><div class="vc-body"><div class="tx-table-wrap"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table></div>${footerHtml}${odoNote}${highNote}${svcRowHtml}</div></div>`;
 }
 
 function renderVehicleTable(vehicles){
   const rows=vehicles.map(v=>v.readingsOnly
-    ?`<tr><td class="vtd-plate">${v.plate}</td><td colspan="5" style="font-style:italic;color:var(--text3);">No fuel data this period — ${v.transactions.length} approved reading${v.transactions.length!==1?'s':''}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''}</td></tr>`
-    :`<tr><td class="vtd-plate">${v.plate}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${v.totalLitres.toFixed(2)} L</td><td class="vtd-num r">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
+    ?`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td colspan="5" style="font-style:italic;color:var(--text3);">No fuel data this period — ${v.transactions.length} approved reading${v.transactions.length!==1?'s':''}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''}</td></tr>`
+    :`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${v.totalLitres.toFixed(2)} L</td><td class="vtd-num r">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
   return`<table class="vehicles-table"><thead><tr><th>Plate</th><th>Fills</th><th>Total Litres</th><th>Total Spend</th><th>Avg Litres/Fill</th><th>Avg km/L</th><th>Flags</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
