@@ -1437,8 +1437,12 @@ async function login(){
 // ── PASSWORD MANAGEMENT ───────────────────────────────────────────────────────
 // The app talks to Supabase Auth (GoTrue) via REST — no supabase-js client.
 // Recovery links arrive as https://.../#access_token=...&refresh_token=...&type=recovery
+// Audit fix #3 item 3: the recovery access token is held in memory only, for
+// the single PUT /auth/v1/user that sets the new password. It is never written
+// to localStorage and never becomes the app session — the user logs in fresh.
+// The refresh token in the link is deliberately not captured at all.
 const RESET_REDIRECT_URL='https://pholacoaches.github.io/fleet-tracker';
-let recoveryToken=null,recoveryRefresh=null;
+let recoveryToken=null;
 
 // Returns true when it has taken over the screen (reset form or error message shown).
 function handleRecoveryRedirect(){
@@ -1447,7 +1451,6 @@ function handleRecoveryRedirect(){
   const clearHash=()=>history.replaceState(null,'',location.pathname+location.search);
   if(p.get('type')==='recovery'&&p.get('access_token')){
     recoveryToken=p.get('access_token');
-    recoveryRefresh=p.get('refresh_token');
     clearHash();
     showAuthCard('resetCard');
     document.getElementById('resetErr').textContent='';
@@ -1500,14 +1503,21 @@ async function submitNewPassword(){
       }
       return;
     }
-    // Recovery session becomes the app session — user continues straight into the app.
-    localStorage.setItem(AUTH_TOKEN_KEY,recoveryToken);
-    if(recoveryRefresh)localStorage.setItem(AUTH_REFRESH_KEY,recoveryRefresh);
-    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
-    recoveryToken=null;recoveryRefresh=null;
+    // Password is set. The recovery session is single-purpose: revoke it
+    // server-side (best-effort), drop it from memory, and require a normal
+    // login with the new password. It is never stored as the app session.
+    const spent=recoveryToken;
+    recoveryToken=null;
+    try{
+      await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=local`,{
+        method:'POST',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+spent}
+      });
+    }catch{}
     document.getElementById('resetForm').classList.add('hidden');
-    okEl.textContent='✓ Password updated — signing you in…';
-    setTimeout(showDashboard,1200);
+    okEl.textContent='✓ Password changed. Please log in with your new password.';
+    document.getElementById('resetBackBtn').classList.remove('hidden');
+    setTimeout(showLogin,2500);
   }catch{
     btn.disabled=false;btn.textContent='Save new password';
     errEl.textContent='Connection error. Please try again.';
