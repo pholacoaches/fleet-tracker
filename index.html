@@ -2613,7 +2613,7 @@ async function renderBackupsList(){
           <div class="backup-date">${escapeHtml(prettyBackupDate(o.name))}</div>
           <div class="backup-name">${escapeHtml(o.name)}</div>
         </div>
-        <button class="btn btn-outline backup-dl" style="font-size:11px;padding:6px 12px;" onclick="downloadBackupFromSupabase('${o.path.replace(/'/g,"\\'")}')">⬇ Download</button>
+        <button class="btn btn-outline backup-dl" style="font-size:11px;padding:6px 12px;" onclick="downloadBackupFromSupabase(${escAttr(JSON.stringify(o.path))})">⬇ Download</button>
       </div>`).join('');
   }catch(err){
     el.innerHTML='<p class="backups-empty">Could not load backups ('+escapeHtml(String(err.message||err))+'). The “backups” bucket may need a Storage policy that allows the app to list it.</p>';
@@ -2657,7 +2657,7 @@ function showErrorBanner(msg){
       <div style="font-size:22px;flex-shrink:0;">⚠️</div>
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:700;color:#C92A2A;margin-bottom:6px;">Upload Failed</div>
-        <div style="font-size:12px;color:#862e2e;line-height:1.6;white-space:pre-line;">${msg}</div>
+        <div style="font-size:12px;color:#862e2e;line-height:1.6;white-space:pre-line;">${escapeHtml(msg)}</div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <button onclick="document.getElementById('fileInput').click();document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:var(--accent);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">Try Again</button>
           <button onclick="document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:transparent;border:1.5px solid #CED4DA;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;color:#495057;">Dismiss</button>
@@ -4974,7 +4974,7 @@ async function generateReport(){
   // ── Assemble document ──
   const now=new Date();
   const dateStr=fmtDDMMYYYY(now)+' '+fmtTimeHM(now);
-  const scopeLine=(vehFilter==='__all__'?'All Vehicles':vehFilter)+' · '+(periodVal==='__all__'?'All Periods':escapeHtml(state.reports[+periodVal].scheduleDate||'Selected Period'));
+  const scopeLine=(vehFilter==='__all__'?'All Vehicles':escapeHtml(vehFilter))+' · '+(periodVal==='__all__'?'All Periods':escapeHtml(state.reports[+periodVal].scheduleDate||'Selected Period'));
 
   const reportTitle=reportType==='full'?(vehFilter!=='__all__'?'Vehicle Report':'Full Fleet Report'):'Custom Report';
 
