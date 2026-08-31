@@ -1371,13 +1371,19 @@ function showLogin(){
 // session for the user. Both end in the same full-page reload.
 async function logout(scope='local'){
   if(scope!=='global')scope='local';
-  // Revoke the session server-side (best-effort — an offline logout must still work)
-  try{
-    await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=${scope}`,{
-      method:'POST',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
-    });
-  }catch{}
+  // Revoke the session server-side (best-effort — an offline logout must still work).
+  // Read the token directly, not via authToken(): that helper now routes a
+  // missing token to logout() itself (item 6), and with no token there is no
+  // session to revoke anyway.
+  const t=localStorage.getItem(AUTH_TOKEN_KEY);
+  if(t){
+    try{
+      await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=${scope}`,{
+        method:'POST',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+t}
+      });
+    }catch{}
+  }
   clearStoredAuth();
   // Build #4b: wipe the tenant's business data from this device — the DB is
   // the source of truth, so nothing is lost. Bare (pre-#4a) leftovers of the
@@ -2738,9 +2744,12 @@ function authToken(){
   if(!t){
     console.warn('[FleetDesk] API call attempted without a session — redirecting to login');
     try{stopRealtimeListener();}catch{}
-    // Only switch screens if the app is still showing — never wipe a login
-    // form the user may already be typing into (the 10s poll also lands here).
-    try{if(!document.getElementById('appContent').classList.contains('hidden'))showLogin();}catch{}
+    // Audit fix #3 item 6: go through logout() (local scope, full page reload)
+    // so the poll timer, realtime listener and per-tenant globals die with the
+    // session — an in-page showLogin() left them all running. Only when the
+    // app is still showing: never reload over a login form the user may
+    // already be typing into (the 10s poll also lands here).
+    try{if(!document.getElementById('appContent').classList.contains('hidden'))logout();}catch{}
     throw new Error('Not signed in');
   }
   return t;
