@@ -1197,7 +1197,6 @@ input[type=file] { display: none; }
 const AUTH_TOKEN_KEY='fleet_auth_token';
 const AUTH_REFRESH_KEY='fleet_auth_refresh';
 const AUTH_TIME_KEY='fleet_auth_time';
-const AUTH_TTL=24*60*60*1000;
 
 // ── TENANT (build #4a) ────────────────────────────────────────────────────────
 // After login the tenant's branding row (RLS: each user reads only their own
@@ -1305,8 +1304,10 @@ async function checkAuth(){
     if(token.startsWith('local-')){clearStoredAuth();return false;}
     // Token still fresh — no network call needed
     if(Date.now()-time<55*60*1000)return true;
+    // Audit fix #3 item 2: a stale access token with no refresh token can
+    // never be renewed — it is a dead session, not a 24h grace period.
+    if(!refresh){clearStoredAuth();return false;}
     // Token is older than 55 min — use refresh token to get a new one
-    if(!refresh)return Date.now()-time<AUTH_TTL;
     // Audit fix #3 item 1: a refresh that fails for ANY reason (rejected by
     // GoTrue, malformed reply, or a network error) means the stored pair is
     // dead — wipe it rather than retrying it forever on every load.
