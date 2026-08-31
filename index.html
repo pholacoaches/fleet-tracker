@@ -2656,11 +2656,23 @@ async function renderBackupsList(){
   }
 }
 
+// Audit fix #3 item 5 — CSV formula injection: a STRING cell starting with
+// = + - @ (or tab / CR) would be evaluated as a formula by Excel/Sheets.
+// Plate/merchant/date are AI-extracted from third-party files and licence
+// numbers are free text, so prefix such strings with an apostrophe. Real
+// numbers (incl. negatives) are left untouched so numeric columns still sum.
+// Every CSV cell in the app must go through this.
+function csvCell(c){
+  let s=String(c??'');
+  if(typeof c==='string'&&/^[=+\-@\t\r]/.test(s))s="'"+s;
+  return`"${s.replace(/"/g,'""')}"`;
+}
+
 function exportCSV(){
   if(!currentReport){alert('No report loaded.');return;}
   const rows=[['Plate','Date','Merchant','Odometer','Litres','Amount','km/L','R/km','Competitor','Odometer Flag']];
   vehiclesWithDriverSubmissions().forEach(v=>{v.transactions.forEach(tx=>{rows.push([v.plate,tx.date,tx.merchant,tx.odometer||'',tx.litres,tx.amount,tx.kmPerLitre||'',tx.costPerKm||'',tx.isCompetitor?'Yes':'No',tx.odometerFlag?'Yes':'No']);});});
-  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv=rows.map(r=>r.map(csvCell).join(',')).join('\n');
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download=`fleet_fuel_${currentReport.scheduleDate||'export'}.csv`;
@@ -3384,7 +3396,7 @@ function exportComplianceCSV(){
     });
   });
   if(rows.length===1){alert('Nothing expires in the next 60 days — no CSV to export.');return;}
-  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv=rows.map(r=>r.map(csvCell).join(',')).join('\n');
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download='compliance_expiring_60days_'+new Date().toISOString().slice(0,10)+'.csv';
