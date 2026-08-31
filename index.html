@@ -1772,11 +1772,11 @@ function loadServiceData(){try{return JSON.parse(localStorage.getItem(nsKey(SERV
 function saveServiceData(d){localStorage.setItem(nsKey(SERVICE_KEY),JSON.stringify(d));}
 
 function editVehicleService(plate){
-  const form=document.getElementById('vsf-'+plate.replace(/\s+/g,'_'));
+  const form=document.getElementById('vsf-'+plateDomId(plate));
   if(form)form.classList.toggle('open');
 }
 function saveVehicleService(plate){
-  const id=plate.replace(/\s+/g,'_');
+  const id=plateDomId(plate);
   const odo=parseInt(document.getElementById('vs-odo-'+id)?.value,10);
   const interval=parseInt(document.getElementById('vs-int-'+id)?.value,10);
   if(!odo||!interval||odo<=0||interval<=0){alert('Please enter a valid odometer and interval.');return;}
@@ -1842,6 +1842,17 @@ function fmtTimeHM(d){
 function escapeHtml(s){
   return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+// Attribute-context variant: use for every interpolation inside an HTML
+// attribute (title="", value="", id="", data-*) — also neutralises backtick
+// and equals so the value stays inert even under unquoted-attribute parsing.
+// For a value passed as a JS string inside an inline on* handler, wrap it as
+// escAttr(JSON.stringify(v)) so it is escaped for JS first, then for HTML.
+function escAttr(s){
+  return String(s??'').replace(/[&<>"'`=]/g,c=>'&#'+c.charCodeAt(0)+';');
+}
+// Plate → DOM-id fragment: [A-Za-z0-9_-] only, so a plate-derived id can never
+// carry markup. Writer and readers of an id must both use this.
+function plateDomId(p){return String(p??'').replace(/[^A-Za-z0-9_-]/g,'_');}
 
 function computeVehicleStats(v,fleetAvg){
   const txs=v.transactions;
@@ -2204,7 +2215,7 @@ function renderDashboard(){
   document.getElementById('heroVehicles').textContent=r.vehicles.length;
 
   document.getElementById('periodTabs').innerHTML=state.reports.map((rep,i)=>`
-    <button class="period-tab ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})">${rep.scheduleDate||'Report '+(i+1)}</button>
+    <button class="period-tab ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})">${escapeHtml(rep.scheduleDate||'Report '+(i+1))}</button>
   `).join('');
 
   const odomAlerts=r.vehicles.filter(v=>v.hasOdometerIssue);
@@ -2260,7 +2271,7 @@ function renderDashboard(){
   document.getElementById('topVehicles').innerHTML=top3.map((v,i)=>`
     <div class="top-vehicle-card rank-${i+1}">
       <div class="top-rank">${['🥇 1st','🥈 2nd','🥉 3rd'][i]} Highest Spend</div>
-      <div class="top-plate">${v.plate}</div>
+      <div class="top-plate">${escapeHtml(v.plate)}</div>
       <div class="top-amount">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
       <div class="top-meta">${v.totalLitres.toFixed(2)} L · ${v.transactions.length} fill(s) · avg ${v.avgLitresPerFill} L/fill</div>
       <span class="top-badge ${v.isHighSpend?'high':'ok'}">${v.isHighSpend?'⚠ High Spend':'✓ Normal'}</span>
@@ -2271,13 +2282,13 @@ function renderDashboard(){
   const byLitres=[...r.vehicles].sort((a,b)=>b.totalLitres-a.totalLitres);
   renderBarChart('spendChart',bySpend,bySpend[0]?.totalAmount||1,v=>`
     <div class="bar-row">
-      <div class="bar-label">${v.plate}</div>
+      <div class="bar-label">${escapeHtml(v.plate)}</div>
       <div class="bar-track"><div class="bar-fill ${v.isHighSpend?'red':'blue'}" style="width:${(v.totalAmount/(bySpend[0]?.totalAmount||1)*100).toFixed(1)}%"></div></div>
       <div class="bar-val">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
     </div>`);
   renderBarChart('litresChart',byLitres,byLitres[0]?.totalLitres||1,v=>`
     <div class="bar-row">
-      <div class="bar-label">${v.plate}</div>
+      <div class="bar-label">${escapeHtml(v.plate)}</div>
       <div class="bar-track"><div class="bar-fill blue" style="width:${(v.totalLitres/(byLitres[0]?.totalLitres||1)*100).toFixed(1)}%;background:#5BA3D0;"></div></div>
       <div class="bar-val">${v.totalLitres.toFixed(2)} L</div>
     </div>`);
@@ -2325,7 +2336,7 @@ function toggleVehicleCard(btn){ btn.closest('.vc').classList.toggle('open'); }
 
 function renderVehicleBlock(v,vi){
   const plate=v.plate;
-  const id=plate.replace(/\s+/g,'_');
+  const id=plateDomId(plate);
   const lastTx=v.transactions[v.transactions.length-1];
   const lastOdo=lastTx&&lastTx.odometer?lastTx.odometer.toLocaleString('en-US')+' km':'—';
   const currentOdo=lastTx&&lastTx.odometer?lastTx.odometer:null;
@@ -2334,7 +2345,7 @@ function renderVehicleBlock(v,vi){
   let svcHeaderClass='';
   let svcRowHtml='';
   if(!svc||!svc.lastServiceOdo||!svc.interval){
-    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val" style="color:var(--text3);font-style:italic;font-family:var(--font);">Not set up</span></div><button class="vc-svc-btn" onclick="editVehicleService('${plate}')">＋ Set up service</button></div>`;
+    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val" style="color:var(--text3);font-style:italic;font-family:var(--font);">Not set up</span></div><button class="vc-svc-btn" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">＋ Set up service</button></div>`;
   }else{
     const kmUsed=currentOdo?currentOdo-svc.lastServiceOdo:0;
     const kmRemaining=svc.interval-kmUsed;
@@ -2343,9 +2354,9 @@ function renderVehicleBlock(v,vi){
     else if(kmRemaining<=500){svcHeaderClass='svc-urgent';valClass='sv-red';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
     else if(kmRemaining<=2000){svcHeaderClass='svc-warn';valClass='sv-yellow';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
     else{valClass='sv-green';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
-    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val ${valClass}">${svcText}</span></div><button class="vc-svc-btn" onclick="editVehicleService('${plate}')">✎ Edit</button></div>`;
+    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val ${valClass}">${svcText}</span></div><button class="vc-svc-btn" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">✎ Edit</button></div>`;
   }
-  svcRowHtml+=`<div class="vc-service-form" id="vsf-${id}"><div class="vsf-row"><div><label>Last service odometer (km)</label><input type="number" id="vs-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000"></div><div><label>Service interval (km)</label><input type="number" id="vs-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000"></div></div><button class="vsf-save" onclick="saveVehicleService('${plate}')">Save</button></div>`;
+  svcRowHtml+=`<div class="vc-service-form" id="vsf-${id}"><div class="vsf-row"><div><label>Last service odometer (km)</label><input type="number" id="vs-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000"></div><div><label>Service interval (km)</label><input type="number" id="vs-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000"></div></div><button class="vsf-save" onclick="saveVehicleService(${escAttr(JSON.stringify(plate))})">Save</button></div>`;
 
   const badges=[];
   if(v.readingsOnly)badges.push('<span class="badge badge-comp">Readings only</span>');
@@ -2358,7 +2369,7 @@ function renderVehicleBlock(v,vi){
   const rows=v.transactions.map(tx=>{
     const srcTag=multiSource?(tx.source==='Engen'?'<span style="font-size:9px;color:#1971C2;font-weight:600;margin-left:4px;">[ENGEN]</span>':tx.source==='Freight'?'<span style="font-size:9px;color:#2F9E44;font-weight:600;margin-left:4px;">[FREIGHT]</span>':''):'';
     const photoThumb=tx.driverSubmission?odoThumbHtml(tx.photoPath):'';
-    return`<tr><td class="td-date">${tx.date}</td><td class="td-merchant">${tx.merchant}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
+    return`<tr><td class="td-date">${escapeHtml(tx.date)}</td><td class="td-merchant">${escapeHtml(tx.merchant)}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
   }).join('');
 
   const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn"><span>⚠</span><span>Odometer query: one or more readings are lower than the previous entry. Please verify with the fuel supplier or the driver — may be a data capture error.</span></div>`:'';
@@ -2374,13 +2385,13 @@ function renderVehicleBlock(v,vi){
     ?`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat" style="font-style:italic;color:var(--text3);">No fuel data this period</span></div></div>`
     :`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${v.totalLitres.toFixed(2)} L</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>`;
 
-  return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${plate}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary">${summaryStats}</div></button><div class="vc-body"><div class="tx-table-wrap"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table></div>${footerHtml}${odoNote}${highNote}${svcRowHtml}</div></div>`;
+  return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${escapeHtml(plate)}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary">${summaryStats}</div></button><div class="vc-body"><div class="tx-table-wrap"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table></div>${footerHtml}${odoNote}${highNote}${svcRowHtml}</div></div>`;
 }
 
 function renderVehicleTable(vehicles){
   const rows=vehicles.map(v=>v.readingsOnly
-    ?`<tr><td class="vtd-plate">${v.plate}</td><td colspan="5" style="font-style:italic;color:var(--text3);">No fuel data this period — ${v.transactions.length} approved reading${v.transactions.length!==1?'s':''}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''}</td></tr>`
-    :`<tr><td class="vtd-plate">${v.plate}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${v.totalLitres.toFixed(2)} L</td><td class="vtd-num r">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
+    ?`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td colspan="5" style="font-style:italic;color:var(--text3);">No fuel data this period — ${v.transactions.length} approved reading${v.transactions.length!==1?'s':''}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''}</td></tr>`
+    :`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${v.totalLitres.toFixed(2)} L</td><td class="vtd-num r">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
   return`<table class="vehicles-table"><thead><tr><th>Plate</th><th>Fills</th><th>Total Litres</th><th>Total Spend</th><th>Avg Litres/Fill</th><th>Avg km/L</th><th>Flags</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -2409,14 +2420,14 @@ function renderTrendChart(elId,points,unit,color){
   const areaD=`${pathD} L ${coords[coords.length-1].x} ${H-padY} L ${coords[0].x} ${H-padY} Z`;
   const colors={blue:'#1971C2',green:'#2F9E44',amber:'#E67700'};
   const col=colors[color]||colors.blue;
-  const dots=coords.map((c,i)=>`<circle cx="${c.x}" cy="${c.y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text x="${c.x}" y="${H-5}" text-anchor="middle" font-size="8" fill="#868E96">${points[i].label}</text><text x="${c.x}" y="${c.y-9}" text-anchor="middle" font-size="9" fill="${col}" font-weight="700">${unit==='R'?'R'+Math.round(points[i].value/1000)+'k':points[i].value.toFixed(0)+' L'}</text>`).join('');
+  const dots=coords.map((c,i)=>`<circle cx="${c.x}" cy="${c.y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text x="${c.x}" y="${H-5}" text-anchor="middle" font-size="8" fill="#868E96">${escapeHtml(points[i].label)}</text><text x="${c.x}" y="${c.y-9}" text-anchor="middle" font-size="9" fill="${col}" font-weight="700">${unit==='R'?'R'+Math.round(points[i].value/1000)+'k':points[i].value.toFixed(0)+' L'}</text>`).join('');
   el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="trend-svg" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="grad_${elId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity="0.12"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs><path d="${areaD}" fill="url(#grad_${elId})"/><path d="${pathD}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>${dots}</svg>`;
 }
 
 function renderHistory(){
   document.getElementById('historyGrid').innerHTML=state.reports.map((r,i)=>{
     const total=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
-    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">✕</button><div class="history-period">${r.scheduleDate||'Report '+(i+1)}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">R${total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`;
+    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">✕</button><div class="history-period">${escapeHtml(r.scheduleDate||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">R${total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`;
   }).join('');
 }
 
@@ -2461,7 +2472,7 @@ function renderComparison(){
   const prevPlates=new Set(prev.vehicles.map(v=>v.plate));
   const newVehicles=[...currPlates].filter(p=>!prevPlates.has(p));
   const missingVehicles=[...prevPlates].filter(p=>!currPlates.has(p));
-  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">📅 ${prev.scheduleDate||'Previous'}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2);">R${prevTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${prevLitres.toFixed(2)} L · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">📅 ${curr.scheduleDate||'Current'}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent);">R${currTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${currLitres.toFixed(2)} L · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} R${Math.abs(currTotal-prevTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">✅ New vehicles this period: <strong>${newVehicles.join(', ')}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">⚠ Vehicles not seen this period: <strong>${missingVehicles.join(', ')}</strong></div>`:''}`;
+  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(prev.scheduleDate||'Previous')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2);">R${prevTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${prevLitres.toFixed(2)} L · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(curr.scheduleDate||'Current')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent);">R${currTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${currLitres.toFixed(2)} L · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} R${Math.abs(currTotal-prevTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">✅ New vehicles this period: <strong>${escapeHtml(newVehicles.join(', '))}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">⚠ Vehicles not seen this period: <strong>${escapeHtml(missingVehicles.join(', '))}</strong></div>`:''}`;
 }
 
 function switchReport(i){ activeReportIndex=i; recomputeAllStats(); renderDashboard(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -2602,7 +2613,7 @@ async function renderBackupsList(){
           <div class="backup-date">${escapeHtml(prettyBackupDate(o.name))}</div>
           <div class="backup-name">${escapeHtml(o.name)}</div>
         </div>
-        <button class="btn btn-outline backup-dl" style="font-size:11px;padding:6px 12px;" onclick="downloadBackupFromSupabase('${o.path.replace(/'/g,"\\'")}')">⬇ Download</button>
+        <button class="btn btn-outline backup-dl" style="font-size:11px;padding:6px 12px;" onclick="downloadBackupFromSupabase(${escAttr(JSON.stringify(o.path))})">⬇ Download</button>
       </div>`).join('');
   }catch(err){
     el.innerHTML='<p class="backups-empty">Could not load backups ('+escapeHtml(String(err.message||err))+'). The “backups” bucket may need a Storage policy that allows the app to list it.</p>';
@@ -2646,7 +2657,7 @@ function showErrorBanner(msg){
       <div style="font-size:22px;flex-shrink:0;">⚠️</div>
       <div style="flex:1;">
         <div style="font-size:13px;font-weight:700;color:#C92A2A;margin-bottom:6px;">Upload Failed</div>
-        <div style="font-size:12px;color:#862e2e;line-height:1.6;white-space:pre-line;">${msg}</div>
+        <div style="font-size:12px;color:#862e2e;line-height:1.6;white-space:pre-line;">${escapeHtml(msg)}</div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <button onclick="document.getElementById('fileInput').click();document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:var(--accent);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">Try Again</button>
           <button onclick="document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:transparent;border:1.5px solid #CED4DA;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;color:#495057;">Dismiss</button>
@@ -3253,13 +3264,13 @@ function renderAlertBanner(){
 }
 
 function toggleComplianceEdit(plate){
-  const id=plate.replace(/\s+/g,'_');
+  const id=plateDomId(plate);
   const form=document.getElementById('cef-'+id);
   if(form)form.classList.toggle('open');
 }
 
 async function saveComplianceEdit(plate){
-  const id=plate.replace(/\s+/g,'_');
+  const id=plateDomId(plate);
   const g=f=>{const el=document.getElementById('ce-'+f+'-'+id);return el?el.value.trim():'';};
   const num=v=>v&&!isNaN(parseFloat(v))?parseFloat(v):null;
   const row={
@@ -3416,7 +3427,7 @@ function renderDiscCards(plates){
 
   document.getElementById('discsGrid').innerHTML=list.map((v,vi)=>{
     const{plate,rec,worst}=v;
-    const id=plate.replace(/\s+/g,'_');
+    const id=plateDomId(plate);
     const cardClass=worst==='expired'||worst==='urgent'?'dc-red':worst==='warn'?'dc-amber':worst==='ok'?'dc-green':'';
     const badgeClass=worst==='expired'||worst==='urgent'?'dcb-expired':worst==='warn'?'dcb-warn':worst==='ok'?'dcb-ok':'';
     const badgeText=worst==='expired'?'Expired':worst==='urgent'?'Urgent':worst==='warn'?'Due Soon':worst==='ok'?'All Valid':'Not Set';
@@ -3426,7 +3437,7 @@ function renderDiscCards(plates){
       const st=complianceStatus(exp);
       const chipClass='cc-'+st.status;
       const chipText=st.status==='expired'?`${Math.abs(st.days)}d over`:st.status==='unknown'?'Not set':st.status==='ok'?`${st.days}d`:`${st.days}d left`;
-      const renewBtn=it.renewMonths?`<button class="comp-renew-btn" onclick="renewComplianceItem('${plate.replace(/'/g,"\\'")}','${it.key}')">✓ Renewed</button>`:'';
+      const renewBtn=it.renewMonths?`<button class="comp-renew-btn" onclick="renewComplianceItem(${escAttr(JSON.stringify(plate))},'${it.key}')">✓ Renewed</button>`:'';
       return`<div class="comp-row">
         <span class="comp-item-label">${it.icon} ${it.label}</span>
         <span class="comp-date">${exp?fmtDDMMYYYY(exp):'—'}</span>
@@ -3445,7 +3456,7 @@ function renderDiscCards(plates){
         ${rec.make_model?`<div class="disc-info-row" style="margin-top:4px;"><span class="disc-info-label">Make / Model</span><span class="disc-info-val">${escapeHtml(rec.make_model)}</span></div>`:''}
         ${rec.notes?`<div style="font-size:11px;color:var(--amber);font-style:italic;margin-top:4px;">📝 ${escapeHtml(rec.notes)}</div>`:''}
       </div>
-      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleComplianceEdit('${plate.replace(/'/g,"\\'")}')">✎ Edit Details</button></div>
+      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleComplianceEdit(${escAttr(JSON.stringify(plate))})">✎ Edit Details</button></div>
       <div class="disc-edit-form" id="cef-${id}">
         <div class="def-row">
           <div><label>Make / Model</label><input type="text" id="ce-make-${id}" value="${escapeHtml(rec.make_model||'')}" placeholder="e.g. Yutong ZK6122H"></div>
@@ -3465,7 +3476,7 @@ function renderDiscCards(plates){
           <div><label>Op. Licence Cost (R)</label><input type="number" id="ce-ocost-${id}" min="0" step="0.01" value="${rec.operating_licence_cost||''}"></div>
         </div>
         <div><label>Notes</label><input type="text" id="ce-notes-${id}" value="${escapeHtml(rec.notes||'')}" placeholder="Optional"></div>
-        <button class="def-save" onclick="saveComplianceEdit('${plate.replace(/'/g,"\\'")}')">💾 Save</button>
+        <button class="def-save" onclick="saveComplianceEdit(${escAttr(JSON.stringify(plate))})">💾 Save</button>
       </div>
     </div>`;
   }).join('');
@@ -3488,7 +3499,7 @@ function renderDiscBulk(plates){
       <thead><tr><th>Plate</th><th>Make / Model</th><th>💿 Disc Expiry</th><th>Disc No.</th><th>🛠 COF Expiry</th><th>🚏 Op. Lic. Expiry</th><th>Op. Lic. No.</th></tr></thead>
       <tbody>${list.map(p=>{
         const r=complianceData[p]||{};
-        const id=p.replace(/\s+/g,'_');
+        const id=plateDomId(p);
         return`<tr data-plate="${escapeHtml(p)}">
           <td class="bp">${escapeHtml(p)}</td>
           <td><input type="text" id="bk-make-${id}" value="${escapeHtml(r.make_model||'')}"></td>
@@ -3507,7 +3518,7 @@ async function saveDiscBulk(){
   btn.disabled=true;btn.textContent='Saving...';
   const rows=[...document.querySelectorAll('#discBulkWrap tbody tr')].map(tr=>{
     const plate=tr.dataset.plate;
-    const id=plate.replace(/\s+/g,'_');
+    const id=plateDomId(plate);
     const g=f=>{const el=document.getElementById('bk-'+f+'-'+id);return el?el.value.trim():'';};
     return{
       plate,
@@ -3567,7 +3578,7 @@ async function renderTyresTab(){
 function renderTyrePlateStrip(plates){
   document.getElementById('tyrePlateStrip').innerHTML=plates.map(p=>{
     const count=tyresData.filter(t=>t.plate===p).length;
-    return`<button class="tyre-plate-chip ${p===selectedTyrePlate?'active':''}" onclick="selectTyrePlate('${p.replace(/'/g,"\\'")}')">${p}<span class="tyre-chip-count">${count}</span></button>`;
+    return`<button class="tyre-plate-chip ${p===selectedTyrePlate?'active':''}" onclick="selectTyrePlate(${escAttr(JSON.stringify(p))})">${escapeHtml(p)}<span class="tyre-chip-count">${count}</span></button>`;
   }).join('');
 }
 
@@ -3612,17 +3623,17 @@ function renderTyreVehiclePanel(){
 
   panel.innerHTML=`
     <div class="section-header">
-      <div class="section-title" style="font-size:15px;">🚌 ${plate} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
+      <div class="section-title" style="font-size:15px;">🚌 ${escapeHtml(plate)} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
       <div class="section-actions">
         <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddTyreForm()">＋ Add Tyre</button>
       </div>
     </div>
     ${cards}
     <div class="tyre-add-form" id="tyreAddForm">
-      <div class="tyre-form-title">＋ Add Tyre — ${plate}</div>
+      <div class="tyre-form-title">＋ Add Tyre — ${escapeHtml(plate)}</div>
       <div class="tyre-form-err" id="tyreFormErr"></div>
       <div class="tf-grid">
-        <div class="tf-field"><label>Vehicle Plate</label><input type="text" id="tf-plate" value="${plate}" readonly style="background:var(--surface2);"></div>
+        <div class="tf-field"><label>Vehicle Plate</label><input type="text" id="tf-plate" value="${escAttr(plate)}" readonly style="background:var(--surface2);"></div>
         <div class="tf-field"><label>Position *</label><select id="tf-position">${TYRE_POSITIONS.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div>
         <div class="tf-field"><label>Brand *</label>
           <select id="tf-brand" onchange="tyreBrandChanged(this)">${TYRE_BRANDS.map(b=>`<option value="${b}">${b}</option>`).join('')}</select>
@@ -4046,7 +4057,7 @@ function renderMaintPlateStrip(plates){
   document.getElementById('maintPlateStrip').innerHTML=plates.map(p=>{
     const count=maintJobs.filter(j=>j.plate===p).length;
     const hasFlag=maintFlags.some(f=>f.plate===p&&f.severity==='red');
-    return`<button class="tyre-plate-chip ${p===selectedMaintPlate?'active':''}" onclick="selectMaintPlate('${p.replace(/'/g,"\\'")}')">${hasFlag?'🚩 ':''}${escapeHtml(p)}<span class="tyre-chip-count">${count}</span></button>`;
+    return`<button class="tyre-plate-chip ${p===selectedMaintPlate?'active':''}" onclick="selectMaintPlate(${escAttr(JSON.stringify(p))})">${hasFlag?'🚩 ':''}${escapeHtml(p)}<span class="tyre-chip-count">${count}</span></button>`;
   }).join('');
 }
 
@@ -4963,7 +4974,7 @@ async function generateReport(){
   // ── Assemble document ──
   const now=new Date();
   const dateStr=fmtDDMMYYYY(now)+' '+fmtTimeHM(now);
-  const scopeLine=(vehFilter==='__all__'?'All Vehicles':vehFilter)+' · '+(periodVal==='__all__'?'All Periods':escapeHtml(state.reports[+periodVal].scheduleDate||'Selected Period'));
+  const scopeLine=(vehFilter==='__all__'?'All Vehicles':escapeHtml(vehFilter))+' · '+(periodVal==='__all__'?'All Periods':escapeHtml(state.reports[+periodVal].scheduleDate||'Selected Period'));
 
   const reportTitle=reportType==='full'?(vehFilter!=='__all__'?'Vehicle Report':'Full Fleet Report'):'Custom Report';
 
