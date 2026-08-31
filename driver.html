@@ -399,10 +399,13 @@ function renderPlateList(){
   if(vehicleList.length===0){el.innerHTML='<div class="plate-none">No vehicles available — please contact the office.</div>';return;}
   el.innerHTML=list.length
     ?list.map(v=>{
-      const arg=`'${v.plate.replace(/'/g,"\\'")}'`;
+      // Render-only escaping: the handler receives the raw plate (browser
+      // decodes the attribute, then JS parses the JSON string literal), so
+      // pickPlate/vehicleList.find/submit all keep using the true value.
+      const arg=escAttr(JSON.stringify(v.plate));
       return v.fleet_no
-        ?`<button class="plate-row" onclick="pickPlate(${arg})"><span class="pr-fleet">🚌 Bus ${v.fleet_no}</span><span class="pr-plate-sub">${v.plate}</span></button>`
-        :`<button class="plate-row" onclick="pickPlate(${arg})">${v.plate}</button>`;
+        ?`<button class="plate-row" onclick="pickPlate(${arg})"><span class="pr-fleet">🚌 Bus ${escapeHtml(v.fleet_no)}</span><span class="pr-plate-sub">${escapeHtml(v.plate)}</span></button>`
+        :`<button class="plate-row" onclick="pickPlate(${arg})">${escapeHtml(v.plate)}</button>`;
     }).join('')
     :'<div class="plate-none">No vehicles match your search.</div>';
 }
