@@ -1366,17 +1366,19 @@ function showLogin(){
   document.getElementById('loginErr').textContent='';
 }
 
-async function logout(){
+// Audit fix #3 item 4: scope 'local' (default, the Log out button) revokes
+// only this device's session; 'global' (Log out everywhere) revokes every
+// session for the user. Both end in the same full-page reload.
+async function logout(scope='local'){
+  if(scope!=='global')scope='local';
   // Revoke the session server-side (best-effort — an offline logout must still work)
   try{
-    await fetch(`${SUPABASE_URL}/auth/v1/logout`,{
+    await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=${scope}`,{
       method:'POST',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
     });
   }catch{}
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(AUTH_REFRESH_KEY);
-  localStorage.removeItem(AUTH_TIME_KEY);
+  clearStoredAuth();
   // Build #4b: wipe the tenant's business data from this device — the DB is
   // the source of truth, so nothing is lost. Bare (pre-#4a) leftovers of the
   // same keys are removed too.
@@ -1389,6 +1391,11 @@ async function logout(){
   // Full reload wipes all in-memory state — timers, poll intervals, per-tenant
   // globals — that an in-page showLogin() would leave running.
   window.location.reload();
+}
+
+function logoutEverywhere(){
+  if(!confirm('This will sign you out on all devices. Continue?'))return;
+  logout('global');
 }
 
 function togglePasswordVisibility(){
@@ -5145,6 +5152,9 @@ initApp();
     <button class="login-btn" id="accountSaveBtn" onclick="saveAccountPassword()">Save new password</button>
     <div class="login-ok" id="accountOk"></div>
     <div class="login-err" id="accountErr"></div>
+    <label class="login-label" style="margin-top:18px;">Sessions</label>
+    <div class="login-hint" style="margin-bottom:8px;">Signs you out of FleetDesk on every device and browser, including this one.</div>
+    <button type="button" class="btn btn-danger" style="width:100%;" onclick="logoutEverywhere()">⎋ Log out everywhere</button>
   </div>
 </div>
 
