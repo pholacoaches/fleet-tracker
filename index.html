@@ -1286,6 +1286,15 @@ function applyBranding(){
 }
 
 
+// The three stored session keys live and die together. Audit fix #3: every
+// path that decides the session is unusable must call this so no dead
+// access/refresh token is ever left behind in localStorage.
+function clearStoredAuth(){
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_REFRESH_KEY);
+  localStorage.removeItem(AUTH_TIME_KEY);
+}
+
 async function checkAuth(){
   try{
     const token=localStorage.getItem(AUTH_TOKEN_KEY);
@@ -1293,19 +1302,24 @@ async function checkAuth(){
     const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
     if(!token)return false;
     // Stage 5: legacy login removed — a leftover 'local-' token is not a session
-    if(token.startsWith('local-')){localStorage.removeItem(AUTH_TOKEN_KEY);return false;}
+    if(token.startsWith('local-')){clearStoredAuth();return false;}
     // Token still fresh — no network call needed
     if(Date.now()-time<55*60*1000)return true;
     // Token is older than 55 min — use refresh token to get a new one
     if(!refresh)return Date.now()-time<AUTH_TTL;
-    const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
-      body:JSON.stringify({refresh_token:refresh})
-    });
-    if(!res.ok)return false;
-    const data=await res.json();
-    if(!data.access_token)return false;
+    // Audit fix #3 item 1: a refresh that fails for ANY reason (rejected by
+    // GoTrue, malformed reply, or a network error) means the stored pair is
+    // dead — wipe it rather than retrying it forever on every load.
+    let data;
+    try{
+      const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+        body:JSON.stringify({refresh_token:refresh})
+      });
+      data=res.ok?await res.json():null;
+    }catch{data=null;}
+    if(!data||!data.access_token){clearStoredAuth();return false;}
     localStorage.setItem(AUTH_TOKEN_KEY,data.access_token);
     if(data.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,data.refresh_token);
     localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
@@ -1573,7 +1587,11 @@ async function saveAccountPassword(){
   if(invalid){errEl.textContent=invalid;return;}
   btn.disabled=true;btn.textContent='Saving...';
   try{
-    await checkAuth(); // refresh the access token if it is stale
+    // Refresh the access token if it is stale. Audit fix #3 item 1: if the
+    // session turned out to be dead, checkAuth() has already wiped the stored
+    // keys — go through logout() (full reload → login screen) instead of
+    // firing the PUT with no bearer token.
+    if(!(await checkAuth())){logout();return;}
     const res=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
       method:'PUT',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+localStorage.getItem(AUTH_TOKEN_KEY)},
