@@ -617,6 +617,10 @@ async function submitReading(){
   try{
     const photoPath=await uploadPhoto();
     if(!photoPath)throw new Error('photo upload failed');
+    // Pilot fix 1b: photo_verified:false ONLY on the second-failure manual-entry
+    // path (AI never read this photo). Every other path omits the field and the
+    // DB default (true) applies.
+    const photoUnverified=aiDetectedOdometer===null&&aiFailCount>=2;
     const response=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings`,{
       method:'POST',
       headers:{...SB_HEADERS,'Content-Type':'application/json','Prefer':'return=minimal'},
@@ -627,7 +631,8 @@ async function submitReading(){
         ai_odometer:aiDetectedOdometer,
         driver_code:driver.personal_code,
         driver_name:driver.name,
-        photo_path:photoPath
+        photo_path:photoPath,
+        ...(photoUnverified?{photo_verified:false}:{})
       })
     });
     if(!response.ok&&response.status!==201)throw new Error('Submission failed: '+response.status);
