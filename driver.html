@@ -550,8 +550,11 @@ async function readOdometerWithAI(base64){
       const data=await response.json();
       const raw=(data.content||[]).map(i=>i.text||'').join('').replace(/```json|```/g,'').trim();
       const parsed=JSON.parse(raw);
-      if(Number.isInteger(parsed.odometer)&&parsed.odometer>0){outcome='ok';aiOdo=parsed.odometer;}
-      else if(parsed&&typeof parsed==='object'&&parsed.odometer===null)outcome='unreadable';
+      // Pilot fix 2: cap at 7 digits — a photographed screen once yielded
+      // 1201214692 (odometer + trip meter joined). Out-of-range integers are
+      // treated as an unreadable photo (a strike), never as a valid read.
+      if(Number.isInteger(parsed.odometer)&&parsed.odometer>0&&parsed.odometer<=9999999){outcome='ok';aiOdo=parsed.odometer;}
+      else if(parsed&&typeof parsed==='object'&&(parsed.odometer===null||Number.isInteger(parsed.odometer)))outcome='unreadable';
       // any other shape stays 'error'
     }
   }catch(err){

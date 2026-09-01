@@ -49,7 +49,8 @@ const DRIVER_PROMPT =
   'This is a photo of a vehicle dashboard. Read the TOTAL odometer only — the cumulative kilometre ' +
   'figure, normally the larger integer with no decimal point. IGNORE trip meters (usually smaller, ' +
   'with a decimal point, often labelled TRIP, A or B) and every other number on the dashboard ' +
-  '(clock, speed, fuel range, temperature). If the total odometer is genuinely unreadable, use null. ' +
+  '(clock, speed, fuel range, temperature). Never join two numbers together. The total odometer is ' +
+  'at most 7 digits. If the total odometer is genuinely unreadable, use null. ' +
   'Respond with ONLY strict JSON, no markdown, no code fences, exactly this shape: ' +
   '{"odometer": <integer or null>, "confidence": "high"|"medium"|"low"}';
 
