@@ -432,32 +432,58 @@ function confirmVehicle(){
 }
 
 // ── Photo: compress client-side to max 1280px / ~200KB JPEG ──
+// Pilot fix 3 (phone memory): the old path held the ORIGINAL photo as a
+// FileReader base64 string (~1.3× file size) alongside its full-resolution
+// decoded bitmap — enough for low-memory warnings on phones. Now the file is
+// decoded straight to the capped size via createImageBitmap(resizeWidth/
+// resizeHeight) where supported; the fallback draws an object-URL <img>, so a
+// full-size base64 copy never exists either way. The preview/AI base64 comes
+// from the ~200KB compressed blob only.
 const MAX_DIM=1280, TARGET_BYTES=200*1024, MAX_INPUT_BYTES=25*1024*1024;
 
 async function compressPhoto(file){
-  const dataUrl=await new Promise((resolve,reject)=>{
-    const r=new FileReader();
-    r.onload=e=>resolve(e.target.result);
-    r.onerror=reject;
-    r.readAsDataURL(file);
-  });
-  const img=await new Promise((resolve,reject)=>{
-    const i=new Image();
-    i.onload=()=>resolve(i);
-    i.onerror=reject;
-    i.src=dataUrl;
-  });
-  const scale=Math.min(1,MAX_DIM/Math.max(img.width,img.height));
-  const canvas=document.createElement('canvas');
-  canvas.width=Math.round(img.width*scale);
-  canvas.height=Math.round(img.height*scale);
-  canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
-  // Walk quality down until we are under ~200KB (0.5 floor keeps the odometer legible)
-  for(const q of [0.8,0.7,0.6,0.5]){
-    const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',q));
-    if(blob&&(blob.size<=TARGET_BYTES||q===0.5))return{blob,preview:canvas.toDataURL('image/jpeg',q)};
+  const url=URL.createObjectURL(file);
+  let canvas=null;
+  try{
+    // Dimension read only — rasterisation is deferred until drawImage.
+    const img=await new Promise((resolve,reject)=>{
+      const i=new Image();
+      i.onload=()=>resolve(i);
+      i.onerror=reject;
+      i.src=url;
+    });
+    const scale=Math.min(1,MAX_DIM/Math.max(img.width,img.height));
+    const w=Math.round(img.width*scale),h=Math.round(img.height*scale);
+    let source=img,bitmap=null;
+    if(window.createImageBitmap){
+      try{
+        bitmap=await createImageBitmap(file,{resizeWidth:w,resizeHeight:h,resizeQuality:'high'});
+        source=bitmap;
+      }catch{/* older WebKit rejects resize options — fall back to the <img> */}
+    }
+    canvas=document.createElement('canvas');
+    canvas.width=w;canvas.height=h;
+    canvas.getContext('2d').drawImage(source,0,0,w,h);
+    if(bitmap)bitmap.close();
+    // Walk quality down until we are under ~200KB (0.5 floor keeps the odometer legible)
+    for(const q of [0.8,0.7,0.6,0.5]){
+      const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',q));
+      if(blob&&(blob.size<=TARGET_BYTES||q===0.5)){
+        const preview=await new Promise((res,rej)=>{
+          const r=new FileReader();
+          r.onload=e=>res(e.target.result);
+          r.onerror=rej;
+          r.readAsDataURL(blob);
+        });
+        return{blob,preview};
+      }
+    }
+    return null;
+  }finally{
+    URL.revokeObjectURL(url);
+    // Release the canvas backing store immediately instead of waiting for GC
+    if(canvas){canvas.width=0;canvas.height=0;}
   }
-  return null;
 }
 
 async function handlePhoto(event){
@@ -605,6 +631,8 @@ async function submitReading(){
       })
     });
     if(!response.ok&&response.status!==201)throw new Error('Submission failed: '+response.status);
+    // Pilot fix 3: drop the photo references as soon as the upload is recorded
+    photoBlob=null;photoBase64='';
     document.getElementById('thanksTitle').textContent=`Thank you ${driver.name.split(' ')[0]}, reading received`;
     document.getElementById('successOdo').textContent=odo.toLocaleString('en-ZA')+' km';
     showScreen('thanksScreen');
