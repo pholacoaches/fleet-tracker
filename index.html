@@ -1297,6 +1297,33 @@ function clearStoredAuth(){
   localStorage.removeItem(AUTH_TIME_KEY);
 }
 
+// Build #4b wipe, shared by logout() and every stale-session path (pilot fix 2
+// item 2): the tenant's business data and the tenant cache die with the
+// session. The DB is the source of truth, so nothing is lost. checkAuth()
+// runs at boot while TENANT is still null (nsKey() would return bare keys),
+// so resolve the namespace from the cached tenant when needed.
+function wipeTenantLocalData(){
+  let tid=TENANT?.id||null;
+  if(!tid){
+    try{tid=JSON.parse(localStorage.getItem(TENANT_CACHE_KEY))?.id||null;}catch{}
+  }
+  // Bare (pre-#4a) leftovers of the same keys are removed too.
+  [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY].forEach(k=>{
+    if(tid)localStorage.removeItem(k+':'+tid);
+    localStorage.removeItem(k);
+  });
+  // Drop the tenant cache so the next login can never inherit this tenant
+  localStorage.removeItem(TENANT_CACHE_KEY);
+}
+
+// A session found dead (stale token, failed refresh, legacy token) takes the
+// tenant's local data with it — never leave one tenant's cache behind for the
+// next person on the device.
+function clearDeadSession(){
+  clearStoredAuth();
+  wipeTenantLocalData();
+}
+
 async function checkAuth(){
   try{
     const token=localStorage.getItem(AUTH_TOKEN_KEY);
@@ -1304,12 +1331,12 @@ async function checkAuth(){
     const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
     if(!token)return false;
     // Stage 5: legacy login removed — a leftover 'local-' token is not a session
-    if(token.startsWith('local-')){clearStoredAuth();return false;}
+    if(token.startsWith('local-')){clearDeadSession();return false;}
     // Token still fresh — no network call needed
     if(Date.now()-time<55*60*1000)return true;
     // Audit fix #3 item 2: a stale access token with no refresh token can
     // never be renewed — it is a dead session, not a 24h grace period.
-    if(!refresh){clearStoredAuth();return false;}
+    if(!refresh){clearDeadSession();return false;}
     // Token is older than 55 min — use refresh token to get a new one
     // Audit fix #3 item 1: a refresh that fails for ANY reason (rejected by
     // GoTrue, malformed reply, or a network error) means the stored pair is
@@ -1323,7 +1350,7 @@ async function checkAuth(){
       });
       data=res.ok?await res.json():null;
     }catch{data=null;}
-    if(!data||!data.access_token){clearStoredAuth();return false;}
+    if(!data||!data.access_token){clearDeadSession();return false;}
     localStorage.setItem(AUTH_TOKEN_KEY,data.access_token);
     if(data.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,data.refresh_token);
     localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
@@ -1387,16 +1414,7 @@ async function logout(scope='local'){
       });
     }catch{}
   }
-  clearStoredAuth();
-  // Build #4b: wipe the tenant's business data from this device — the DB is
-  // the source of truth, so nothing is lost. Bare (pre-#4a) leftovers of the
-  // same keys are removed too.
-  [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY].forEach(k=>{
-    localStorage.removeItem(nsKey(k));
-    localStorage.removeItem(k);
-  });
-  // Drop the tenant cache so the next login can never inherit this tenant
-  localStorage.removeItem(TENANT_CACHE_KEY);
+  clearDeadSession();
   // Full reload wipes all in-memory state — timers, poll intervals, per-tenant
   // globals — that an in-page showLogin() would leave running.
   window.location.reload();
