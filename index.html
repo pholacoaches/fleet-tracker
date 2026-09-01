@@ -896,6 +896,9 @@ input[type=file] { display: none; }
   <!-- z-index 3: the full-size hero content wrapper below is z-index 2 and later in
        the DOM, so at equal z-index it paints over these buttons and swallows clicks -->
   <div id="heroAccountBtns" style="position:absolute;top:16px;right:20px;z-index:3;display:flex;gap:8px;">
+    <!-- Pilot fix 2a: the bell must also be reachable with no reports loaded —
+         pending driver submissions were invisible in the empty state -->
+    <button class="logout-btn" id="heroNotifBtn" onclick="toggleNotifPanel()" style="position:relative;">🔔 <span id="heroNotifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#C92A2A;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;align-items:center;justify-content:center;">0</span></button>
     <button class="logout-btn" onclick="openAccountPanel()">👤 Account</button>
     <button class="logout-btn" onclick="logout()">⎋ Log out</button>
   </div>
@@ -2234,9 +2237,19 @@ Important rules:
   return JSON.parse(clean);
 }
 
+// Pilot fix 2b: with no fuel report but approved driver readings on file, the
+// dashboard must still render (fuel stats at R0 / 0 L, readings-only vehicle
+// blocks) — six readings once sat invisible for five days behind the empty
+// state. The virtual report is render-only: it is never pushed into
+// state.reports, saved, synced, or deletable.
+function hasApprovedReadings(){
+  return (approvedData||[]).some(n=>n.status==='approved'&&n.plate&&n.odometer);
+}
+
 function renderDashboard(){
   recomputeAllStats();
-  if(state.reports.length===0){
+  const readingsOnlyMode=state.reports.length===0&&hasApprovedReadings();
+  if(state.reports.length===0&&!readingsOnlyMode){
     document.getElementById('emptyState').classList.remove('hidden');
     document.getElementById('dashboard').classList.add('hidden');
     document.getElementById('heroStatsStrip').style.display='none';
@@ -2245,7 +2258,9 @@ function renderDashboard(){
   }
   document.getElementById('emptyState').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
-  currentReport=state.reports[activeReportIndex];
+  currentReport=readingsOnlyMode
+    ?{id:'virtual-readings-only',scheduleDate:'Driver readings',uploadedAt:new Date().toISOString(),vehicles:[],sources:[],virtual:true}
+    :state.reports[activeReportIndex];
   const r=currentReport;
 
   document.getElementById('heroStatsStrip').style.display='block';
@@ -2254,7 +2269,9 @@ function renderDashboard(){
   const _hLitres=r.vehicles.reduce((s,v)=>s+v.totalLitres,0);
   document.getElementById('heroSpend').textContent='R'+Math.round(_hTotal/1000)+'k';
   document.getElementById('heroLitres').textContent=_hLitres.toFixed(0)+' L';
-  document.getElementById('heroVehicles').textContent=r.vehicles.length;
+  // In readings-only mode the vehicle count reflects the readings-only blocks,
+  // not the (empty) report.
+  document.getElementById('heroVehicles').textContent=readingsOnlyMode?vehiclesWithDriverSubmissions().length:r.vehicles.length;
 
   document.getElementById('periodTabs').innerHTML=state.reports.map((rep,i)=>`
     <button class="period-tab ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})">${escapeHtml(rep.scheduleDate||'Report '+(i+1))}</button>
@@ -2960,7 +2977,11 @@ async function fetchSubmissions(){
     if(pendRes.ok||apprRes.ok){
       rebuildNotifData();
       updateNotifBadge();
-      filterVehicles();
+      // Pilot fix 2b: with no fuel reports the empty state may need to flip to
+      // the readings-only dashboard (or back) — filterVehicles alone can't do
+      // that because the dashboard container itself is hidden.
+      if(state.reports.length===0)renderDashboard();
+      else filterVehicles();
     }
   }catch(err){console.error('Notif fetch failed:',err);}
 }
@@ -3017,7 +3038,11 @@ function vehiclesWithDriverSubmissions(){
   const approved=(approvedData||[]).filter(n=>n.status==='approved'&&n.plate&&n.odometer);
   const byPlate={};
   approved.forEach(s=>{(byPlate[s.plate]=byPlate[s.plate]||[]).push(s);});
-  const fa=currentReport.vehicles.reduce((s,v)=>s+v.totalAmount,0)/currentReport.vehicles.length;
+  // Virtual readings-only report has no vehicles — null fleetAvg skips the
+  // high-spend flag instead of comparing against NaN.
+  const fa=currentReport.vehicles.length
+    ?currentReport.vehicles.reduce((s,v)=>s+v.totalAmount,0)/currentReport.vehicles.length
+    :null;
   const result=currentReport.vehicles.map(v=>{
     const subs=byPlate[v.plate];
     if(!subs)return v;
@@ -3041,16 +3066,19 @@ function vehiclesWithDriverSubmissions(){
 }
 
 function updateNotifBadge(){
-  const badge=document.getElementById('notifBadge');
-  const btn=document.getElementById('notifBtn');
-  if(!badge||!btn)return;
+  // Two bells: the stats-strip one and the hero one (pilot fix 2a — the hero
+  // bell is what shows when no fuel report is loaded). Keep both badges in sync.
   const count=pendingData.filter(n=>!n.status||n.status==='pending').length;
-  if(count>0){
-    badge.textContent=count>99?'99+':count;
-    badge.style.display='flex';
-  }else{
-    badge.style.display='none';
-  }
+  ['notifBadge','heroNotifBadge'].forEach(id=>{
+    const badge=document.getElementById(id);
+    if(!badge)return;
+    if(count>0){
+      badge.textContent=count>99?'99+':count;
+      badge.style.display='flex';
+    }else{
+      badge.style.display='none';
+    }
+  });
 }
 
 function toggleNotifPanel(){
