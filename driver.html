@@ -248,6 +248,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
           <div class="photo-area-text">Tap here to take a photo<br>of your odometer</div>
         </div>
         <div class="ai-status" id="aiStatus"></div>
+        <!-- Pilot fix 1c: connection errors re-run the AI read on the SAME photo -->
+        <button class="photo-btn secondary" id="aiRetryBtn" style="display:none" onclick="retryAiRead()">🔁 Retry</button>
         <div class="odo-ai-result" id="aiResult"></div>
         <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(event)">
         <button class="photo-btn secondary" onclick="document.getElementById('cameraInput').click()" style="display:none" id="retakeBtn">🔄 Retake Photo</button>
@@ -517,12 +519,20 @@ async function readOdometerWithAI(base64){
   status.className='ai-status reading';
   status.textContent='🤖 AI is reading your odometer...';
   result.classList.remove('show');
+  document.getElementById('aiRetryBtn').style.display='none';
   // Pilot fix 1a: the Worker's pinned prompt now targets the TOTAL odometer
   // (ignoring trip meters) and answers strict JSON
   // {"odometer": <integer or null>, "confidence": "high"|"medium"|"low"}.
   // The typed box is NEVER pre-filled from the AI — the two values stay
   // independent and both are submitted (odometer vs ai_odometer).
-  let aiOdo=null;
+  //
+  // Pilot fix 1c: three outcomes, and only 'unreadable' counts a strike —
+  //   'ok'          model returned an integer odometer
+  //   'unreadable'  model answered, explicitly {"odometer": null}
+  //   'error'       fetch threw / non-2xx / unparseable body — a CONNECTION
+  //                 problem, not the photo's fault: offer Retry on the same
+  //                 photo instead of burning a retake strike.
+  let outcome='error',aiOdo=null;
   try{
     // Audit fix #1: the Worker validates the driver code (X-Driver-Code) via
     // driver_page_init and pins the model, max_tokens AND the prompt itself —
@@ -536,14 +546,18 @@ async function readOdometerWithAI(base64){
         ]}]
       })
     });
-    const data=await response.json();
-    const raw=(data.content||[]).map(i=>i.text||'').join('').replace(/```json|```/g,'').trim();
-    const parsed=JSON.parse(raw);
-    if(Number.isInteger(parsed.odometer)&&parsed.odometer>0)aiOdo=parsed.odometer;
+    if(response.ok){
+      const data=await response.json();
+      const raw=(data.content||[]).map(i=>i.text||'').join('').replace(/```json|```/g,'').trim();
+      const parsed=JSON.parse(raw);
+      if(Number.isInteger(parsed.odometer)&&parsed.odometer>0){outcome='ok';aiOdo=parsed.odometer;}
+      else if(parsed&&typeof parsed==='object'&&parsed.odometer===null)outcome='unreadable';
+      // any other shape stays 'error'
+    }
   }catch(err){
     console.error('[FleetDesk] AI odometer read failed:',err);
   }
-  if(aiOdo!==null){
+  if(outcome==='ok'){
     aiDetectedOdometer=aiOdo;
     aiFailCount=0;
     status.className='ai-status success';
@@ -554,13 +568,21 @@ async function readOdometerWithAI(base64){
     checkAiMismatch();
     return;
   }
-  // Pilot fix 1b: unreadable photo. The first failure forces a retake; the
-  // second allows manual entry (ai_odometer stays null, so the office can see
-  // the reading was not photo-verified).
   aiDetectedOdometer=null;
-  aiFailCount++;
   checkAiMismatch();
   status.className='ai-status error';
+  if(outcome==='error'){
+    // No strike: the photo was never judged. Submit stays disabled — Retry
+    // re-sends the same photo once the signal is back.
+    status.textContent='⚠ Connection problem — check your signal and try again';
+    document.getElementById('aiRetryBtn').style.display='block';
+    document.getElementById('submitBtn').disabled=true;
+    return;
+  }
+  // Pilot fix 1b: genuinely unreadable photo. The first failure forces a
+  // retake; the second allows manual entry (ai_odometer stays null, so the
+  // office can see the reading was not photo-verified).
+  aiFailCount++;
   if(aiFailCount===1){
     status.textContent='⚠ Couldn’t read the odometer — retake with the total km filling the frame';
     document.getElementById('submitBtn').disabled=true;
@@ -568,6 +590,12 @@ async function readOdometerWithAI(base64){
     status.textContent='⚠ Still couldn’t read the photo — type the reading below. The office will see it as photo unverified.';
     document.getElementById('submitBtn').disabled=false;
   }
+}
+
+// Pilot fix 1c: re-run the AI read on the photo already taken (no new capture)
+function retryAiRead(){
+  if(!photoBase64)return;
+  readOdometerWithAI(photoBase64.split(',')[1]);
 }
 
 // Pilot fix 1c: non-blocking nudge when the typed value differs from what the
@@ -674,6 +702,7 @@ function resetFormFields(){
   document.getElementById('photoArea').classList.remove('has-photo');
   document.getElementById('retakeBtn').style.display='none';
   document.getElementById('aiStatus').className='ai-status';
+  document.getElementById('aiRetryBtn').style.display='none';
   document.getElementById('aiResult').classList.remove('show');
   document.getElementById('odoMismatch').style.display='none';
   document.getElementById('photoRequiredBanner').style.display='flex';
