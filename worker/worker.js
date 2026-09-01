@@ -41,10 +41,17 @@ const DASHBOARD_MAX_TOKENS = 4000;
 const DRIVER_MODEL = 'claude-sonnet-4-6';
 const DRIVER_MAX_TOKENS = 100;
 
-// Prompt the driver page currently sends — now fixed server-side.
+// Pilot fix 1a: the old "return only digits" prompt made the model give up on
+// dashboards showing several numbers (total + trip meter) — it returned
+// nothing on a clear photo. Target the TOTAL odometer explicitly and demand
+// strict JSON so the client can tell "unreadable" from "garbage".
 const DRIVER_PROMPT =
-  'This is a photo of a vehicle odometer. Read the odometer number and return ONLY the numeric value ' +
-  'with no text, no units, no spaces. Just the digits. Example: 145823';
+  'This is a photo of a vehicle dashboard. Read the TOTAL odometer only — the cumulative kilometre ' +
+  'figure, normally the larger integer with no decimal point. IGNORE trip meters (usually smaller, ' +
+  'with a decimal point, often labelled TRIP, A or B) and every other number on the dashboard ' +
+  '(clock, speed, fuel range, temperature). If the total odometer is genuinely unreadable, use null. ' +
+  'Respond with ONLY strict JSON, no markdown, no code fences, exactly this shape: ' +
+  '{"odometer": <integer or null>, "confidence": "high"|"medium"|"low"}';
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // Production origin only. The localhost entries exist for local testing —

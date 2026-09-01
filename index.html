@@ -896,6 +896,9 @@ input[type=file] { display: none; }
   <!-- z-index 3: the full-size hero content wrapper below is z-index 2 and later in
        the DOM, so at equal z-index it paints over these buttons and swallows clicks -->
   <div id="heroAccountBtns" style="position:absolute;top:16px;right:20px;z-index:3;display:flex;gap:8px;">
+    <!-- Pilot fix 2a: the bell must also be reachable with no reports loaded —
+         pending driver submissions were invisible in the empty state -->
+    <button class="logout-btn" id="heroNotifBtn" onclick="toggleNotifPanel()" style="position:relative;">🔔 <span id="heroNotifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#C92A2A;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;align-items:center;justify-content:center;">0</span></button>
     <button class="logout-btn" onclick="openAccountPanel()">👤 Account</button>
     <button class="logout-btn" onclick="logout()">⎋ Log out</button>
   </div>
@@ -2234,9 +2237,19 @@ Important rules:
   return JSON.parse(clean);
 }
 
+// Pilot fix 2b: with no fuel report but approved driver readings on file, the
+// dashboard must still render (fuel stats at R0 / 0 L, readings-only vehicle
+// blocks) — six readings once sat invisible for five days behind the empty
+// state. The virtual report is render-only: it is never pushed into
+// state.reports, saved, synced, or deletable.
+function hasApprovedReadings(){
+  return (approvedData||[]).some(n=>n.status==='approved'&&n.plate&&n.odometer);
+}
+
 function renderDashboard(){
   recomputeAllStats();
-  if(state.reports.length===0){
+  const readingsOnlyMode=state.reports.length===0&&hasApprovedReadings();
+  if(state.reports.length===0&&!readingsOnlyMode){
     document.getElementById('emptyState').classList.remove('hidden');
     document.getElementById('dashboard').classList.add('hidden');
     document.getElementById('heroStatsStrip').style.display='none';
@@ -2245,7 +2258,9 @@ function renderDashboard(){
   }
   document.getElementById('emptyState').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
-  currentReport=state.reports[activeReportIndex];
+  currentReport=readingsOnlyMode
+    ?{id:'virtual-readings-only',scheduleDate:'Driver readings',uploadedAt:new Date().toISOString(),vehicles:[],sources:[],virtual:true}
+    :state.reports[activeReportIndex];
   const r=currentReport;
 
   document.getElementById('heroStatsStrip').style.display='block';
@@ -2254,7 +2269,9 @@ function renderDashboard(){
   const _hLitres=r.vehicles.reduce((s,v)=>s+v.totalLitres,0);
   document.getElementById('heroSpend').textContent='R'+Math.round(_hTotal/1000)+'k';
   document.getElementById('heroLitres').textContent=_hLitres.toFixed(0)+' L';
-  document.getElementById('heroVehicles').textContent=r.vehicles.length;
+  // In readings-only mode the vehicle count reflects the readings-only blocks,
+  // not the (empty) report.
+  document.getElementById('heroVehicles').textContent=readingsOnlyMode?vehiclesWithDriverSubmissions().length:r.vehicles.length;
 
   document.getElementById('periodTabs').innerHTML=state.reports.map((rep,i)=>`
     <button class="period-tab ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})">${escapeHtml(rep.scheduleDate||'Report '+(i+1))}</button>
@@ -2411,7 +2428,8 @@ function renderVehicleBlock(v,vi){
   const rows=v.transactions.map(tx=>{
     const srcTag=multiSource?(tx.source==='Engen'?'<span style="font-size:9px;color:#1971C2;font-weight:600;margin-left:4px;">[ENGEN]</span>':tx.source==='Freight'?'<span style="font-size:9px;color:#2F9E44;font-weight:600;margin-left:4px;">[FREIGHT]</span>':''):'';
     const photoThumb=tx.driverSubmission?odoThumbHtml(tx.photoPath):'';
-    return`<tr><td class="td-date">${escapeHtml(tx.date)}</td><td class="td-merchant">${escapeHtml(tx.merchant)}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
+    const unverifiedTag=tx.driverSubmission&&tx.photoVerified===false?' <span style="font-size:9px;color:#E67700;font-weight:700;margin-left:4px;">[📷 UNVERIFIED]</span>':'';
+    return`<tr><td class="td-date">${escapeHtml(tx.date)}</td><td class="td-merchant">${escapeHtml(tx.merchant)}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}${unverifiedTag}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
   }).join('');
 
   const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn"><span>⚠</span><span>Odometer query: one or more readings are lower than the previous entry. Please verify with the fuel supplier or the driver — may be a data capture error.</span></div>`:'';
@@ -2960,7 +2978,11 @@ async function fetchSubmissions(){
     if(pendRes.ok||apprRes.ok){
       rebuildNotifData();
       updateNotifBadge();
-      filterVehicles();
+      // Pilot fix 2b: with no fuel reports the empty state may need to flip to
+      // the readings-only dashboard (or back) — filterVehicles alone can't do
+      // that because the dashboard container itself is hidden.
+      if(state.reports.length===0)renderDashboard();
+      else filterVehicles();
     }
   }catch(err){console.error('Notif fetch failed:',err);}
 }
@@ -2988,6 +3010,9 @@ function driverSubmissionTx(submission){
     driverSubmission:true,
     createdAt:submission.created_at,
     photoPath:submission.photo_path||null,
+    // Missing field (older cached rows) counts as verified — only an explicit
+    // false was the driver page's second-failure manual entry (pilot fix 1b)
+    photoVerified:submission.photo_verified!==false,
     notes:submission.notes||''
   };
 }
@@ -3017,7 +3042,11 @@ function vehiclesWithDriverSubmissions(){
   const approved=(approvedData||[]).filter(n=>n.status==='approved'&&n.plate&&n.odometer);
   const byPlate={};
   approved.forEach(s=>{(byPlate[s.plate]=byPlate[s.plate]||[]).push(s);});
-  const fa=currentReport.vehicles.reduce((s,v)=>s+v.totalAmount,0)/currentReport.vehicles.length;
+  // Virtual readings-only report has no vehicles — null fleetAvg skips the
+  // high-spend flag instead of comparing against NaN.
+  const fa=currentReport.vehicles.length
+    ?currentReport.vehicles.reduce((s,v)=>s+v.totalAmount,0)/currentReport.vehicles.length
+    :null;
   const result=currentReport.vehicles.map(v=>{
     const subs=byPlate[v.plate];
     if(!subs)return v;
@@ -3041,16 +3070,19 @@ function vehiclesWithDriverSubmissions(){
 }
 
 function updateNotifBadge(){
-  const badge=document.getElementById('notifBadge');
-  const btn=document.getElementById('notifBtn');
-  if(!badge||!btn)return;
+  // Two bells: the stats-strip one and the hero one (pilot fix 2a — the hero
+  // bell is what shows when no fuel report is loaded). Keep both badges in sync.
   const count=pendingData.filter(n=>!n.status||n.status==='pending').length;
-  if(count>0){
-    badge.textContent=count>99?'99+':count;
-    badge.style.display='flex';
-  }else{
-    badge.style.display='none';
-  }
+  ['notifBadge','heroNotifBadge'].forEach(id=>{
+    const badge=document.getElementById(id);
+    if(!badge)return;
+    if(count>0){
+      badge.textContent=count>99?'99+':count;
+      badge.style.display='flex';
+    }else{
+      badge.style.display='none';
+    }
+  });
 }
 
 function toggleNotifPanel(){
@@ -3090,6 +3122,11 @@ function renderNotifPanel(){
     const mismatchBadge=n.ai_odometer!=null&&Math.abs(n.odometer-n.ai_odometer)>25
       ?'<span style="font-size:10px;font-weight:700;background:#C92A2A;color:white;border-radius:20px;padding:2px 8px;">⚠ Odo Mismatch</span>'
       :'';
+    // Pilot fix 1b: photo_verified=false means the AI never read this photo
+    // (second-failure manual entry on the driver page)
+    const unverifiedBadge=n.photo_verified===false
+      ?'<span style="font-size:10px;font-weight:700;background:#FFF9DB;color:#E67700;border:1px solid #E67700;border-radius:20px;padding:2px 8px;">📷 Photo unverified</span>'
+      :'';
     const actionBtns=(!n.status||n.status==='pending')
       ?`<div style="display:flex;gap:6px;margin-top:8px;">
           <button onclick="approveNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:#2F9E44;color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">✅ Approve</button>
@@ -3099,7 +3136,7 @@ function renderNotifPanel(){
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
         <span class="notif-item-plate">${escapeHtml(n.plate)}</span>
         <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-US')+' km':'—'}</span>
-        ${statusBadge}${mismatchBadge}
+        ${statusBadge}${mismatchBadge}${unverifiedBadge}
       </div>
       <div style="font-size:11px;font-weight:700;color:var(--text2);margin-top:3px;">👤 ${escapeHtml(n.driver_name||'—')}</div>
       <div class="notif-item-time">📅 ${timeStr}</div>
@@ -4532,7 +4569,7 @@ async function loadDriverHistoryPage(){
   btn.disabled=true;btn.textContent='Loading…';
   try{
     const res=await fetch(
-      `${SUPABASE_URL}/rest/v1/odometer_readings?select=id,plate,odometer,status,created_at&driver_code=eq.${encodeURIComponent(_dhCode)}&order=created_at.desc&limit=${DRIVER_HISTORY_PAGE}&offset=${_dhRows.length}`,
+      `${SUPABASE_URL}/rest/v1/odometer_readings?select=id,plate,odometer,status,created_at,photo_verified&driver_code=eq.${encodeURIComponent(_dhCode)}&order=created_at.desc&limit=${DRIVER_HISTORY_PAGE}&offset=${_dhRows.length}`,
       {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}}
     );
     if(!res.ok){
@@ -4570,11 +4607,14 @@ function renderDriverHistoryList(hasMore){
       :r.status==='flagged'
       ?'<span style="font-size:10px;font-weight:700;background:#FFF5F5;color:#C92A2A;border-radius:20px;padding:2px 8px;">🚩 Flagged</span>'
       :'<span style="font-size:10px;font-weight:700;background:var(--accent-light);color:var(--accent);border-radius:20px;padding:2px 8px;">Pending</span>';
+    const unverifiedBadge=r.photo_verified===false
+      ?'<span style="font-size:10px;font-weight:700;background:#FFF9DB;color:#E67700;border:1px solid #E67700;border-radius:20px;padding:2px 8px;">📷 Photo unverified</span>'
+      :'';
     return`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px;">
       <span style="color:var(--text3);white-space:nowrap;">${fmtDDMMYYYY(r.created_at)} ${fmtTimeHM(r.created_at)}</span>
       <span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate||'—')}</span>
       <span style="font-family:var(--font-mono);font-weight:700;">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span>
-      ${badge}
+      ${badge}${unverifiedBadge}
     </div>`;
   }).join('');
   btn.style.display=hasMore?'block':'none';
@@ -5209,6 +5249,8 @@ initApp();
         <div id="popupPhotoBox"></div>
       </div>
       <div id="popupMismatch" style="display:none;background:var(--accent-light);border:2px solid var(--accent);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--accent);font-weight:700;margin-bottom:16px;line-height:1.6;"></div>
+      <!-- Pilot fix 1b: AI never read this photo (driver-page second-failure manual entry) -->
+      <div id="popupUnverified" style="display:none;background:#FFF9DB;border:2px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-bottom:16px;line-height:1.6;">📷 <strong>Photo unverified</strong> — the AI could not read this odometer photo; the reading was typed manually. Please check the photo against the entered km.</div>
       <div id="popupNotes" style="display:none;background:var(--amber-light);border:1px solid #FFE066;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:16px;"></div>
       <div id="popupTime" style="font-size:11px;color:var(--text3);margin-bottom:18px;"></div>
       <div style="display:flex;gap:10px;">
@@ -5298,6 +5340,7 @@ function showNotifPopup(rows){
     }else{
       mismatchEl.style.display='none';
     }
+    document.getElementById('popupUnverified').style.display=rec.photo_verified===false?'block':'none';
   }else{
     // Batch view — one grouped popup; clicking anywhere on it opens the bell panel
     _currentPopupRecord=null;
@@ -5310,7 +5353,11 @@ function showNotifPopup(rows){
     const mismatchWarn=mismatches.length>0
       ?`<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);font-weight:700;margin-top:12px;">⚠️ ${mismatches.length} submission${mismatches.length!==1?'s have':' has'} an odometer mismatch — ${escapeHtml(mismatches.map(m=>m.plate).join(', '))}</div>`
       :'';
-    document.getElementById('popupBatchList').innerHTML=plateList+mismatchWarn;
+    const unverified=rows.filter(r=>r.photo_verified===false);
+    const unverifiedWarn=unverified.length>0
+      ?`<div style="background:#FFF9DB;border:1.5px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-top:12px;">📷 ${unverified.length} submission${unverified.length!==1?'s are':' is'} photo unverified — ${escapeHtml(unverified.map(m=>m.plate).join(', '))}</div>`
+      :'';
+    document.getElementById('popupBatchList').innerHTML=plateList+mismatchWarn+unverifiedWarn;
   }
   modal.style.display='flex';
 }
