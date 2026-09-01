@@ -257,8 +257,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
     <div class="card">
       <div class="card-header">🔢 Step 2 — Confirm Odometer Reading</div>
       <div class="card-body">
-        <input type="number" class="odo-input" id="odoInput" placeholder="000000" inputmode="numeric">
-        <div class="odo-label">Enter or confirm the km reading shown on the dashboard</div>
+        <input type="number" class="odo-input" id="odoInput" placeholder="000000" inputmode="numeric" oninput="checkAiMismatch()">
+        <div class="odo-label">Type the total km reading shown on the dashboard</div>
+        <!-- Pilot fix 1c: non-blocking hint when the typed value differs from the AI read -->
+        <div id="odoMismatch" style="display:none;margin-top:10px;padding:10px 14px;background:#FFF9DB;border:1px solid var(--amber);border-radius:8px;font-size:13px;color:var(--amber);font-weight:700;text-align:center;"></div>
       </div>
     </div>
 
@@ -305,6 +307,7 @@ let currentFleetNo='';    // fleet/bus number of the picked vehicle ('' when not
 let photoBlob=null;       // compressed JPEG ready for upload
 let photoBase64='';
 let aiDetectedOdometer=null;
+let aiFailCount=0;        // consecutive AI read failures for THIS submission (pilot fix 1b)
 
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('show',s.id===id));
@@ -471,7 +474,10 @@ async function handlePhoto(event){
     photoArea.classList.add('has-photo');
     document.getElementById('retakeBtn').style.display='block';
     document.getElementById('photoRequiredBanner').style.display='none';
-    document.getElementById('submitBtn').disabled=false;
+    // Pilot fix 1b: Submit stays disabled until the AI read resolves — it is
+    // enabled on a successful read, or after the SECOND failed read (manual
+    // entry fallback). readOdometerWithAI owns the button from here.
+    document.getElementById('submitBtn').disabled=true;
     await readOdometerWithAI(photoBase64.split(',')[1]);
   }catch(err){
     console.error('[FleetDesk] photo processing failed:',err);
@@ -485,6 +491,12 @@ async function readOdometerWithAI(base64){
   status.className='ai-status reading';
   status.textContent='🤖 AI is reading your odometer...';
   result.classList.remove('show');
+  // Pilot fix 1a: the Worker's pinned prompt now targets the TOTAL odometer
+  // (ignoring trip meters) and answers strict JSON
+  // {"odometer": <integer or null>, "confidence": "high"|"medium"|"low"}.
+  // The typed box is NEVER pre-filled from the AI — the two values stay
+  // independent and both are submitted (odometer vs ai_odometer).
+  let aiOdo=null;
   try{
     // Audit fix #1: the Worker validates the driver code (X-Driver-Code) via
     // driver_page_init and pins the model, max_tokens AND the prompt itself —
@@ -499,23 +511,49 @@ async function readOdometerWithAI(base64){
       })
     });
     const data=await response.json();
-    const text=data.content.map(i=>i.text||'').join('').trim().replace(/[^0-9]/g,'');
-    if(text&&text.length>3){
-      aiDetectedOdometer=parseInt(text);
-      document.getElementById('odoInput').value=text;
-      status.className='ai-status success';
-      status.textContent='✅ AI read your odometer — please confirm below';
-      result.textContent=`AI detected: ${aiDetectedOdometer.toLocaleString('en-ZA')} km`;
-      result.classList.add('show');
-    }else{
-      aiDetectedOdometer=null;
-      status.className='ai-status error';
-      status.textContent='⚠ Could not read odometer automatically — please type it in below';
-    }
+    const raw=(data.content||[]).map(i=>i.text||'').join('').replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(raw);
+    if(Number.isInteger(parsed.odometer)&&parsed.odometer>0)aiOdo=parsed.odometer;
   }catch(err){
-    aiDetectedOdometer=null;
-    status.className='ai-status error';
-    status.textContent='⚠ Could not read odometer — please type it in manually';
+    console.error('[FleetDesk] AI odometer read failed:',err);
+  }
+  if(aiOdo!==null){
+    aiDetectedOdometer=aiOdo;
+    aiFailCount=0;
+    status.className='ai-status success';
+    status.textContent='✅ Photo read — now type the reading yourself below';
+    result.textContent=`Photo shows: ${aiOdo.toLocaleString('en-ZA')} km`;
+    result.classList.add('show');
+    document.getElementById('submitBtn').disabled=false;
+    checkAiMismatch();
+    return;
+  }
+  // Pilot fix 1b: unreadable photo. The first failure forces a retake; the
+  // second allows manual entry (ai_odometer stays null, so the office can see
+  // the reading was not photo-verified).
+  aiDetectedOdometer=null;
+  aiFailCount++;
+  checkAiMismatch();
+  status.className='ai-status error';
+  if(aiFailCount===1){
+    status.textContent='⚠ Couldn’t read the odometer — retake with the total km filling the frame';
+    document.getElementById('submitBtn').disabled=true;
+  }else{
+    status.textContent='⚠ Still couldn’t read the photo — type the reading below. The office will see it as photo unverified.';
+    document.getElementById('submitBtn').disabled=false;
+  }
+}
+
+// Pilot fix 1c: non-blocking nudge when the typed value differs from what the
+// AI saw in the photo. Never prevents submission — both values go to the DB.
+function checkAiMismatch(){
+  const el=document.getElementById('odoMismatch');
+  const typed=parseInt(document.getElementById('odoInput').value);
+  if(aiDetectedOdometer!==null&&typed&&typed!==aiDetectedOdometer){
+    el.textContent=`📷 Photo shows ${aiDetectedOdometer.toLocaleString('en-ZA')} — please double-check`;
+    el.style.display='block';
+  }else{
+    el.style.display='none';
   }
 }
 
@@ -542,10 +580,9 @@ async function submitReading(){
   if(!photoBlob){showDriverError('Please take a photo of your odometer first.');return;}
   const odo=parseInt(document.getElementById('odoInput').value);
   const notes=document.getElementById('notesInput').value.trim();
-  if(aiDetectedOdometer!==null&&Math.abs(odo-aiDetectedOdometer)>25){
-    showDriverError('The number you entered does not match the photo. Please retake the photo or correct the reading.');
-    return;
-  }
+  // Pilot fix 1c: an AI/typed mismatch no longer blocks submission — the
+  // odoMismatch hint nudges the driver, and both values reach the office
+  // (the dashboard already badges rows where they differ by more than 25 km).
   if(!odo||odo<1000){showDriverError('Please enter a valid odometer reading — must be at least 1,000 km.');return;}
   if(odo>2000000){showDriverError('That reading seems too high. Please check the odometer and try again.');return;}
   const btn=document.getElementById('submitBtn');
@@ -605,11 +642,12 @@ function resetFormFields(){
   document.getElementById('retakeBtn').style.display='none';
   document.getElementById('aiStatus').className='ai-status';
   document.getElementById('aiResult').classList.remove('show');
+  document.getElementById('odoMismatch').style.display='none';
   document.getElementById('photoRequiredBanner').style.display='flex';
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   btn.innerHTML='✅ Submit Odometer Reading';
-  photoBlob=null;photoBase64='';aiDetectedOdometer=null;
+  photoBlob=null;photoBase64='';aiDetectedOdometer=null;aiFailCount=0;
 }
 
 function startAnother(){
