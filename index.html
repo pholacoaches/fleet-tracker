@@ -1537,13 +1537,15 @@ async function submitNewPassword(){
       }
       return;
     }
-    // Password is set. The recovery session is single-purpose: revoke it
-    // server-side (best-effort), drop it from memory, and require a normal
-    // login with the new password. It is never stored as the app session.
+    // Password is set. A reset usually means the old password may be
+    // compromised — revoke EVERY session for this user (scope=global), not
+    // just the recovery one, so sessions opened under the old password die
+    // with it (best-effort). The recovery token is dropped from memory and
+    // the user logs in fresh with the new password, same as before.
     const spent=recoveryToken;
     recoveryToken=null;
     try{
-      await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=local`,{
+      await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=global`,{
         method:'POST',
         headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+spent}
       });
@@ -1608,6 +1610,7 @@ function getAuthEmail(){
 
 function openAccountPanel(){
   document.getElementById('accountEmail').textContent=getAuthEmail()||'Unknown';
+  document.getElementById('accountPw0').value='';
   document.getElementById('accountPw1').value='';
   document.getElementById('accountPw2').value='';
   document.getElementById('accountOk').textContent='';
@@ -1621,40 +1624,95 @@ function closeAccountPanel(){
   document.getElementById('accountModal').style.display='none';
 }
 
+// The account email, without asking the user to type it: the JWT carries it;
+// if a token ever lacks the claim, GET /auth/v1/user is the fallback.
+async function getAccountEmail(){
+  const jwtEmail=getAuthEmail();
+  if(jwtEmail)return jwtEmail;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+localStorage.getItem(AUTH_TOKEN_KEY)}
+    });
+    if(!res.ok)return'';
+    const data=await res.json();
+    return data.email||'';
+  }catch{return'';}
+}
+
 async function saveAccountPassword(){
+  const pw0=document.getElementById('accountPw0').value;
   const pw1=document.getElementById('accountPw1').value;
   const pw2=document.getElementById('accountPw2').value;
   const errEl=document.getElementById('accountErr');
   const okEl=document.getElementById('accountOk');
   const btn=document.getElementById('accountSaveBtn');
   errEl.textContent='';okEl.textContent='';
+  if(!pw0){errEl.textContent='Please enter your current password.';return;}
   const invalid=validateNewPassword(pw1,pw2);
   if(invalid){errEl.textContent=invalid;return;}
   btn.disabled=true;btn.textContent='Saving...';
+  const restoreBtn=()=>{btn.disabled=false;btn.textContent='Save new password';};
   try{
     // Refresh the access token if it is stale. Audit fix #3 item 1: if the
     // session turned out to be dead, checkAuth() has already wiped the stored
     // keys — go through logout() (full reload → login screen) instead of
-    // firing the PUT with no bearer token.
+    // continuing with no bearer token.
     if(!(await checkAuth())){logout();return;}
+    const email=await getAccountEmail();
+    if(!email){restoreBtn();errEl.textContent='Could not confirm your account email. Please log out and back in, then try again.';return;}
+    // Security 2026-09-02: a password change must prove the CURRENT password.
+    // The proof is a real password grant — GoTrue checks it server-side. The
+    // fresh session it returns becomes this device's session, and because it
+    // is seconds old the PUT below also passes the dashboard's "Secure
+    // password change" toggle (sessions under 24h need no reauth nonce).
+    const grantRes=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+      body:JSON.stringify({email,password:pw0})
+    });
+    const grant=grantRes.ok?await grantRes.json():null;
+    if(!grant||!grant.access_token){
+      restoreBtn();
+      errEl.textContent=grantRes.status===429
+        ?'Too many attempts — please wait a minute and try again.'
+        :'Current password is incorrect.';
+      return;
+    }
+    localStorage.setItem(AUTH_TOKEN_KEY,grant.access_token);
+    if(grant.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,grant.refresh_token);
+    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
+    // current_password rides along so the "Require current password" dashboard
+    // toggle can be enabled without breaking this flow — GoTrue validates it
+    // only when that toggle is on and ignores it otherwise.
     const res=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
       method:'PUT',
-      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+localStorage.getItem(AUTH_TOKEN_KEY)},
-      body:JSON.stringify({password:pw1})
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+grant.access_token},
+      body:JSON.stringify({password:pw1,current_password:pw0})
     });
     const data=await res.json().catch(()=>({}));
-    btn.disabled=false;btn.textContent='Save new password';
     if(!res.ok){
+      restoreBtn();
       errEl.textContent=(res.status===401||res.status===403)
         ?'Your session has expired. Please log out and log back in, then try again.'
         :(data.msg||data.error_description||'Could not update the password. Please try again.');
       return;
     }
+    // Revoke every session EXCEPT the fresh grant above — any device holding
+    // a session under the old password is signed out; this one stays in.
+    // Best-effort: the password itself is already changed at this point.
+    try{
+      await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=others`,{
+        method:'POST',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+grant.access_token}
+      });
+    }catch{}
+    restoreBtn();
+    document.getElementById('accountPw0').value='';
     document.getElementById('accountPw1').value='';
     document.getElementById('accountPw2').value='';
-    okEl.textContent='✓ Password updated successfully.';
+    okEl.textContent='✓ Password changed. Other devices have been signed out.';
   }catch{
-    btn.disabled=false;btn.textContent='Save new password';
+    restoreBtn();
     errEl.textContent='Connection error. Please try again.';
   }
 }
@@ -5223,6 +5281,8 @@ initApp();
     </div>
     <label class="login-label">Signed in as</label>
     <div class="account-email"><strong id="accountEmail">—</strong></div>
+    <label class="login-label" for="accountPw0">Current password</label>
+    <input class="login-input" type="password" id="accountPw0" placeholder="••••••••" autocomplete="current-password">
     <label class="login-label" for="accountPw1">New password</label>
     <input class="login-input" type="password" id="accountPw1" placeholder="••••••••" autocomplete="new-password">
     <div class="login-hint">At least 8 characters</div>
