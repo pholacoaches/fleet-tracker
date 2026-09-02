@@ -31,6 +31,8 @@
  *   SUPABASE_URL        var    — https://wlwwzbyuchsonwugqhww.supabase.co
  *   SUPABASE_ANON_KEY   var    — the publishable key (not a secret; it is
  *                                in the page source anyway)
+ *   ALLOWED_ORIGINS     var    — comma-separated CORS allowlist, differs per
+ *                                wrangler environment (prod vs "dev")
  *   DRIVER_RATE_LIMIT   optional Rate Limiting binding (see README)
  */
 
@@ -55,15 +57,19 @@ const DRIVER_PROMPT =
   '{"odometer": <integer or null>, "confidence": "high"|"medium"|"low"}';
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
-// Production origin only. The localhost entries exist for local testing —
-// 8787 is `wrangler dev`, 8377 is the static app server in .claude/launch.json.
-// REMOVE BOTH before the first client goes live: delete the two lines marked
-// DEV-ONLY below and redeploy.
-const ALLOWED_ORIGINS = new Set([
-  'https://pholacoaches.github.io',
-  'http://localhost:8787', // DEV-ONLY — remove before go-live
-  'http://localhost:8377', // DEV-ONLY — remove before go-live
-]);
+// The allowlist comes from the ALLOWED_ORIGINS var in wrangler.jsonc, a
+// comma-separated list, so it differs per environment (2026-09-02):
+//   default env  (fleet-proxy)      production origin only
+//   env "dev"    (fleet-proxy-dev)  production + localhost 8787 / 8377
+// If the var is missing or empty the Worker fails closed to the production
+// origin alone — a mis-deploy can never re-open localhost on production.
+const PRODUCTION_ORIGINS = ['https://pholacoaches.github.io'];
+
+function allowedOrigins(env) {
+  const raw = typeof env.ALLOWED_ORIGINS === 'string' ? env.ALLOWED_ORIGINS : '';
+  const list = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return new Set(list.length ? list : PRODUCTION_ORIGINS);
+}
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -76,8 +82,10 @@ const MAX_BODY_DRIVER = 2 * 1024 * 1024;
 const DRIVER_CODE_RE = /^[A-Z]{3}-[0-9]{4}$/;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function corsHeaders(origin) {
-  if (!origin || !ALLOWED_ORIGINS.has(origin)) return {};
+// Computed once per request in fetch(): {} when the Origin is not allowed,
+// otherwise the full CORS header set for that origin. Passed down as `cors`.
+function corsHeaders(env, origin) {
+  if (!origin || !allowedOrigins(env).has(origin)) return {};
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -88,16 +96,11 @@ function corsHeaders(origin) {
 }
 
 // Same error shape the app already reads: data.error.message (index.html:2178)
-function jsonError(origin, status, type, message) {
+function jsonError(cors, status, type, message) {
   return new Response(JSON.stringify({ type: 'error', error: { type, message } }), {
     status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders(origin) },
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors },
   });
-}
-
-function originAllowed(request) {
-  const origin = request.headers.get('Origin');
-  return !!origin && ALLOWED_ORIGINS.has(origin);
 }
 
 async function readJsonBody(request, maxBytes) {
@@ -155,7 +158,7 @@ async function verifyDriverCode(env, code) {
 // ── Anthropic call ───────────────────────────────────────────────────────────
 // Passes Anthropic's status + JSON straight through (the app reads
 // data.content / data.error.message), with our CORS headers instead of "*".
-async function callAnthropic(env, origin, payload) {
+async function callAnthropic(env, cors, payload) {
   const res = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -168,7 +171,7 @@ async function callAnthropic(env, origin, payload) {
   const text = await res.text();
   return new Response(text, {
     status: res.status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders(origin) },
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors },
   });
 }
 
@@ -178,25 +181,25 @@ async function callAnthropic(env, origin, payload) {
 //   { type:'text', text } ] } ] }
 // Only `messages` is taken from the client; model/max_tokens are pinned; the
 // content blocks are whitelisted so the proxy can't be used as a general chat.
-async function handleDashboard(request, env, origin) {
+async function handleDashboard(request, env, cors) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  if (!token) return jsonError(origin, 401, 'authentication_error', 'Sign in to use AI extraction.');
+  if (!token) return jsonError(cors, 401, 'authentication_error', 'Sign in to use AI extraction.');
 
   const user = await verifySupabaseUser(env, token);
-  if (!user) return jsonError(origin, 401, 'authentication_error', 'Your session is not valid. Please log in again.');
+  if (!user) return jsonError(cors, 401, 'authentication_error', 'Your session is not valid. Please log in again.');
 
   const { body, error } = await readJsonBody(request, MAX_BODY_DASHBOARD);
-  if (error) return jsonError(origin, 400, 'invalid_request_error', error);
+  if (error) return jsonError(cors, 400, 'invalid_request_error', error);
 
   const messages = sanitiseMessages(body && body.messages, {
     allowDocument: true,
     allowImage: false,
     allowText: true,
   });
-  if (!messages) return jsonError(origin, 400, 'invalid_request_error', 'Request must contain one user message with a PDF document and a text instruction.');
+  if (!messages) return jsonError(cors, 400, 'invalid_request_error', 'Request must contain one user message with a PDF document and a text instruction.');
 
-  return callAnthropic(env, origin, {
+  return callAnthropic(env, cors, {
     model: DASHBOARD_MODEL,
     max_tokens: DASHBOARD_MAX_TOKENS,
     messages,
@@ -206,28 +209,28 @@ async function handleDashboard(request, env, origin) {
 // ── Route: POST /ai/driver ───────────────────────────────────────────────────
 // Body contract: same shape as today, but ONLY the image block is used — the
 // prompt is DRIVER_PROMPT above, whatever the client sends.
-async function handleDriver(request, env, origin) {
+async function handleDriver(request, env, cors) {
   const code = (request.headers.get('X-Driver-Code') || '').trim().toUpperCase();
-  if (!DRIVER_CODE_RE.test(code)) return jsonError(origin, 401, 'authentication_error', 'Driver code missing or malformed.');
+  if (!DRIVER_CODE_RE.test(code)) return jsonError(cors, 401, 'authentication_error', 'Driver code missing or malformed.');
 
   // Optional Rate Limiting binding — see README. Keyed by code so one leaked
   // or guessed code can't be hammered; guessing itself is throttled at the
   // Cloudflare rule level (README).
   if (env.DRIVER_RATE_LIMIT) {
     const { success } = await env.DRIVER_RATE_LIMIT.limit({ key: code });
-    if (!success) return jsonError(origin, 429, 'rate_limit_error', 'Too many requests — please wait a minute and try again.');
+    if (!success) return jsonError(cors, 429, 'rate_limit_error', 'Too many requests — please wait a minute and try again.');
   }
 
   const driver = await verifyDriverCode(env, code);
-  if (!driver) return jsonError(origin, 401, 'authentication_error', 'Driver code not recognised.');
+  if (!driver) return jsonError(cors, 401, 'authentication_error', 'Driver code not recognised.');
 
   const { body, error } = await readJsonBody(request, MAX_BODY_DRIVER);
-  if (error) return jsonError(origin, 400, 'invalid_request_error', error);
+  if (error) return jsonError(cors, 400, 'invalid_request_error', error);
 
   const image = extractSingleImage(body && body.messages);
-  if (!image) return jsonError(origin, 400, 'invalid_request_error', 'Request must contain one JPEG image of the odometer.');
+  if (!image) return jsonError(cors, 400, 'invalid_request_error', 'Request must contain one JPEG image of the odometer.');
 
-  return callAnthropic(env, origin, {
+  return callAnthropic(env, cors, {
     model: DRIVER_MODEL,
     max_tokens: DRIVER_MAX_TOKENS,
     messages: [{ role: 'user', content: [image, { type: 'text', text: DRIVER_PROMPT }] }],
@@ -293,11 +296,15 @@ export default {
     const path = url.pathname.replace(/\/+$/, '') || '/';
     const known = path === '/ai/dashboard' || path === '/ai/driver';
 
+    // {} unless the Origin is on this environment's allowlist.
+    const cors = corsHeaders(env, origin);
+    const allowed = Object.keys(cors).length > 0;
+
     // Preflight: only for known routes and allowed origins; otherwise the
     // browser gets no CORS headers and blocks the call.
     if (request.method === 'OPTIONS') {
-      if (!known || !originAllowed(request)) return new Response(null, { status: 404 });
-      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+      if (!known || !allowed) return new Response(null, { status: 404 });
+      return new Response(null, { status: 204, headers: cors });
     }
 
     if (!known) return new Response('Not found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
@@ -305,19 +312,19 @@ export default {
 
     // Browser calls always carry Origin on a cross-site POST. Anything without
     // an allowed Origin (curl, other sites) is refused outright.
-    if (!originAllowed(request)) return jsonError(origin, 403, 'permission_error', 'Origin not allowed.');
+    if (!allowed) return jsonError(cors, 403, 'permission_error', 'Origin not allowed.');
 
     if (!env.ANTHROPIC_API_KEY || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
-      return jsonError(origin, 500, 'api_error', 'Proxy is not configured.');
+      return jsonError(cors, 500, 'api_error', 'Proxy is not configured.');
     }
 
     try {
-      if (path === '/ai/dashboard') return await handleDashboard(request, env, origin);
-      return await handleDriver(request, env, origin);
+      if (path === '/ai/dashboard') return await handleDashboard(request, env, cors);
+      return await handleDriver(request, env, cors);
     } catch (err) {
       // Never echo internals to the client.
       console.error('fleet-proxy error:', err && err.message);
-      return jsonError(origin, 502, 'api_error', 'The AI service could not be reached. Please try again.');
+      return jsonError(cors, 502, 'api_error', 'The AI service could not be reached. Please try again.');
     }
   },
 };

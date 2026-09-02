@@ -16,11 +16,31 @@ Pinned: `claude-sonnet-4-6`, `max_tokens` 4000 (dashboard) / 100 (driver) —
 the same values the app sends today. The client's `model`/`max_tokens` are
 ignored.
 
-CORS is limited to `https://pholacoaches.github.io`. **`http://localhost:8787`
-(`wrangler dev`) and `http://localhost:8377` (the static app server in
-`.claude/launch.json`) are also allowed for local testing — remove those two
-lines (`ALLOWED_ORIGINS` in `worker.js`, marked `DEV-ONLY`) before the first
-client goes live.** Requests without an allowed `Origin` get 403.
+CORS is environment-based (since 2026-09-02, see "Environments" below).
+Production allows `https://pholacoaches.github.io` only. Requests without an
+allowed `Origin` get 403.
+
+## Environments
+
+The allowlist is the `ALLOWED_ORIGINS` var in `wrangler.jsonc` (comma-separated).
+`worker.js` falls back to the production origin alone if the var is missing.
+
+| Command | Worker | URL | `ALLOWED_ORIGINS` |
+|---|---|---|---|
+| `wrangler deploy` | `fleet-proxy` (production) | `https://fleet-proxy.gjtucker83.workers.dev` | `https://pholacoaches.github.io` |
+| `wrangler deploy --env dev` | `fleet-proxy-dev` | `https://fleet-proxy-dev.gjtucker83.workers.dev` | production + `http://localhost:8787` + `http://localhost:8377` |
+
+Never add localhost / 127.0.0.1 to the production block. Wrangler does not
+inherit `vars` into named environments, so the `dev` block repeats the
+Supabase vars — keep both in step.
+
+`fleet-proxy-dev` is a separate Worker, so it needs its own
+`ANTHROPIC_API_KEY` secret (Cloudflare dashboard → Workers → fleet-proxy-dev →
+Settings → Variables and Secrets; `wrangler secret put` via the `!` shell has
+uploaded an empty value before). Until it is set, the dev Worker answers
+preflights correctly but every POST returns 500 "Proxy is not configured".
+To test the app locally against it, point the two fetch URLs in `index.html` /
+`driver.html` at `fleet-proxy-dev` temporarily — never commit that change.
 
 Errors come back in Anthropic's shape (`{ error: { type, message } }`) so the
 app's existing `data.error.message` handling keeps working.

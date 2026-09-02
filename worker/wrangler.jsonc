@@ -1,9 +1,19 @@
 /**
- * fleet-proxy — Cloudflare Worker config (audit fix #1, 2026-08-25).
- * Deploy from this folder:  wrangler deploy
- * Secrets are NOT declared here; ANTHROPIC_API_KEY already exists on the
- * Worker and is kept across deploys. See README.md for the one-time cleanup
- * of the six legacy secrets.
+ * fleet-proxy — Cloudflare Worker config (audit fix #1, 2026-08-25;
+ * prod/dev environment split 2026-09-02).
+ *
+ * Deploy from this folder:
+ *   wrangler deploy              → fleet-proxy      (production, top-level config)
+ *   wrangler deploy --env dev    → fleet-proxy-dev  (local-testing copy)
+ *
+ * Secrets are NOT declared here. ANTHROPIC_API_KEY already exists on the
+ * production Worker and is kept across deploys. The dev Worker is a separate
+ * Worker and needs its own copy of the secret (set it in the dashboard —
+ * see README.md, "Environments").
+ *
+ * Note: wrangler does NOT inherit `vars` into named environments, so the
+ * "dev" block repeats the Supabase vars on purpose. Keep the two blocks in
+ * step; only ALLOWED_ORIGINS should differ.
  */
 {
   "$schema": "https://developers.cloudflare.com/schemas/wrangler.json",
@@ -13,11 +23,28 @@
   "workers_dev": true,
   "observability": { "enabled": true },
 
-  // Non-secret configuration. The publishable key is already public in the
-  // page source; the Worker uses it to call Supabase Auth / the RPC.
+  // ── Production (default environment) ──────────────────────────────────
+  // ALLOWED_ORIGINS: comma-separated CORS allowlist. GitHub Pages only —
+  // no localhost / 127.0.0.1 here, ever. worker.js falls back to the
+  // production origin alone if this var is missing.
   "vars": {
     "SUPABASE_URL": "https://wlwwzbyuchsonwugqhww.supabase.co",
-    "SUPABASE_ANON_KEY": "sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5"
+    "SUPABASE_ANON_KEY": "sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5",
+    "ALLOWED_ORIGINS": "https://pholacoaches.github.io"
+  },
+
+  // ── Dev environment: `wrangler deploy --env dev` ──────────────────────
+  // Same code, separate Worker (fleet-proxy-dev). Adds the local origins:
+  // 8787 is `wrangler dev`, 8377 is the static app server in .claude/launch.json.
+  "env": {
+    "dev": {
+      "name": "fleet-proxy-dev",
+      "vars": {
+        "SUPABASE_URL": "https://wlwwzbyuchsonwugqhww.supabase.co",
+        "SUPABASE_ANON_KEY": "sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5",
+        "ALLOWED_ORIGINS": "https://pholacoaches.github.io,http://localhost:8787,http://localhost:8377"
+      }
+    }
   }
 
   // OPTIONAL — per-driver-code throttle for /ai/driver (Workers Rate Limiting
