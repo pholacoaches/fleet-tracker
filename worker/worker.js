@@ -33,7 +33,9 @@
  *                                in the page source anyway)
  *   ALLOWED_ORIGINS     var    — comma-separated CORS allowlist, differs per
  *                                wrangler environment (prod vs "dev")
- *   DRIVER_RATE_LIMIT   optional Rate Limiting binding (see README)
+ *   DASHBOARD_IP_LIMIT, DASHBOARD_USER_LIMIT, DRIVER_IP_LIMIT, DRIVER_CODE_LIMIT
+ *                       Workers Rate Limiting bindings (2026-09-03, see
+ *                       "Rate limiting" below and README). All fail open.
  */
 
 // ── Pinned AI settings ───────────────────────────────────────────────────────
@@ -101,6 +103,46 @@ function jsonError(cors, status, type, message) {
     status,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors },
   });
+}
+
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// Workers Rate Limiting bindings, declared in wrangler.jsonc ("ratelimits",
+// both environments). Two layers per route:
+//   per IP        checked in the router before the config check and before any
+//                 Supabase call — the cheapest gate, keyed on CF-Connecting-IP
+//   per identity  checked inside the handler once the caller is known:
+//                 driver code (after the regex, before the RPC) / Supabase user id
+// Every check FAILS OPEN: a missing binding or a throwing limit() call logs a
+// warning and lets the request through. Throttling must never take real users
+// down; the Anthropic spend cap remains the hard backstop.
+// The binding only answers success/failure (no remaining-time figure), so
+// Retry-After is the window length.
+const RETRY_AFTER_SECONDS = 60;
+const RATE_LIMIT_MESSAGE = 'Too many requests in a short time. Please wait a minute and try again.';
+
+async function rateLimited(env, bindingName, key) {
+  const limiter = env[bindingName];
+  if (!limiter || typeof limiter.limit !== 'function') {
+    console.warn(`fleet-proxy: rate-limit binding ${bindingName} missing — failing open`);
+    return false;
+  }
+  try {
+    const { success } = await limiter.limit({ key: String(key) });
+    return success === false;
+  } catch (err) {
+    console.warn(`fleet-proxy: rate-limit binding ${bindingName} threw — failing open:`, err && err.message);
+    return false;
+  }
+}
+
+function rateLimitResponse(cors) {
+  const res = jsonError(cors, 429, 'rate_limit_error', RATE_LIMIT_MESSAGE);
+  res.headers.set('Retry-After', String(RETRY_AFTER_SECONDS));
+  return res;
+}
+
+function clientIp(request) {
+  return request.headers.get('CF-Connecting-IP') || 'unknown';
 }
 
 async function readJsonBody(request, maxBytes) {
@@ -189,6 +231,10 @@ async function handleDashboard(request, env, cors) {
   const user = await verifySupabaseUser(env, token);
   if (!user) return jsonError(cors, 401, 'authentication_error', 'Your session is not valid. Please log in again.');
 
+  // Per signed-in user (20/min). PDF chunks are sent one at a time and each
+  // takes 15–60 s, so genuine use stays under 4/min.
+  if (await rateLimited(env, 'DASHBOARD_USER_LIMIT', user.id)) return rateLimitResponse(cors);
+
   const { body, error } = await readJsonBody(request, MAX_BODY_DASHBOARD);
   if (error) return jsonError(cors, 400, 'invalid_request_error', error);
 
@@ -213,13 +259,10 @@ async function handleDriver(request, env, cors) {
   const code = (request.headers.get('X-Driver-Code') || '').trim().toUpperCase();
   if (!DRIVER_CODE_RE.test(code)) return jsonError(cors, 401, 'authentication_error', 'Driver code missing or malformed.');
 
-  // Optional Rate Limiting binding — see README. Keyed by code so one leaked
-  // or guessed code can't be hammered; guessing itself is throttled at the
-  // Cloudflare rule level (README).
-  if (env.DRIVER_RATE_LIMIT) {
-    const { success } = await env.DRIVER_RATE_LIMIT.limit({ key: code });
-    if (!success) return jsonError(cors, 429, 'rate_limit_error', 'Too many requests — please wait a minute and try again.');
-  }
+  // Per driver code (15/min), checked before the RPC so one leaked or guessed
+  // code can't hammer Supabase either. One photo = one call; a bad minute of
+  // retakes and retries is well under this.
+  if (await rateLimited(env, 'DRIVER_CODE_LIMIT', code)) return rateLimitResponse(cors);
 
   const driver = await verifyDriverCode(env, code);
   if (!driver) return jsonError(cors, 401, 'authentication_error', 'Driver code not recognised.');
@@ -313,6 +356,13 @@ export default {
     // Browser calls always carry Origin on a cross-site POST. Anything without
     // an allowed Origin (curl, other sites) is refused outright.
     if (!allowed) return jsonError(cors, 403, 'permission_error', 'Origin not allowed.');
+
+    // Per-IP throttle before anything that costs us a Supabase or Anthropic
+    // call. Driver 60/min (SA mobile carriers put many phones behind one
+    // address, so this stays loose); dashboard 40/min (also blunts a token
+    // spray against Supabase Auth through us).
+    const ipBinding = path === '/ai/dashboard' ? 'DASHBOARD_IP_LIMIT' : 'DRIVER_IP_LIMIT';
+    if (await rateLimited(env, ipBinding, clientIp(request))) return rateLimitResponse(cors);
 
     if (!env.ANTHROPIC_API_KEY || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
       return jsonError(cors, 500, 'api_error', 'Proxy is not configured.');

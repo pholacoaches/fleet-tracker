@@ -521,6 +521,8 @@ async function readOdometerWithAI(base64){
   //   'error'       fetch threw / non-2xx / unparseable body — a CONNECTION
   //                 problem, not the photo's fault: offer Retry on the same
   //                 photo instead of burning a retake strike.
+  //   'limited'     Worker answered 429 (per-code / per-IP throttle, or
+  //                 Anthropic's own limit): calm message + Retry, no strike.
   let outcome='error',aiOdo=null;
   try{
     // Audit fix #1: the Worker validates the driver code (X-Driver-Code) via
@@ -545,6 +547,8 @@ async function readOdometerWithAI(base64){
       if(Number.isInteger(parsed.odometer)&&parsed.odometer>0&&parsed.odometer<=9999999){outcome='ok';aiOdo=parsed.odometer;}
       else if(parsed&&typeof parsed==='object'&&(parsed.odometer===null||Number.isInteger(parsed.odometer)))outcome='unreadable';
       // any other shape stays 'error'
+    }else if(response.status===429){
+      outcome='limited';
     }
   }catch(err){
     console.error('[FleetDesk] AI odometer read failed:',err);
@@ -563,6 +567,12 @@ async function readOdometerWithAI(base64){
   aiDetectedOdometer=null;
   checkAiMismatch();
   status.className='ai-status error';
+  if(outcome==='limited'){
+    status.textContent='⏸ Too many photos in a short time — wait a minute, then tap Retry';
+    document.getElementById('aiRetryBtn').style.display='block';
+    document.getElementById('submitBtn').disabled=true;
+    return;
+  }
   if(outcome==='error'){
     // No strike: the photo was never judged. Submit stays disabled — Retry
     // re-sends the same photo once the signal is back.
