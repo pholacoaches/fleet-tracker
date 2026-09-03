@@ -33,9 +33,28 @@
     "ALLOWED_ORIGINS": "https://pholacoaches.github.io"
   },
 
+  // ── Rate limiting (2026-09-03) ─────────────────────────────────────────
+  // Workers Rate Limiting bindings — free, no storage, deployed by wrangler.
+  // period must be 10 or 60 s; counters are per Cloudflare location, so a
+  // limit is approximate. worker.js FAILS OPEN if a binding is missing.
+  // Limits agreed with Greg: generous enough that genuine use never hits them.
+  //   DRIVER_IP_LIMIT      60/min per IP   (router, before any Supabase call)
+  //   DRIVER_CODE_LIMIT    15/min per code (after the regex, before the RPC)
+  //   DASHBOARD_IP_LIMIT   40/min per IP   (router, before the token check)
+  //   DASHBOARD_USER_LIMIT 20/min per Supabase user id (after verification)
+  // namespace_id is a positive integer unique per limiter; the dev block uses
+  // 2001–2004 so the two Workers can never share a counter.
+  "ratelimits": [
+    { "name": "DRIVER_IP_LIMIT",      "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
+    { "name": "DRIVER_CODE_LIMIT",    "namespace_id": "1002", "simple": { "limit": 15, "period": 60 } },
+    { "name": "DASHBOARD_IP_LIMIT",   "namespace_id": "1003", "simple": { "limit": 40, "period": 60 } },
+    { "name": "DASHBOARD_USER_LIMIT", "namespace_id": "1004", "simple": { "limit": 20, "period": 60 } }
+  ],
+
   // ── Dev environment: `wrangler deploy --env dev` ──────────────────────
   // Same code, separate Worker (fleet-proxy-dev). Adds the local origins:
   // 8787 is `wrangler dev`, 8377 is the static app server in .claude/launch.json.
+  // Bindings are NOT inherited into named environments — keep in step.
   "env": {
     "dev": {
       "name": "fleet-proxy-dev",
@@ -43,15 +62,13 @@
         "SUPABASE_URL": "https://wlwwzbyuchsonwugqhww.supabase.co",
         "SUPABASE_ANON_KEY": "sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5",
         "ALLOWED_ORIGINS": "https://pholacoaches.github.io,http://localhost:8787,http://localhost:8377"
-      }
+      },
+      "ratelimits": [
+        { "name": "DRIVER_IP_LIMIT",      "namespace_id": "2001", "simple": { "limit": 60, "period": 60 } },
+        { "name": "DRIVER_CODE_LIMIT",    "namespace_id": "2002", "simple": { "limit": 15, "period": 60 } },
+        { "name": "DASHBOARD_IP_LIMIT",   "namespace_id": "2003", "simple": { "limit": 40, "period": 60 } },
+        { "name": "DASHBOARD_USER_LIMIT", "namespace_id": "2004", "simple": { "limit": 20, "period": 60 } }
+      ]
     }
   }
-
-  // OPTIONAL — per-driver-code throttle for /ai/driver (Workers Rate Limiting
-  // binding, no extra cost). Uncomment to enable; worker.js uses it when
-  // present and works without it. 20 AI reads per minute per code is far
-  // above real use (a driver submits once a day).
-  // ,"ratelimits": [
-  //   { "name": "DRIVER_RATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } }
-  // ]
 }

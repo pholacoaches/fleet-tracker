@@ -2183,6 +2183,7 @@ async function extractWithAI(base64Data,filename){
           });
         });
       }catch(batchErr){
+        if(batchErr.rateLimited)throw batchErr; // stop now — nothing saved yet
         console.error(`Batch pages ${startPage}–${endPage} failed:`,batchErr);
         failedRanges.push(`pages ${startPage}–${endPage}`);
       }
@@ -2239,6 +2240,7 @@ async function extractWithAI(base64Data,filename){
   }catch(err){
     hideLoading();
     console.error(err);
+    if(err.rateLimited){showErrorBanner(err.message);return;}
     showErrorBanner('Error processing PDF:\n\n'+err.message+'\n\nPlease check your internet connection and try again.');
   }
 }
@@ -2297,6 +2299,13 @@ Important rules:
       ]}]
     })
   });
+  // Worker per-user / per-IP throttle (or Anthropic's own limit): abort the
+  // whole upload with one calm message instead of failing chunk after chunk.
+  if(response.status===429){
+    const e=new Error('Too many uploads in a short time. Please wait a minute, then upload this PDF again. Nothing from this file has been saved yet.');
+    e.rateLimited=true;
+    throw e;
+  }
   const data=await response.json();
   if(data.error)throw new Error(data.error.message);
   const text=data.content.map(i=>i.text||'').join('');
