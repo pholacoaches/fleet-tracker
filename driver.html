@@ -203,7 +203,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
     <div class="greet-title" id="greetName">Hi</div>
     <div class="greet-sub">Ready to submit your odometer reading?</div>
     <div class="dup-banner" id="dupBanner" style="display:none;">You already submitted a reading today — continue?</div>
-    <button class="big-btn" id="startBtn" onclick="showScreen('plateScreen');document.getElementById('plateSearch').focus();">🚌 Start</button>
+    <button class="big-btn" id="startBtn" onclick="showScreen('plateScreen');document.getElementById('plateSearch').focus();">Start</button>
   </div>
 </div>
 
@@ -211,7 +211,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 <div id="plateScreen" class="screen">
   <div class="main">
     <div class="step-title">Which vehicle are you driving?</div>
-    <input type="text" class="search-input" id="plateSearch" placeholder="🔍 Bus number or plate..." oninput="renderPlateList()" autocomplete="off">
+    <input type="text" class="search-input" id="plateSearch" placeholder="🔍 Fleet number or plate..." oninput="renderPlateList()" autocomplete="off">
     <div class="plate-list" id="plateList"><div class="plate-none">Loading vehicles...</div></div>
   </div>
 </div>
@@ -398,7 +398,7 @@ function renderPlateList(){
       // pickPlate/vehicleList.find/submit all keep using the true value.
       const arg=escAttr(JSON.stringify(v.plate));
       return v.fleet_no
-        ?`<button class="plate-row" onclick="pickPlate(${arg})"><span class="pr-fleet">🚌 Bus ${escapeHtml(v.fleet_no)}</span><span class="pr-plate-sub">${escapeHtml(v.plate)}</span></button>`
+        ?`<button class="plate-row" onclick="pickPlate(${arg})"><span class="pr-fleet">${escapeHtml(v.fleet_no)}</span><span class="pr-plate-sub">${escapeHtml(v.plate)}</span></button>`
         :`<button class="plate-row" onclick="pickPlate(${arg})">${escapeHtml(v.plate)}</button>`;
     }).join('')
     :'<div class="plate-none">No vehicles match your search.</div>';
@@ -409,14 +409,14 @@ function pickPlate(plate){
   currentPlate=plate;
   currentFleetNo=(v&&v.fleet_no)||'';
   const fleetEl=document.getElementById('confirmFleet');
-  fleetEl.textContent=currentFleetNo?`🚌 Bus ${currentFleetNo}`:'';
+  fleetEl.textContent=currentFleetNo||'';
   fleetEl.style.display=currentFleetNo?'block':'none';
   document.getElementById('confirmPlate').textContent=plate;
   showScreen('confirmScreen');
 }
 
 function confirmVehicle(){
-  const label=currentFleetNo?`Bus ${currentFleetNo} · ${currentPlate}`:currentPlate;
+  const label=currentFleetNo?`${currentFleetNo} · ${currentPlate}`:currentPlate;
   document.getElementById('formPlate').textContent=label;
   document.getElementById('successPlate').textContent=label;
   showScreen('formScreen');
