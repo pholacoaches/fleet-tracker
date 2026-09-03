@@ -972,7 +972,7 @@ input[type=file] { display: none; }
     <div class="dash-tabs">
       <button class="dash-tab-btn active" data-tab="overview"    onclick="switchDashTab('overview')">📊 Overview</button>
       <button class="dash-tab-btn"        data-tab="performance" onclick="switchDashTab('performance')">🏆 Performance</button>
-      <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')">🚌 Vehicle Blocks</button>
+      <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')">🚘 Vehicle Blocks</button>
       <button class="dash-tab-btn"        data-tab="drivers"     onclick="switchDashTab('drivers')">👤 Drivers</button>
 <button class="dash-tab-btn" data-tab="discs" onclick="switchDashTab('discs')">📋 Disc Renewal<span class="dash-tab-badge" id="discTabBadge">0</span></button>
       <button class="dash-tab-btn"        data-tab="trends"      onclick="switchDashTab('trends')">📈 Trends</button>
@@ -1009,7 +1009,7 @@ input[type=file] { display: none; }
     <!-- TAB 3: VEHICLE BLOCKS -->
     <div class="tab-panel" id="tab-vehicles">
       <div class="section-header">
-        <div class="section-title">🚌 Vehicle Blocks</div>
+        <div class="section-title">🚘 Vehicle Blocks</div>
         <div class="section-count" id="vehicleCount"></div>
         <div class="section-actions">
           <button class="btn btn-outline" onclick="exportCSV()" style="font-size:11px;padding:6px 12px;">📥 CSV</button>
@@ -3555,7 +3555,7 @@ function renderDiscView(){
     <div class="disc-summary-card ds-amber"><div class="disc-summary-label">⚠ Due Within 60 Days</div><div class="disc-summary-val">${warn}</div></div>
     <div class="disc-summary-card ds-green"><div class="disc-summary-label">✅ Valid</div><div class="disc-summary-val">${ok}</div></div>
     <div class="disc-summary-card"><div class="disc-summary-label">📋 Not Set</div><div class="disc-summary-val" style="color:var(--text3);">${notSet}</div></div>
-    <div class="disc-summary-card"><div class="disc-summary-label">🚌 Vehicles</div><div class="disc-summary-val">${plates.length}</div></div>
+    <div class="disc-summary-card"><div class="disc-summary-label">🚘 Vehicles</div><div class="disc-summary-val">${plates.length}</div></div>
   `;
 
   if(discBulkMode){
@@ -3784,7 +3784,7 @@ function renderTyreVehiclePanel(){
 
   panel.innerHTML=`
     <div class="section-header">
-      <div class="section-title" style="font-size:15px;">🚌 ${escapeHtml(plate)} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
+      <div class="section-title" style="font-size:15px;">🚘 ${escapeHtml(plate)} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
       <div class="section-actions">
         <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddTyreForm()">＋ Add Tyre</button>
       </div>
@@ -3974,7 +3974,7 @@ const MAINT_CATEGORIES={
   engine:{label:'Engine',icon:'🔩',components:['Engine overhaul','Turbo','Injectors','Radiator','Water pump','Cooling fan','Cylinder head','Belts & tensioners']},
   electrical:{label:'Electrical',icon:'🔋',components:['Battery','Alternator','Starter motor','Wiring','Lights']},
   suspension:{label:'Suspension & Steering',icon:'🪛',components:['Air bags','Shock absorbers','Kingpins','Wheel bearings','Steering box','Tie rod ends']},
-  body:{label:'Body & Interior',icon:'🚌',components:['Door mechanism','Seats','Glass/windscreen','Panel repair','Paint']},
+  body:{label:'Body & Interior',icon:'🚘',components:['Door mechanism','Seats','Glass/windscreen','Panel repair','Paint']},
   aircon:{label:'Aircon',icon:'❄️',components:['Aircon compressor','Aircon regas','Blower/fans','Condenser']},
   cof:{label:'COF',icon:'📋',components:['COF inspection','COF repairs']},
   other:{label:'Other',icon:'🔧',components:['Other']}
@@ -4106,7 +4106,7 @@ function computeMaintFlags(){
     const daysLeft=Math.ceil((expiry-Date.now())/(1000*60*60*24));
     if(daysLeft<0){
       flags.push({type:'cof',severity:'red',plate,icon:'📋',
-        html:`<strong>COF EXPIRED:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expired ${Math.abs(daysLeft)} day(s) ago (${fmtDDMMYYYY(expiry)}). This vehicle may not legally carry passengers.`});
+        html:`<strong>COF EXPIRED:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expired ${Math.abs(daysLeft)} day(s) ago (${fmtDDMMYYYY(expiry)}). This vehicle may not legally be operated.`});
     }else if(daysLeft<=30){
       flags.push({type:'cof',severity:'amber',plate,icon:'📋',
         html:`<strong>COF due soon:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expires in ${daysLeft} day(s) (${fmtDDMMYYYY(expiry)}). Book the inspection now.`});
@@ -4283,7 +4283,7 @@ function renderMaintVehiclePanel(){
 
   panel.innerHTML=`
     <div class="section-header" style="margin-top:6px;">
-      <div class="section-title" style="font-size:15px;">🚌 ${escapeHtml(plate)} — ${jobs.length} job${jobs.length!==1?'s':''}${totalSpend>0?' · '+fmtRand(totalSpend)+' total':''}</div>
+      <div class="section-title" style="font-size:15px;">🚘 ${escapeHtml(plate)} — ${jobs.length} job${jobs.length!==1?'s':''}${totalSpend>0?' · '+fmtRand(totalSpend)+' total':''}</div>
       <div class="section-actions">
         <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddJobForm()">＋ Add Job</button>
       </div>
@@ -4301,7 +4301,7 @@ function renderMaintVehiclePanel(){
         <div class="tf-field"><label>Date In *</label><input type="date" id="mf-datein"></div>
         <div class="tf-field"><label>Date Out (blank = still in workshop)</label><input type="date" id="mf-dateout"></div>
         <div class="tf-field"><label>Workshop</label><select id="mf-workshop"><option value="external">Outside supplier</option><option value="internal">In-house</option></select></div>
-        <div class="tf-field"><label>Supplier</label><input type="text" id="mf-supplier" placeholder="e.g. Bus Truck & Coach"></div>
+        <div class="tf-field"><label>Supplier</label><input type="text" id="mf-supplier" placeholder="e.g. ABC Auto Repairs"></div>
         <div class="tf-field"><label>Labour Cost (R)</label><input type="number" id="mf-labour" min="0" step="0.01" placeholder="e.g. 3500.00"></div>
         <div class="tf-field"><label>Total Cost (R)</label><input type="number" id="mf-total" min="0" step="0.01" placeholder="e.g. 18500.00"></div>
       </div>
