@@ -297,6 +297,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   </div>
 </div>
 
+<script src="esc.js"></script>
 <script>
 const SUPABASE_URL='https://wlwwzbyuchsonwugqhww.supabase.co';
 const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
@@ -316,19 +317,7 @@ function showScreen(id){
   window.scrollTo({top:0});
 }
 
-// Escape helpers — verbatim copies of index.html's escapeHtml/escAttr (this
-// page is standalone and cannot import them). Keep the bodies identical.
-function escapeHtml(s){
-  return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-// Attribute-context variant: use for every interpolation inside an HTML
-// attribute (title="", value="", id="", data-*) — also neutralises backtick
-// and equals so the value stays inert even under unquoted-attribute parsing.
-// For a value passed as a JS string inside an inline on* handler, wrap it as
-// escAttr(JSON.stringify(v)) so it is escaped for JS first, then for HTML.
-function escAttr(s){
-  return String(s??'').replace(/[&<>"'`=]/g,c=>'&#'+c.charCodeAt(0)+';');
-}
+// escapeHtml / escAttr live in esc.js (shared with index.html).
 
 // ── Tenant branding (build #4a): driver_page_init returns the driver's
 // tenant's branding row — apply name + accent. Default palette stays for Phola.
