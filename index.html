@@ -964,7 +964,7 @@ input[type=file] { display: none; }
   <!-- DASHBOARD -->
   <div id="dashboard" class="hidden">
 
-    <div class="dash-header">
+    <div class="dash-header" id="dashHeader">
       <div class="period-tabs" id="periodTabs"></div>
     </div>
 
@@ -2349,6 +2349,9 @@ function renderDashboard(){
   // not the (empty) report.
   document.getElementById('heroVehicles').textContent=readingsOnlyMode?vehiclesWithDriverSubmissions().length:r.vehicles.length;
 
+  // Readings-only mode has no reports, so the strip would render as an empty
+  // grey bar — hide the wrapper (and its margin) until a fuel report exists.
+  document.getElementById('dashHeader').classList.toggle('hidden',state.reports.length===0);
   document.getElementById('periodTabs').innerHTML=state.reports.map((rep,i)=>`
     <button class="period-tab ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})">${escapeHtml(rep.scheduleDate||'Report '+(i+1))}</button>
   `).join('');
