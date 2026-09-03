@@ -1195,6 +1195,7 @@ input[type=file] { display: none; }
   </div>
 </main>
 
+<script src="esc.js"></script>
 <script>
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 const AUTH_TOKEN_KEY='fleet_auth_token';
@@ -1960,17 +1961,7 @@ function fmtTimeHM(d){
   d=new Date(d);
   return`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
-function escapeHtml(s){
-  return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-// Attribute-context variant: use for every interpolation inside an HTML
-// attribute (title="", value="", id="", data-*) — also neutralises backtick
-// and equals so the value stays inert even under unquoted-attribute parsing.
-// For a value passed as a JS string inside an inline on* handler, wrap it as
-// escAttr(JSON.stringify(v)) so it is escaped for JS first, then for HTML.
-function escAttr(s){
-  return String(s??'').replace(/[&<>"'`=]/g,c=>'&#'+c.charCodeAt(0)+';');
-}
+// escapeHtml / escAttr live in esc.js (shared with driver.html).
 // Plate → DOM-id fragment: [A-Za-z0-9_-] only, so a plate-derived id can never
 // carry markup. Writer and readers of an id must both use this.
 function plateDomId(p){return String(p??'').replace(/[^A-Za-z0-9_-]/g,'_');}
