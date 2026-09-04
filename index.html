@@ -3805,7 +3805,11 @@ async function compressLicencePhoto(file){
     let source=img,bitmap=null;
     if(window.createImageBitmap){
       try{
-        bitmap=await createImageBitmap(file,{resizeWidth:w,resizeHeight:h,resizeQuality:'high'});
+        // fix-scan-rotation (2026-09-04): honour the EXIF orientation tag
+        // explicitly. Current Chrome does so by default; older Chrome and
+        // Safari defaulted to 'none', which sends the AI a sideways AND
+        // squashed picture (w/h come from the oriented <img> above).
+        bitmap=await createImageBitmap(file,{resizeWidth:w,resizeHeight:h,resizeQuality:'high',imageOrientation:'from-image'});
         source=bitmap;
       }catch{/* older WebKit rejects resize options — fall back to the <img> */}
     }
@@ -3818,6 +3822,33 @@ async function compressLicencePhoto(file){
       if(blob&&(blob.size<=SCAN_TARGET_BYTES||q===0.55))return blob;
     }
     return null;
+  }finally{
+    URL.revokeObjectURL(url);
+    if(canvas){canvas.width=0;canvas.height=0;}
+  }
+}
+
+// fix-scan-rotation (2026-09-04): turn an already-compressed photo 90°
+// clockwise. EXIF is honoured above, so this is for a document that is
+// physically sideways in the frame — the user sees it in the thumbnail and
+// clicks ↻ instead of retaking the photo. Memory-only like everything else.
+async function rotateBlob90(blob){
+  const url=URL.createObjectURL(blob);
+  let canvas=null;
+  try{
+    const img=await new Promise((resolve,reject)=>{
+      const i=new Image();
+      i.onload=()=>resolve(i);
+      i.onerror=reject;
+      i.src=url;
+    });
+    canvas=document.createElement('canvas');
+    canvas.width=img.height;canvas.height=img.width;
+    const g=canvas.getContext('2d');
+    g.translate(canvas.width,0);
+    g.rotate(Math.PI/2);
+    g.drawImage(img,0,0);
+    return await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.85));
   }finally{
     URL.revokeObjectURL(url);
     if(canvas){canvas.width=0;canvas.height=0;}
@@ -3917,14 +3948,26 @@ async function readLicenceWithAI(base64){
   if(response.status===429)return{outcome:'limited'};
   if(response.status===401)return{outcome:'error',note:'Session expired — log in again'};
   if(!response.ok)return{outcome:'error',note:'The AI service could not be reached — retry'};
+  let raw='',stop='';
   try{
     const data=await response.json();
-    const raw=(data.content||[]).map(i=>i.text||'').join('').replace(/```json|```/g,'').trim();
-    const parsed=JSON.parse(raw);
+    raw=(data.content||[]).map(i=>i.text||'').join('').trim();
+    stop=data.stop_reason||'';
+    // fix-scan-rotation (2026-09-04): diagnostic only — Chrome hides
+    // console.debug unless the console's Verbose level is on. Model text and
+    // stop reason only; the photo is never logged.
+    console.debug('[FleetDesk] licence scan raw answer (stop_reason='+stop+'):',raw.slice(0,600));
+    // A reply cut off by the token cap is reported as such, not as "unexpected".
+    if(stop==='max_tokens')return{outcome:'error',note:'AI answer was cut off — retry'};
+    // Take the object from the first "{" to the last "}" so a sentence of
+    // preamble or a code fence around the JSON no longer breaks the parse.
+    const a=raw.indexOf('{'),b=raw.lastIndexOf('}');
+    if(a<0||b<=a)return{outcome:'error',note:'Unexpected answer from the AI — retry'};
+    const parsed=JSON.parse(raw.slice(a,b+1));
     if(!parsed||typeof parsed!=='object'||!('plate' in parsed))return{outcome:'error',note:'Unexpected answer from the AI — retry'};
     return{outcome:'ok',data:parsed};
   }catch(err){
-    console.error('[FleetDesk] AI licence answer unreadable:',err);
+    console.error('[FleetDesk] AI licence answer unreadable (stop_reason='+stop+'):',err);
     return{outcome:'error',note:'Unexpected answer from the AI — retry'};
   }
 }
@@ -3962,6 +4005,27 @@ function retryScanRow(id){
   processScanQueue();
 }
 
+// fix-scan-rotation (2026-09-04): rotate the compressed photo 90° clockwise,
+// refresh the thumbnail, and re-send it. Any read result is discarded — the
+// row starts over from the rotated image.
+async function rotateScanRow(id){
+  const row=scanRows.find(r=>r.id===id);
+  if(!row||!row.blob||row.status==='reading'||row.status==='waiting'||row.status==='saved')return;
+  row.status='reading';row.note='Rotating…';updateScanRow(row);
+  try{
+    const rotated=await rotateBlob90(row.blob);
+    if(!rotated)throw new Error('rotate failed');
+    if(row.blobUrl)URL.revokeObjectURL(row.blobUrl);
+    row.blob=rotated;row.blobUrl=URL.createObjectURL(rotated);
+    row.fields=blankScanFields();row.confidence=null;row.selected=false;
+    row.status='queued';row.note='';updateScanRow(row);
+    processScanQueue();
+  }catch(err){
+    console.error('[FleetDesk] rotate failed:',err);
+    row.status='error';row.note='Could not rotate the photo — retry';updateScanRow(row);
+  }
+}
+
 // Inputs write straight into row.fields, so a full re-render never loses an edit.
 function scanField(id,key,value){
   const row=scanRows.find(r=>r.id===id);
@@ -3987,10 +4051,14 @@ function scanRowFlags(row){
 }
 
 function scanStatusHtml(row){
-  const retry=`<button class="scan-retry" onclick="retryScanRow(${escAttr(JSON.stringify(row.id))})">↻ Retry</button>`;
+  const idj=escAttr(JSON.stringify(row.id));
+  // ↻ Rotate is offered wherever a re-send makes sense and a compressed photo
+  // exists (a queued/reading row has neither yet; a saved row is finished).
+  const rotate=row.blob?`<button class="scan-retry" onclick="rotateScanRow(${idj})" title="Turn the photo 90° and read it again">⟳ Rotate</button>`:'';
+  const retry=`<button class="scan-retry" onclick="retryScanRow(${idj})">↻ Retry</button>${rotate}`;
   switch(row.status){
     case 'queued':return'⏳ Queued';
-    case 'reading':return'🤖 Reading…';
+    case 'reading':return row.note?`🤖 ${escapeHtml(row.note)}`:'🤖 Reading…';
     case 'waiting':return`<span class="scan-status-warn">⏸ ${escapeHtml(row.note)}</span>`;
     case 'limited':return`<span class="scan-status-warn">⏸ ${escapeHtml(row.note)}</span>${retry}`;
     case 'error':return`<span class="scan-status-bad">⚠ ${escapeHtml(row.note)}</span>${retry}`;
@@ -4005,7 +4073,8 @@ function scanStatusHtml(row){
       if(flags.length)parts.push(`<span class="scan-status-warn">⚠ Check: ${escapeHtml(flags.join(', '))}</span>`);
       if(plate)parts.push(known?'<span class="scan-status-ok">Update</span>':inFleet?'<span class="scan-status-ok">New record</span>':'<span class="scan-status-warn">New vehicle</span>');
       if(row.confidence==='low')parts.push('<span class="scan-status-warn">low confidence</span>');
-      return parts.join(' · ')||'✓ Read';
+      // A read row can still be sideways-and-wrong: offer the rotate here too.
+      return (parts.join(' · ')||'✓ Read')+rotate;
     }
   }
   return'';

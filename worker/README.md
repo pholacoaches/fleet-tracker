@@ -14,7 +14,8 @@ the Cloudflare dashboard.
 | anything else (`/`, `/login`, `/auth/*`) | — | — | **404** |
 
 Pinned: `claude-sonnet-4-6`, `max_tokens` 4000 (dashboard) / 100 (driver) /
-300 (compliance). The client's `model`/`max_tokens` are ignored. The
+600 (compliance — raised from 300 on 2026-09-04 after sideways photos got
+prose-then-JSON replies cut mid-object). The client's `model`/`max_tokens` are ignored. The
 compliance route stays on the same model as the other two on purpose; if real
 licence photos misread, upgrade that route alone (model + structured output)
 with evidence — the office approves every scanned value in a table before it
