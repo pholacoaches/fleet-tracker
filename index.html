@@ -3434,6 +3434,7 @@ function worstComplianceStatus(rec){
 }
 
 async function fetchCompliance(){
+  await fetchFleetPlates();
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_compliance?select=*`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
@@ -3444,6 +3445,22 @@ async function fetchCompliance(){
     rows.forEach(r=>complianceData[r.plate]=r);
     if(rows.length===0)await migrateLocalDiscData();
   }catch(err){console.error('[FleetDesk] fetchCompliance failed:',err);}
+}
+
+// Current fleet (2026-09-04): the tenant's ACTIVE vehicles. The compliance
+// tab lists these plus any plate with a compliance row — never plates that
+// only ever appeared in an old fuel report. RLS scopes the read to the
+// tenant. On failure the previous set is kept so the tab does not empty out.
+let fleetPlates=new Set();
+async function fetchFleetPlates(){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?select=plate&active=eq.true`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
+    });
+    if(!res.ok){console.error('[FleetDesk] fetchFleetPlates failed:',res.status);return;}
+    const rows=await res.json();
+    fleetPlates=new Set(rows.map(r=>normalisePlate(r.plate)).filter(Boolean));
+  }catch(err){console.error('[FleetDesk] fetchFleetPlates failed:',err);}
 }
 
 // One-time: carry old localStorage disc entries (DD.MM.YYYY) into Supabase
@@ -3475,10 +3492,13 @@ async function upsertCompliance(rows){
   }catch(err){console.error('[FleetDesk] Compliance save error:',err);return false;}
 }
 
-// ALL vehicles ever seen across every report + compliance rows (not just current period)
+// Plates the compliance tab lists (2026-09-04): the tenant's active vehicles
+// (vehicles table) plus every plate with a compliance row. Fuel-report plates
+// are NOT unioned any more — 22 vehicles no longer run kept resurfacing as
+// "Not set". Shared by the summary strip, cards, bulk table, CSV, the scan
+// table's plate list and the Maintenance tab's COF loop.
 function getCompliancePlates(){
-  const plates=new Set();
-  state.reports.forEach(r=>r.vehicles.forEach(v=>plates.add(v.plate)));
+  const plates=new Set(fleetPlates);
   Object.keys(complianceData).forEach(p=>plates.add(p));
   return[...plates].sort();
 }
@@ -4757,8 +4777,9 @@ function computeMaintFlags(){
   // vehicle_compliance goes through the same ladder as the Disc Renewal tab
   // (respecting cof_not_required). Only a vehicle with NO COF date on file
   // falls back to an estimate from its last COF job (+ COMP_RENEW_MONTHS),
-  // labelled as such. Vehicles known only to compliance are included too.
-  new Set([...plates,...Object.keys(complianceData)]).forEach(plate=>{
+  // labelled as such. Same plate list as the Disc Renewal tab (active
+  // vehicles + compliance rows), so the two tabs always agree.
+  getCompliancePlates().forEach(plate=>{
     const rec=complianceData[plate];
     if(rec&&rec.cof_not_required)return;
     let expiryIso=rec&&rec.cof_expiry?rec.cof_expiry:null,estimated=false;
