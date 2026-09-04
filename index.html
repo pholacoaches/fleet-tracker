@@ -648,9 +648,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-days.dd-red { color:var(--red); }
 .disc-days.dd-amber { color:var(--amber); }
 .disc-days.dd-green { color:var(--green); }
-.disc-card-footer { display:flex; justify-content:flex-end; padding:8px 14px; border-top:1px solid var(--border); background:var(--surface2); }
+.disc-card-footer { display:flex; justify-content:flex-end; gap:6px; padding:8px 14px; border-top:1px solid var(--border); background:var(--surface2); }
 .disc-edit-btn { font-size:11px; padding:3px 9px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); color:var(--text2); cursor:pointer; font-family:var(--font); font-weight:700; transition:border-color 0.15s, color 0.15s; }
 .disc-edit-btn:hover { border-color:var(--accent); color:var(--accent); }
+.disc-edit-btn:disabled { opacity:0.6; cursor:default; }
+/* Archive: quiet ghost variant — reversible, so not red, but it must not
+   compete with Edit Details beside it */
+.disc-edit-btn.disc-archive-btn { border-color:transparent; background:transparent; color:var(--text3); font-weight:600; }
+.disc-edit-btn.disc-archive-btn:hover { border-color:var(--border2); color:var(--text2); }
 .disc-edit-form { padding:12px 14px; border-top:1px solid var(--border); background:var(--surface2); display:none; flex-direction:column; gap:10px; }
 .disc-edit-form.open { display:flex; }
 .disc-edit-form label { font-size:11px; font-weight:700; color:var(--text2); display:block; margin-bottom:3px; }
@@ -3525,7 +3530,9 @@ function isArchivedPlate(plate){return !!(complianceData[plate]&&complianceData[
 // NULL. Returns {ok, vehicleFailed} so the caller can warn when the driver
 // app's picker did not change even though the compliance side did.
 async function setPlateArchived(plate,archived){
-  const stamp=archived?new Date().toISOString():null;
+  // Retry on an already-archived plate keeps the original stamp, so only the
+  // vehicles PATCH is effectively re-run.
+  const stamp=archived?((complianceData[plate]&&complianceData[plate].archived_at)||new Date().toISOString()):null;
   if(!await upsertCompliance([{plate,archived_at:stamp}]))return{ok:false,vehicleFailed:false};
   complianceData[plate]={...(complianceData[plate]||{plate}),archived_at:stamp};
   let vehicleFailed=false;
@@ -3789,7 +3796,7 @@ function renderDiscCards(plates){
         ${rec.notes?`<div style="font-size:11px;color:var(--amber);font-style:italic;margin-top:4px;">📝 ${escapeHtml(rec.notes)}</div>`:''}
       </div>
       <div class="disc-renew-form" id="crf-${id}"></div>
-      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleComplianceEdit(${pj})">✎ Edit Details</button></div>
+      <div class="disc-card-footer"><button class="disc-edit-btn disc-archive-btn" onclick="archiveComplianceVehicle(${pj},this)" title="Take this vehicle out of service — it leaves the list but nothing is deleted">🗄 Archive</button><button class="disc-edit-btn" onclick="toggleComplianceEdit(${pj})">✎ Edit Details</button></div>
       <div class="disc-edit-form" id="cef-${id}">
         <div class="def-row">
           <div><label>Make / Model</label><input type="text" id="ce-make-${id}" value="${escapeHtml(rec.make_model||'')}" placeholder="e.g. Yutong ZK6122H"></div>
@@ -3824,6 +3831,55 @@ async function setNotRequired(plate,key,flag){
   const row={plate,[item.nrField]:!!flag};
   if(!await upsertCompliance([row])){alert('Could not save. Please check your connection and try again.');return;}
   complianceData[plate]={...(complianceData[plate]||{}),...row};
+  renderDiscView();updateDiscTabBadge();renderAlertBanner();
+}
+
+// ── Archive / restore actions (2026-09-04) ───────────────────────────────────
+// confirm() / alert() match the other destructive-looking flows on this page
+// (delete report, close scan). The plate is data, not markup, so it goes into
+// the dialog text as-is. Re-render is the same triad every save path uses:
+// cards + summary strip, tab badge, Overview banner. The Maintenance tab
+// recomputes its COF flags on entry, so it needs nothing here.
+//
+// Double-click guard: setPlateArchived is two round trips, so a plate that is
+// mid-flight is refused and the clicked button is disabled until it settles.
+const compBusyPlates=new Set();
+async function archiveComplianceVehicle(plate,btn){
+  if(compBusyPlates.has(plate))return;
+  const retry=isArchivedPlate(plate); // already archived → vehicles PATCH failed earlier, just retry it
+  if(!retry){
+    const inVehicles=!!fleetPlateRaw[plate];
+    let msg=`Archive ${plate}?\n\nIt will leave the Disc Renewal list and stop counting towards alerts. Nothing is deleted — tick "Show archived" to see or restore it later.`;
+    if(inVehicles)msg+=`\n\n⚠ ${plate} is also a fleet vehicle: it will disappear from the driver app's vehicle picker until it is restored.`;
+    if(!confirm(msg))return;
+  }
+  compBusyPlates.add(plate);
+  const label=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Archiving…';}
+  const r=await setPlateArchived(plate,true);
+  compBusyPlates.delete(plate);
+  if(!r.ok){
+    if(btn){btn.disabled=false;btn.textContent=label;}
+    alert(`Could not archive ${plate}. Please check your connection and try again.`);
+    return;
+  }
+  if(r.vehicleFailed)alert(`${plate} is archived, but it could not be removed from the driver app's vehicle picker, so drivers may still see it. Tick "Show archived" and use Retry on its card.`);
+  renderDiscView();updateDiscTabBadge();renderAlertBanner();
+}
+
+async function restoreComplianceVehicle(plate,btn){
+  if(compBusyPlates.has(plate))return;
+  compBusyPlates.add(plate);
+  const label=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Restoring…';}
+  const r=await setPlateArchived(plate,false);
+  compBusyPlates.delete(plate);
+  if(!r.ok){
+    if(btn){btn.disabled=false;btn.textContent=label;}
+    alert(`Could not restore ${plate}. Please check your connection and try again.`);
+    return;
+  }
+  if(r.vehicleFailed)alert(`${plate} is restored, but it could not be re-enabled in the driver app's vehicle picker, so drivers will not see it yet. Its card will offer a Retry.`);
   renderDiscView();updateDiscTabBadge();renderAlertBanner();
 }
 
