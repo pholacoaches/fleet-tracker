@@ -3436,6 +3436,7 @@ function worstComplianceStatus(rec){
 async function fetchCompliance(){
   await fetchFleetPlates();
   try{
+    // select=* already brings archived_at (archive build) into complianceData
     const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_compliance?select=*`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
@@ -3450,16 +3451,36 @@ async function fetchCompliance(){
 // Current fleet (2026-09-04): the tenant's ACTIVE vehicles. The compliance
 // tab lists these plus any plate with a compliance row — never plates that
 // only ever appeared in an old fuel report. RLS scopes the read to the
-// tenant. On failure the previous set is kept so the tab does not empty out.
+// tenant. On failure the previous sets are kept so the tab does not empty out.
+//
+// Two structures on purpose (archive build, 2026-09-04):
+//  fleetPlates   — ONLY active rows. This is what the Disc Renewal list unions
+//                  in, so a retired vehicle must never land here (sw v69 fix).
+//  fleetPlateRaw — ALL rows, active and inactive, normalised → plate exactly
+//                  as stored in `vehicles`. Needed to word the archive confirm
+//                  (does a vehicles row exist?) and to PATCH the right row on
+//                  archive / restore, since Demo/Savika store plates with hyphens.
 let fleetPlates=new Set();
+let fleetPlateRaw={};
 async function fetchFleetPlates(){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?select=plate&active=eq.true`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?select=plate,active`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(!res.ok){console.error('[FleetDesk] fetchFleetPlates failed:',res.status);return;}
     const rows=await res.json();
-    fleetPlates=new Set(rows.map(r=>normalisePlate(r.plate)).filter(Boolean));
+    const raw={},active=new Set();
+    rows.forEach(r=>{
+      const n=normalisePlate(r.plate);
+      if(!n)return;
+      // Two stored spellings of one plate (e.g. "ABC 123 GP" and "ABC123GP")
+      // would collapse here and the archive PATCH would hit only one row.
+      if(raw[n]!==undefined&&raw[n]!==r.plate)console.warn('[FleetDesk] vehicles: plates',raw[n],'and',r.plate,'normalise to the same value',n);
+      raw[n]=r.plate;
+      if(r.active)active.add(n);
+    });
+    fleetPlateRaw=raw;
+    fleetPlates=active;
   }catch(err){console.error('[FleetDesk] fetchFleetPlates failed:',err);}
 }
 
@@ -3492,6 +3513,37 @@ async function upsertCompliance(rows){
   }catch(err){console.error('[FleetDesk] Compliance save error:',err);return false;}
 }
 
+// ── Archive / restore (2026-09-04) ───────────────────────────────────────────
+// archived_at on vehicle_compliance: NULL = active, timestamp = archived.
+// Nothing is deleted. Both writes are tenant-scoped by RLS.
+function isArchivedPlate(plate){return !!(complianceData[plate]&&complianceData[plate].archived_at);}
+
+// Compliance row first (upsert creates it if the plate only lived in
+// `vehicles`), then vehicles.active follows where a vehicles row exists.
+// upsertCompliance passes an explicit null through, so restore writes a real
+// NULL. Returns {ok, vehicleFailed} so the caller can warn when the driver
+// app's picker did not change even though the compliance side did.
+async function setPlateArchived(plate,archived){
+  const stamp=archived?new Date().toISOString():null;
+  if(!await upsertCompliance([{plate,archived_at:stamp}]))return{ok:false,vehicleFailed:false};
+  complianceData[plate]={...(complianceData[plate]||{plate}),archived_at:stamp};
+  let vehicleFailed=false;
+  const raw=fleetPlateRaw[plate];
+  if(raw){
+    try{
+      const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?plate=eq.${encodeURIComponent(raw)}`,{
+        method:'PATCH',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({active:!archived})
+      });
+      if(!res.ok){vehicleFailed=true;console.error('[FleetDesk] vehicles.active update failed:',res.status,await res.text());}
+    }catch(err){vehicleFailed=true;console.error('[FleetDesk] vehicles.active update failed:',err);}
+    // Only mirror the change locally when the DB actually took it
+    if(!vehicleFailed){if(archived)fleetPlates.delete(plate);else fleetPlates.add(plate);}
+  }
+  return{ok:true,vehicleFailed};
+}
+
 // Plates the compliance tab lists (2026-09-04): the tenant's active vehicles
 // (vehicles table) plus every plate with a compliance row. Fuel-report plates
 // are NOT unioned any more — 22 vehicles no longer run kept resurfacing as
@@ -3507,6 +3559,7 @@ function getCompliancePlates(){
 function getComplianceAlertCounts(){
   const c={overdue:0,week:0,book:0,soon:0,ok:0,unknown:0,not_required:0};
   Object.values(complianceData).forEach(rec=>{
+    if(rec.archived_at)return; // archived = out of service, never "not road-legal"
     COMP_ITEMS.forEach(it=>{c[itemStatus(rec,it).status]++;});
   });
   return c;
