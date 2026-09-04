@@ -10,10 +10,15 @@ the Cloudflare dashboard.
 |---|---|---|---|
 | `POST /ai/dashboard` | `index.html` fuel-statement PDF extraction | `Authorization: Bearer <Supabase access token>` — verified with `GET /auth/v1/user` on every call | client's PDF chunk + prompt, model + max_tokens pinned |
 | `POST /ai/driver` | `driver.html` odometer photo read | `X-Driver-Code: AAA-0000` — validated with the `driver_page_init` RPC (null = unknown/inactive) | client's JPEG only; prompt, model and max_tokens pinned |
+| `POST /ai/compliance` | `index.html` licence-document photo read (Disc Renewal → Scan Licences, 2026-09-04) | same as `/ai/dashboard` (Supabase bearer token) | client's JPEG only; prompt, model and max_tokens pinned |
 | anything else (`/`, `/login`, `/auth/*`) | — | — | **404** |
 
-Pinned: `claude-sonnet-4-6`, `max_tokens` 4000 (dashboard) / 100 (driver).
-The client's `model`/`max_tokens` are ignored.
+Pinned: `claude-sonnet-4-6`, `max_tokens` 4000 (dashboard) / 100 (driver) /
+300 (compliance). The client's `model`/`max_tokens` are ignored. The
+compliance route stays on the same model as the other two on purpose; if real
+licence photos misread, upgrade that route alone (model + structured output)
+with evidence — the office approves every scanned value in a table before it
+is saved.
 
 CORS is environment-based (see "Environments"). Production allows
 `https://pholacoaches.github.io` only. Requests without an allowed `Origin`
@@ -61,14 +66,17 @@ the hard backstop.
 |---|---|---|---|---|
 | `DRIVER_IP_LIMIT` | `/ai/driver` | client IP | 60 / min | router, before any Supabase call |
 | `DRIVER_CODE_LIMIT` | `/ai/driver` | driver code | 15 / min | handler, after the regex, before the RPC |
-| `DASHBOARD_IP_LIMIT` | `/ai/dashboard` | client IP | 40 / min | router, before the token check |
-| `DASHBOARD_USER_LIMIT` | `/ai/dashboard` | Supabase user id | 20 / min | handler, after token verification |
+| `DASHBOARD_IP_LIMIT` | `/ai/dashboard`, `/ai/compliance` | client IP | 40 / min | router, before the token check |
+| `DASHBOARD_USER_LIMIT` | `/ai/dashboard`, `/ai/compliance` | Supabase user id | 20 / min | handler, after token verification |
 
 Sizing: one driver photo is one call, so 15/min covers a bad minute of
 retakes and retries several times over; SA mobile carriers put many phones
 behind one address, so the driver per-IP limit stays loose. Dashboard PDF
 chunks are sent one at a time and each takes 15–60 s, so real use is under
-4/min.
+4/min. The licence scanner shares the dashboard bindings (same signed-in
+identity) and also sends photos strictly one at a time, each taking several
+seconds, so a batch of 30+ stays under the per-user limit; on a 429 it waits
+out the window once and retries that photo, then leaves a Retry button.
 
 Over the limit → `429` with `Retry-After: 60` and
 `{ error: { type: "rate_limit_error", message: "Too many requests in a short time. Please wait a minute and try again." } }`.
@@ -112,6 +120,27 @@ const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/ai/driver
 });
 ```
 
+`index.html` `readLicenceWithAI` (2026-09-04) — dashboard auth, driver body:
+
+```js
+const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/ai/compliance',{
+  method:'POST',
+  headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
+  body:JSON.stringify({messages:[{role:'user',content:[
+    {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}}
+  ]}]})
+});
+```
+
+Answer (text block, strict JSON, every field nullable — the app blanks and
+flags anything that is not `YYYY-MM-DD`):
+
+```json
+{"plate":"RPF655W","disc_expiry":"2027-03-31","cof_expiry":"2026-09-30",
+ "op_licence_expiry":"2028-01-15","disc_no":null,"op_licence_no":null,
+ "make_model":null,"confidence":"high"}
+```
+
 ## Secrets
 
 `ANTHROPIC_API_KEY` is the only secret. It was rotated on 2026-08-25 and the
@@ -135,6 +164,7 @@ curl -i -X POST http://localhost:8787/login          -H "Origin: https://pholaco
 curl -i -X POST http://localhost:8787/ai/dashboard   -H "Origin: https://evil.example"             # 403
 curl -i -X POST http://localhost:8787/ai/dashboard   -H "Origin: https://pholacoaches.github.io"   # 401
 curl -i -X POST http://localhost:8787/ai/driver      -H "Origin: https://pholacoaches.github.io" -H "X-Driver-Code: ZZZ-0000"   # 401
+curl -i -X POST http://localhost:8787/ai/compliance  -H "Origin: https://pholacoaches.github.io"   # 401
 ```
 
 Rate-limit check against a deployed Worker (per IP; no credentials needed):

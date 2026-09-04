@@ -681,6 +681,32 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-bulk-table input:focus { border-color:var(--accent); }
 .disc-bulk-table input[type=date] { font-family:var(--font-mono); }
 
+/* LICENCE SCAN — approval table (compliance photo-scan Stage 1, 2026-09-04).
+   Reuses .disc-bulk-table for the grid; these add the thumbnail, status and
+   flag styling. Flagged = a value the AI could not read, or a plate to check. */
+.disc-scan-wrap { overflow-x:auto; }
+.disc-scan-bar { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.disc-scan-hint { font-size:12px; color:var(--text3); }
+.disc-scan-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.disc-bulk-table td.scan-thumb { width:64px; text-align:center; font-size:18px; color:var(--text3); }
+.disc-bulk-table td.scan-thumb img { width:58px; height:42px; object-fit:cover; border-radius:4px; border:1px solid var(--border); cursor:zoom-in; display:block; margin:0 auto; }
+.disc-bulk-table td.scan-cb { width:28px; text-align:center; }
+.disc-bulk-table td.scan-cb input { width:16px; min-width:0; height:16px; padding:0; cursor:pointer; }
+.disc-bulk-table td.scan-status { font-size:11px; font-weight:700; color:var(--text2); min-width:170px; max-width:260px; line-height:1.4; }
+.disc-bulk-table tr.scan-flag td { background:var(--amber-light); }
+.disc-bulk-table tr.scan-flag td:first-child { box-shadow:inset 4px 0 0 var(--amber); }
+.disc-bulk-table tr.scan-saved td { background:var(--green-light); }
+.disc-bulk-table tr.scan-saved td:first-child { box-shadow:inset 4px 0 0 var(--green); }
+.disc-bulk-table input.scan-empty { border-color:var(--amber); }
+.disc-bulk-table input.scan-bad { border-color:var(--red); }
+.scan-status-warn { color:var(--amber); }
+.scan-status-bad { color:var(--red); }
+.scan-status-ok { color:var(--green); }
+.scan-retry { font-size:10px; padding:2px 8px; margin-left:6px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); color:var(--text2); cursor:pointer; font-family:var(--font); font-weight:700; white-space:nowrap; }
+.scan-retry:hover { border-color:var(--accent); color:var(--accent); }
+.scan-preview { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1000; display:flex; align-items:center; justify-content:center; cursor:zoom-out; }
+.scan-preview img { max-width:95vw; max-height:95vh; border-radius:6px; }
+
 /* TAB COUNT BADGE */
 .dash-tab-btn { position:relative; }
 .dash-tab-badge { background:var(--red); color:#fff; border-radius:20px; min-width:16px; height:16px; font-size:9px; font-weight:700; display:none; align-items:center; justify-content:center; padding:0 4px; line-height:1; }
@@ -1066,11 +1092,16 @@ input[type=file] { display: none; }
       <button class="btn btn-outline" onclick="toggleDiscBulk()" id="discBulkBtn" style="font-size:11px;padding:6px 12px;">≡ Bulk Edit</button>
       <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;">📥 60-Day CSV</button>
       <button class="btn btn-outline" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;">＋ Add Vehicle</button>
+      <!-- Compliance photo-scan Stage 1: multi-select, no capture attribute so
+           desktop gets a file picker and phones still offer the camera. -->
+      <input type="file" id="discScanInput" accept="image/*" multiple style="display:none;" onchange="startLicenceScan(event)">
+      <button class="btn btn-outline" onclick="document.getElementById('discScanInput').click()" id="discScanBtn" style="font-size:11px;padding:6px 12px;">📷 Scan Licences</button>
     </div>
   </div>
   <div class="disc-summary-strip" id="discSummaryStrip"></div>
   <div class="discs-grid" id="discsGrid"></div>
   <div class="disc-bulk-wrap hidden" id="discBulkWrap"></div>
+  <div class="disc-scan-wrap hidden" id="discScanWrap"></div>
 </div>
 
     <!-- TAB 5: TRENDS -->
@@ -3318,6 +3349,7 @@ const COMP_ITEMS=[
 ];
 let complianceData={};   // by plate
 let discBulkMode=false;
+let discScanMode=false;  // licence-scan approval table open (see LICENCE SCAN below)
 
 function complianceStatus(expiry){  // expiry: 'YYYY-MM-DD' or null
   if(!expiry)return{status:'unknown',days:null};
@@ -3540,10 +3572,24 @@ function renderDiscView(){
   const grid=document.getElementById('discsGrid');
   const bulkWrap=document.getElementById('discBulkWrap');
   const bulkBtn=document.getElementById('discBulkBtn');
+  const scanWrap=document.getElementById('discScanWrap');
+
+  // Licence-scan approval table replaces the cards while open — also with an
+  // empty fleet, since scanning is a valid way to add the first vehicles.
+  if(discScanMode){
+    grid.classList.add('hidden');
+    bulkWrap.classList.add('hidden');
+    scanWrap.classList.remove('hidden');
+    if(plates.length===0)document.getElementById('discSummaryStrip').innerHTML='';
+    renderScanTable();
+    return;
+  }
+  scanWrap.classList.add('hidden');
 
   if(plates.length===0){
     document.getElementById('discSummaryStrip').innerHTML='';
-    grid.innerHTML='<p class="tyre-empty">Upload a fuel report or click "＋ Add Vehicle" to start tracking compliance.</p>';
+    grid.classList.remove('hidden');
+    grid.innerHTML='<p class="tyre-empty">Upload a fuel report, scan licence documents, or click "＋ Add Vehicle" to start tracking compliance.</p>';
     bulkWrap.classList.add('hidden');
     return;
   }
@@ -3709,6 +3755,406 @@ async function saveDiscBulk(){
   rows.forEach(r=>complianceData[r.plate]={...(complianceData[r.plate]||{}),...r});
   discBulkMode=false;
   renderDiscView();updateDiscTabBadge();renderAlertBanner();
+}
+
+// ── LICENCE SCAN (compliance photo-scan Stage 1, 2026-09-04) ─────────────────
+// Photograph the combined SA "Motor Vehicle Licence, Licence Disc and Operator
+// Card" document, let the Worker's /ai/compliance route read the plate and the
+// three expiry dates, approve every value in a table, save to
+// vehicle_compliance. Mirrors driver.html's odometer reader:
+//   compress client-side → one image per call → pinned prompt on the Worker →
+//   strict JSON back → four outcomes (ok / unreadable / error / limited).
+// Photos are processed strictly one at a time (keeps a batch well under the
+// per-user throttle of 20/min) and NEVER stored — memory only, object URLs
+// revoked on close. Stage 2 (alerts / renewal) is not here.
+const SCAN_MAX_DIM=1600, SCAN_TARGET_BYTES=400*1024, SCAN_MAX_INPUT_BYTES=25*1024*1024;
+const SCAN_PLATE_RE=/^[A-Z0-9]{2,10}$/;
+const SCAN_DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
+const SCAN_FIELDS=[
+  {key:'plate',col:'plate',label:'Plate'},
+  {key:'disc_expiry',col:'licence_disc_expiry',label:'Disc expiry',date:true},
+  {key:'cof_expiry',col:'cof_expiry',label:'COF expiry',date:true},
+  {key:'op_licence_expiry',col:'operating_licence_expiry',label:'Op. licence expiry',date:true},
+  {key:'disc_no',col:'licence_disc_no',label:'Disc no.'},
+  {key:'op_licence_no',col:'operating_licence_no',label:'Op. licence no.'},
+  {key:'make_model',col:'make_model',label:'Make / model'}
+];
+let scanRows=[];         // {id,name,file,blob,blobUrl,status,fields,confidence,selected,note}
+let scanRunning=false;
+
+// Decision 5 (2026-09-04): uppercase, strip spaces / hyphens / dots, so a scan
+// updates the existing vehicle instead of creating a duplicate.
+function normalisePlate(s){return String(s??'').toUpperCase().replace(/[\s\-.]/g,'');}
+
+// Port of driver.html compressPhoto with a bigger cap: the expiry dates under
+// the two circles are small print. The API downsizes anything over ~1568px
+// on the long edge anyway. Same memory discipline — decode straight to the
+// capped size, never hold the original as base64, release the canvas.
+async function compressLicencePhoto(file){
+  const url=URL.createObjectURL(file);
+  let canvas=null;
+  try{
+    const img=await new Promise((resolve,reject)=>{
+      const i=new Image();
+      i.onload=()=>resolve(i);
+      i.onerror=reject;
+      i.src=url;
+    });
+    const scale=Math.min(1,SCAN_MAX_DIM/Math.max(img.width,img.height));
+    const w=Math.round(img.width*scale),h=Math.round(img.height*scale);
+    let source=img,bitmap=null;
+    if(window.createImageBitmap){
+      try{
+        bitmap=await createImageBitmap(file,{resizeWidth:w,resizeHeight:h,resizeQuality:'high'});
+        source=bitmap;
+      }catch{/* older WebKit rejects resize options — fall back to the <img> */}
+    }
+    canvas=document.createElement('canvas');
+    canvas.width=w;canvas.height=h;
+    canvas.getContext('2d').drawImage(source,0,0,w,h);
+    if(bitmap)bitmap.close();
+    for(const q of [0.85,0.75,0.65,0.55]){
+      const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',q));
+      if(blob&&(blob.size<=SCAN_TARGET_BYTES||q===0.55))return blob;
+    }
+    return null;
+  }finally{
+    URL.revokeObjectURL(url);
+    if(canvas){canvas.width=0;canvas.height=0;}
+  }
+}
+
+function blobToBase64(blob){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>res(String(e.target.result).split(',')[1]);
+    r.onerror=rej;
+    r.readAsDataURL(blob);
+  });
+}
+
+function blankScanFields(){const f={};SCAN_FIELDS.forEach(d=>f[d.key]='');return f;}
+
+// File-input handler. A second selection while the panel is open appends.
+function startLicenceScan(event){
+  const files=[...(event.target.files||[])];
+  event.target.value='';
+  if(files.length===0)return;
+  if(!discScanMode){scanRows=[];discScanMode=true;discBulkMode=false;}
+  files.forEach(f=>scanRows.push({
+    id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),
+    name:f.name,file:f,blob:null,blobUrl:null,
+    status:'queued',fields:blankScanFields(),confidence:null,selected:false,note:''
+  }));
+  renderDiscView();
+  processScanQueue();
+}
+
+async function processScanQueue(){
+  if(scanRunning)return;
+  scanRunning=true;
+  try{
+    for(;;){
+      if(!discScanMode)break;
+      const row=scanRows.find(r=>r.status==='queued');
+      if(!row)break;
+      await processScanRow(row);
+    }
+  }finally{scanRunning=false;}
+}
+
+async function processScanRow(row){
+  row.status='reading';row.note='';updateScanRow(row);
+  try{
+    if(!row.blob){
+      if(row.file.size>SCAN_MAX_INPUT_BYTES)throw new Error('That photo is too large (over 25 MB).');
+      const blob=await compressLicencePhoto(row.file);
+      if(!blob)throw new Error('Could not process the photo.');
+      row.blob=blob;row.blobUrl=URL.createObjectURL(blob);row.file=null;
+    }
+    const base64=await blobToBase64(row.blob);
+    let res=await readLicenceWithAI(base64);
+    if(res.outcome==='limited'&&discScanMode){
+      // Worker per-user / per-IP throttle (or Anthropic's own): wait out the
+      // window once, then retry the same photo. A second 429 leaves the row
+      // with a Retry button and the queue moves on.
+      row.status='waiting';
+      for(let s=60;s>0&&discScanMode;s--){
+        row.note=`Too many photos in a short time — retrying in ${s}s`;updateScanRow(row);
+        await new Promise(r=>setTimeout(r,1000));
+      }
+      if(discScanMode)res=await readLicenceWithAI(base64);
+    }
+    applyScanResult(row,res);
+  }catch(err){
+    console.error('[FleetDesk] licence scan failed:',err);
+    row.status='error';
+    row.note=err&&err.message==='Not signed in'?'Session expired — log in again':(err&&err.message)||'Could not process the photo.';
+  }
+  updateScanRow(row);
+}
+
+// Same contract as driver.html readOdometerWithAI: the Worker validates the
+// session, pins model + max_tokens + prompt, and passes Anthropic's answer
+// through. Only the photo is sent.
+async function readLicenceWithAI(base64){
+  let response;
+  try{
+    response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/ai/compliance',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
+      body:JSON.stringify({
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}}
+        ]}]
+      })
+    });
+  }catch(err){
+    if(err&&err.message==='Not signed in')throw err;
+    console.error('[FleetDesk] AI licence read failed:',err);
+    return{outcome:'error',note:'Connection problem — check your signal and retry'};
+  }
+  if(response.status===429)return{outcome:'limited'};
+  if(response.status===401)return{outcome:'error',note:'Session expired — log in again'};
+  if(!response.ok)return{outcome:'error',note:'The AI service could not be reached — retry'};
+  try{
+    const data=await response.json();
+    const raw=(data.content||[]).map(i=>i.text||'').join('').replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(raw);
+    if(!parsed||typeof parsed!=='object'||!('plate' in parsed))return{outcome:'error',note:'Unexpected answer from the AI — retry'};
+    return{outcome:'ok',data:parsed};
+  }catch(err){
+    console.error('[FleetDesk] AI licence answer unreadable:',err);
+    return{outcome:'error',note:'Unexpected answer from the AI — retry'};
+  }
+}
+
+// Fill the row from the AI answer. Dates that are not YYYY-MM-DD are dropped
+// (blank + flagged) rather than shown; a wrong-looking value is worse than an
+// empty one. A row with nothing readable at all is 'unreadable'.
+function applyScanResult(row,res){
+  if(res.outcome!=='ok'){
+    row.status=res.outcome;
+    row.note=res.note||(res.outcome==='limited'?'Rate limited — wait a minute, then Retry':'');
+    row.selected=false;
+    return;
+  }
+  const d=res.data;
+  const str=v=>v==null?'':String(v).trim();
+  const f=blankScanFields();
+  f.plate=normalisePlate(d.plate);
+  SCAN_FIELDS.filter(x=>x.date).forEach(x=>{const v=str(d[x.key]);f[x.key]=SCAN_DATE_RE.test(v)&&!isNaN(new Date(v+'T00:00:00'))?v:'';});
+  f.disc_no=str(d.disc_no).slice(0,40);
+  f.op_licence_no=str(d.op_licence_no).slice(0,40);
+  f.make_model=str(d.make_model).slice(0,80);
+  row.fields=f;
+  row.confidence=['high','medium','low'].includes(d.confidence)?d.confidence:null;
+  const anyDate=SCAN_FIELDS.some(x=>x.date&&f[x.key]);
+  if(!f.plate&&!anyDate){row.status='unreadable';row.note='Nothing readable — retake with the whole document in frame';row.selected=false;return;}
+  row.status='done';row.note='';
+  row.selected=SCAN_PLATE_RE.test(f.plate);   // no plate → cannot save → starts unticked
+}
+
+function retryScanRow(id){
+  const row=scanRows.find(r=>r.id===id);
+  if(!row||row.status==='reading'||row.status==='waiting')return;
+  row.status='queued';row.note='';updateScanRow(row);
+  processScanQueue();
+}
+
+// Inputs write straight into row.fields, so a full re-render never loses an edit.
+function scanField(id,key,value){
+  const row=scanRows.find(r=>r.id===id);
+  if(!row)return;
+  row.fields[key]=key==='plate'?normalisePlate(value):value;
+  updateScanStatus(row);
+  updateScanSaveBtn();
+}
+function scanToggle(id,checked){
+  const row=scanRows.find(r=>r.id===id);
+  if(row){row.selected=!!checked;updateScanSaveBtn();}
+}
+
+// What still needs a human look: unreadable values, an odd plate, a plate
+// seen twice in this batch, a plate the fleet has never seen.
+function scanRowFlags(row){
+  const flags=[];
+  const f=row.fields;
+  if(!SCAN_PLATE_RE.test(f.plate))flags.push('plate');
+  SCAN_FIELDS.filter(x=>x.date).forEach(x=>{if(!f[x.key])flags.push(x.label.toLowerCase());});
+  if(f.plate&&scanRows.some(r=>r!==row&&r.status==='done'&&r.fields.plate===f.plate))flags.push('duplicate plate');
+  return flags;
+}
+
+function scanStatusHtml(row){
+  const retry=`<button class="scan-retry" onclick="retryScanRow(${escAttr(JSON.stringify(row.id))})">↻ Retry</button>`;
+  switch(row.status){
+    case 'queued':return'⏳ Queued';
+    case 'reading':return'🤖 Reading…';
+    case 'waiting':return`<span class="scan-status-warn">⏸ ${escapeHtml(row.note)}</span>`;
+    case 'limited':return`<span class="scan-status-warn">⏸ ${escapeHtml(row.note)}</span>${retry}`;
+    case 'error':return`<span class="scan-status-bad">⚠ ${escapeHtml(row.note)}</span>${retry}`;
+    case 'unreadable':return`<span class="scan-status-bad">⚠ ${escapeHtml(row.note)}</span>${retry}`;
+    case 'saved':return'<span class="scan-status-ok">✅ Saved</span>';
+    case 'done':{
+      const flags=scanRowFlags(row);
+      const plate=row.fields.plate;
+      const known=plate&&complianceData[plate];
+      const inFleet=plate&&getCompliancePlates().includes(plate);
+      const parts=[];
+      if(flags.length)parts.push(`<span class="scan-status-warn">⚠ Check: ${escapeHtml(flags.join(', '))}</span>`);
+      if(plate)parts.push(known?'<span class="scan-status-ok">Update</span>':inFleet?'<span class="scan-status-ok">New record</span>':'<span class="scan-status-warn">New vehicle</span>');
+      if(row.confidence==='low')parts.push('<span class="scan-status-warn">low confidence</span>');
+      return parts.join(' · ')||'✓ Read';
+    }
+  }
+  return'';
+}
+
+function scanRowHtml(row){
+  const f=row.fields;
+  const editable=row.status==='done';
+  const flags=editable?scanRowFlags(row):[];
+  const cls=row.status==='saved'?'scan-saved':(editable&&flags.length?'scan-flag':'');
+  const dis=editable?'':'disabled';
+  const idj=escAttr(JSON.stringify(row.id));
+  const inputCls=(key,isDate)=>{
+    if(!editable)return'';
+    const v=f[key];
+    if(key==='plate')return SCAN_PLATE_RE.test(v)?'':(v?'scan-bad':'scan-empty');
+    if(isDate)return v?'':'scan-empty';
+    return'';
+  };
+  const cell=d=>`<td><input type="${d.date?'date':'text'}" class="${inputCls(d.key,d.date)}" value="${escAttr(f[d.key])}" ${dis} ${d.key==='plate'?'list="scanPlateList" style="min-width:110px;font-family:var(--font-mono);text-transform:uppercase;"':''} oninput="scanField(${idj},'${d.key}',this.value)"></td>`;
+  const thumb=row.blobUrl?`<img src="${escAttr(row.blobUrl)}" alt="" onclick="openScanPreview(${idj})">`:'📷';
+  return`<tr id="sr-${escAttr(row.id)}" class="${cls}" title="${escAttr(row.name)}">
+    <td class="scan-cb"><input type="checkbox" ${row.selected?'checked':''} ${editable?'':'disabled'} onchange="scanToggle(${idj},this.checked)"></td>
+    <td class="scan-thumb">${thumb}</td>
+    ${SCAN_FIELDS.map(cell).join('')}
+    <td class="scan-status">${scanStatusHtml(row)}</td>
+  </tr>`;
+}
+
+function renderScanTable(){
+  const wrap=document.getElementById('discScanWrap');
+  const plates=getCompliancePlates();
+  wrap.innerHTML=`
+    <div class="disc-scan-bar">
+      <div class="disc-scan-hint" id="discScanHint"></div>
+      <div class="disc-scan-actions">
+        <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="document.getElementById('discScanInput').click()">📷 Add photos</button>
+        <button class="def-save" id="discScanSaveBtn" onclick="saveLicenceScan()">💾 Save selected</button>
+        <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="closeLicenceScan()">✕ Close</button>
+      </div>
+    </div>
+    <datalist id="scanPlateList">${plates.map(p=>`<option value="${escAttr(p)}"></option>`).join('')}</datalist>
+    <table class="disc-bulk-table" id="discScanTable">
+      <thead><tr><th></th><th>Photo</th><th>Plate</th><th>💿 Disc Expiry</th><th>🛠 COF Expiry</th><th>🚏 Op. Lic. Expiry</th><th>Disc No.</th><th>Op. Lic. No.</th><th>Make / Model</th><th>Status</th></tr></thead>
+      <tbody>${scanRows.map(scanRowHtml).join('')}</tbody>
+    </table>`;
+  updateScanSaveBtn();
+}
+
+function updateScanRow(row){
+  const tr=document.getElementById('sr-'+row.id);
+  if(!tr)return;
+  tr.outerHTML=scanRowHtml(row);
+  // A finished read can change another row's "duplicate plate" flag
+  if(row.status==='done')scanRows.filter(r=>r!==row&&r.status==='done').forEach(updateScanStatus);
+  updateScanSaveBtn();
+}
+
+// Status cell + flag class only — leaves the row's inputs (and focus) alone.
+function updateScanStatus(row){
+  const tr=document.getElementById('sr-'+row.id);
+  if(!tr||row.status!=='done')return;
+  const cell=tr.querySelector('.scan-status');
+  if(cell)cell.innerHTML=scanStatusHtml(row);
+  tr.className=scanRowFlags(row).length?'scan-flag':'';
+  const plateInput=tr.querySelector('input[list="scanPlateList"]');
+  if(plateInput){const v=row.fields.plate;plateInput.className=SCAN_PLATE_RE.test(v)?'':(v?'scan-bad':'scan-empty');}
+  SCAN_FIELDS.filter(x=>x.date).forEach((x,i)=>{
+    const inp=tr.querySelectorAll('input[type=date]')[i];
+    if(inp)inp.className=row.fields[x.key]?'':'scan-empty';
+  });
+}
+
+function updateScanSaveBtn(){
+  const btn=document.getElementById('discScanSaveBtn');
+  const hint=document.getElementById('discScanHint');
+  if(!btn)return;
+  const total=scanRows.length;
+  const pending=scanRows.filter(r=>['queued','reading','waiting'].includes(r.status)).length;
+  const selected=scanRows.filter(r=>r.selected&&r.status==='done').length;
+  btn.textContent=`💾 Save selected (${selected})`;
+  btn.disabled=selected===0;
+  if(hint)hint.textContent=pending
+    ?`Reading ${total-pending+1} of ${total}… every value is editable — tick the rows to save.`
+    :`${total} photo${total===1?'':'s'} read. Every value is editable; amber rows need a check. Tick the rows to save, then Save selected.`;
+}
+
+function openScanPreview(id){
+  const row=scanRows.find(r=>r.id===id);
+  if(!row||!row.blobUrl)return;
+  const ov=document.createElement('div');
+  ov.className='scan-preview';
+  ov.onclick=()=>ov.remove();
+  const img=document.createElement('img');
+  img.src=row.blobUrl;img.alt='';
+  ov.appendChild(img);
+  document.body.appendChild(ov);
+}
+
+function closeLicenceScan(){
+  const unsaved=scanRows.some(r=>r.status!=='saved');
+  if(unsaved&&!confirm('Close the scan? Rows that have not been saved will be discarded.'))return;
+  discScanMode=false;
+  scanRows.forEach(r=>{if(r.blobUrl)URL.revokeObjectURL(r.blobUrl);});
+  scanRows=[];
+  renderDiscView();
+}
+
+// Decision 3 (2026-09-04): send only non-blank fields, one row per request
+// (PostgREST rejects an array whose objects have different keys), through the
+// existing on_conflict=tenant_id,plate upsert — so a scanned plate updates the
+// existing vehicle and a value the AI could not read never blanks a stored one.
+async function saveLicenceScan(){
+  const rows=scanRows.filter(r=>r.selected&&r.status==='done');
+  if(rows.length===0)return;
+  const problems=[];
+  const seen=new Set();
+  rows.forEach((r,i)=>{
+    const f=r.fields;
+    if(!SCAN_PLATE_RE.test(f.plate))problems.push(`Row ${i+1}: plate "${f.plate||'(blank)'}" is not valid`);
+    else if(seen.has(f.plate))problems.push(`Row ${i+1}: plate ${f.plate} appears twice — untick one`);
+    seen.add(f.plate);
+    SCAN_FIELDS.filter(x=>x.date).forEach(x=>{if(f[x.key]&&!SCAN_DATE_RE.test(f[x.key]))problems.push(`Row ${i+1}: ${x.label} is not a valid date`);});
+  });
+  if(problems.length){alert('Please fix before saving:\n\n'+problems.join('\n'));return;}
+  const btn=document.getElementById('discScanSaveBtn');
+  btn.disabled=true;btn.textContent='Saving…';
+  const failed=[];
+  for(const r of rows){
+    const payload={plate:r.fields.plate};
+    SCAN_FIELDS.forEach(x=>{if(x.key!=='plate'&&r.fields[x.key])payload[x.col]=r.fields[x.key].trim();});
+    if(await upsertCompliance([payload])){
+      complianceData[payload.plate]={...(complianceData[payload.plate]||{}),...payload};
+      r.status='saved';r.selected=false;
+    }else failed.push(payload.plate);
+    updateScanRow(r);
+  }
+  updateDiscTabBadge();renderAlertBanner();
+  if(failed.length){
+    alert(`Saved ${rows.length-failed.length} of ${rows.length}. Could not save: ${failed.join(', ')}. Check your connection and try again.`);
+    updateScanSaveBtn();
+    return;
+  }
+  if(scanRows.every(r=>r.status==='saved')){
+    discScanMode=false;
+    scanRows.forEach(r=>{if(r.blobUrl)URL.revokeObjectURL(r.blobUrl);});
+    scanRows=[];
+    renderDiscView();
+  }else updateScanSaveBtn();
 }
 
 // ── TYRES TAB ─────────────────────────────────────────────────────────────────
