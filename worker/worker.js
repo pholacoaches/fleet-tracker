@@ -64,41 +64,71 @@ const DRIVER_PROMPT =
   'Respond with ONLY strict JSON, no markdown, no code fences, exactly this shape: ' +
   '{"odometer": <integer or null>, "confidence": "high"|"medium"|"low"}';
 
-// Compliance scan (2026-09-04). Same model as the other two routes for now;
-// if real licence photos misread, upgrade THIS route (model + structured
-// output) with evidence. The office approves every value in a table before
+// Compliance scan (2026-09-04). fix-scan-accuracy (same day): THIS route
+// alone moved to Claude Opus 5 with structured output, on evidence from real
+// photos — Sonnet returned the receipt date as the COF expiry (2 of 3) and
+// the "Vehicle register number" as the plate (2 of 3). The other two routes
+// stay on Sonnet. The office still approves every value in a table before
 // it is saved, so a misread is caught there, not here.
-const COMPLIANCE_MODEL = 'claude-sonnet-4-6';
-// 600 (was 300, fix-scan-rotation 2026-09-04): the JSON answer is ~130
-// tokens, but on a hard photo the model may open with a sentence before the
-// object; 300 cut such replies mid-JSON and the client saw "Unexpected answer".
-const COMPLIANCE_MAX_TOKENS = 600;
+//
+// Opus 5 thinks by default (adaptive) and max_tokens caps thinking PLUS the
+// answer, so 1500 leaves room for low-effort thinking on top of the ~150-
+// token JSON object. Effort "low" is the cost/latency lever for a fixed
+// extraction like this. Sampling params are not sent (rejected on Opus 5).
+const COMPLIANCE_MODEL = 'claude-opus-5';
+const COMPLIANCE_MAX_TOKENS = 1500;
+const COMPLIANCE_EFFORT = 'low';
 
-// The document repeats dates: an issue / transaction "Date" sits right next
-// to each "Date of expiry". The prompt names the expiry labels explicitly
-// and forbids guessing — a null is far cheaper than a wrong expiry date.
-// fix-scan-rotation (2026-09-04): sideways photos produced prose instead of
-// JSON — the prompt now says the photo may be rotated and that the answer is
-// ALWAYS the JSON object, nulls included, never prose.
+// Structured output: the API guarantees the answer matches this schema, so
+// the client's brace-to-brace parse always finds a well-formed object with
+// every key present. Dates are forced to YYYY-MM-DD (format "date") or null.
+// Every object needs additionalProperties:false; every key is required and
+// nullable via anyOf.
+const nullableString = { anyOf: [{ type: 'string' }, { type: 'null' }] };
+const nullableDate = { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }] };
+const COMPLIANCE_SCHEMA = {
+  type: 'object',
+  properties: {
+    plate: nullableString,
+    disc_expiry: nullableDate,
+    cof_expiry: nullableDate,
+    op_licence_expiry: nullableDate,
+    disc_no: nullableString,
+    op_licence_no: nullableString,
+    make_model: nullableString,
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+  },
+  required: ['plate', 'disc_expiry', 'cof_expiry', 'op_licence_expiry', 'disc_no', 'op_licence_no', 'make_model', 'confidence'],
+  additionalProperties: false,
+};
+
+// The document repeats dates and numbers: a receipt "Date" sits right next
+// to each "Date of expiry", and a "Vehicle register number" (internal
+// registry id) sits near the "Licence number" (the actual number plate).
+// The prompt names the exact field labels, says which look-alikes are NEVER
+// the answer, and forbids guessing — a null is far cheaper than a wrong value.
+// Rotated photos are still read; the answer is always the JSON object.
 const COMPLIANCE_PROMPT =
   'This is a photo of a South African combined "Motor Vehicle Licence, Licence Disc and Operator Card" document ' +
-  '(one page, English/Afrikaans). The photo may be rotated sideways or upside down — read it anyway. Read these fields:\n' +
-  '1. plate: the vehicle registration printed in the "Licence number" field (e.g. RPF655W). Uppercase letters and digits only, no spaces.\n' +
-  '2. disc_expiry: the licence disc expiry date — the line labelled "Roadworthy expiry date" in the licence section.\n' +
-  '3. cof_expiry: the "Date of expiry / Vervaldatum" printed under the LEFT circle at the bottom (Certificate of Fitness / roadworthy).\n' +
-  '4. op_licence_expiry: the "Date of expiry / Vervaldatum" printed under the RIGHT circle at the bottom (Operator card).\n' +
+  '(one page, English/Afrikaans). The photo may be rotated sideways or upside down — read it anyway.\n' +
+  'The bottom of the page has two circles: the bottom-LEFT circle is the Licence Disc & Roadworthy Certificate; ' +
+  'the bottom-RIGHT circle is the Operator Card. Read these fields:\n' +
+  '1. plate: the value of the "Licence number / Lisensienommer" field ONLY. This is the registration mark on the ' +
+  'number plate, in the format letters-digits-letters such as LY14YHGP or DJ17PTGP (Gauteng plates end in GP). ' +
+  'The "Vehicle register number / Voertuigregisternommer" field (values like NVP102W or RPF655W) is an internal ' +
+  'registry number and is NEVER the plate — ignore it completely. Uppercase letters and digits only, no spaces.\n' +
+  '2. disc_expiry: the "RW expiry date / PW vervaldatum" printed INSIDE the bottom-LEFT circle (for example 2026-09-26).\n' +
+  '3. cof_expiry: the "Date of expiry / Vervaldatum" printed UNDER the bottom-LEFT circle ONLY. The receipt "Date" ' +
+  'line nearby (for example "Date 2026-03-27") is a transaction date and is NEVER an expiry — ignore it. ' +
+  'The COF expiry and the operator card expiry are often the same date; that is normal.\n' +
+  '4. op_licence_expiry: the "Date of expiry / Vervaldatum" printed UNDER the bottom-RIGHT circle (Operator Card).\n' +
   '5. disc_no: the licence disc number, if printed and clearly legible.\n' +
   '6. op_licence_no: the operator card / operating licence number, if printed and clearly legible.\n' +
   '7. make_model: the vehicle make and model, if printed.\n' +
-  'CRITICAL: the document repeats dates. Near each circle there is also a transaction or issue "Date" (for example "Date 2026-03-27") — ' +
-  'that is NOT an expiry date and must be ignored. Use only values explicitly labelled as an expiry ("Date of expiry", "Vervaldatum", "expiry date"). ' +
-  'Write every date as YYYY-MM-DD. If any value is missing, obscured or not clearly legible, use null for that field — never guess, infer or copy a value from elsewhere on the page. ' +
-  'ALWAYS answer with the JSON object below and nothing else — even if the photo is rotated, blurry, or nothing at all is legible (then every field is null). ' +
-  'Never reply with prose, an explanation or an apology. ' +
-  'Respond with ONLY strict JSON, no markdown, no code fences, exactly this shape: ' +
-  '{"plate": <string or null>, "disc_expiry": <"YYYY-MM-DD" or null>, "cof_expiry": <"YYYY-MM-DD" or null>, ' +
-  '"op_licence_expiry": <"YYYY-MM-DD" or null>, "disc_no": <string or null>, "op_licence_no": <string or null>, ' +
-  '"make_model": <string or null>, "confidence": "high"|"medium"|"low"}';
+  'Write every date as YYYY-MM-DD. If any value is missing, obscured or not clearly legible, use null for that ' +
+  'field — never guess, infer or copy a value from elsewhere on the page. ' +
+  'ALWAYS answer with the JSON object and nothing else — even if the photo is rotated, blurry, or nothing at all ' +
+  'is legible (then every field is null). Never reply with prose, an explanation or an apology.';
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // The allowlist comes from the ALLOWED_ORIGINS var in wrangler.jsonc, a
@@ -350,9 +380,17 @@ async function handleCompliance(request, env, cors) {
   const image = extractSingleImage(body && body.messages);
   if (!image) return jsonError(cors, 400, 'invalid_request_error', 'Request must contain one JPEG image of the licence document.');
 
+  // Opus 5: thinking is on by default (adaptive) — no `thinking` param sent.
+  // output_config carries both the effort level and the JSON-schema format.
+  // The answer still arrives as a text block (a thinking block with empty
+  // text precedes it), so the client's parser is unchanged.
   return callAnthropic(env, cors, {
     model: COMPLIANCE_MODEL,
     max_tokens: COMPLIANCE_MAX_TOKENS,
+    output_config: {
+      effort: COMPLIANCE_EFFORT,
+      format: { type: 'json_schema', schema: COMPLIANCE_SCHEMA },
+    },
     messages: [{ role: 'user', content: [image, { type: 'text', text: COMPLIANCE_PROMPT }] }],
   });
 }

@@ -13,12 +13,14 @@ the Cloudflare dashboard.
 | `POST /ai/compliance` | `index.html` licence-document photo read (Disc Renewal → Scan Licences, 2026-09-04) | same as `/ai/dashboard` (Supabase bearer token) | client's JPEG only; prompt, model and max_tokens pinned |
 | anything else (`/`, `/login`, `/auth/*`) | — | — | **404** |
 
-Pinned: `claude-sonnet-4-6`, `max_tokens` 4000 (dashboard) / 100 (driver) /
-600 (compliance — raised from 300 on 2026-09-04 after sideways photos got
-prose-then-JSON replies cut mid-object). The client's `model`/`max_tokens` are ignored. The
-compliance route stays on the same model as the other two on purpose; if real
-licence photos misread, upgrade that route alone (model + structured output)
-with evidence — the office approves every scanned value in a table before it
+Pinned: `claude-sonnet-4-6`, `max_tokens` 4000 (dashboard) / 100 (driver).
+The compliance route is the exception since 2026-09-04 (fix-scan-accuracy):
+`claude-opus-5`, `max_tokens` 1500 (thinking + answer), `output_config`
+effort `low` + JSON-schema structured output (all fields nullable, dates
+forced to YYYY-MM-DD). Moved on evidence from real photos — Sonnet returned
+the receipt date as the COF expiry and the "Vehicle register number" as the
+plate on 2 of 3 documents. The client's `model`/`max_tokens` are ignored on
+every route. The office approves every scanned value in a table before it
 is saved.
 
 CORS is environment-based (see "Environments"). Production allows
