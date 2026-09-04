@@ -609,6 +609,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .odo-thumb-lg img { max-height:220px; object-fit:contain; background:#000; }
 .odo-thumb-lg .odo-thumb-msg { font-size:12px; padding:12px; }
 
+/* INLINE SVG ICONS (Tabler Icons outline, MIT). Size and colour come from the
+   parent: 1em and currentColor, so existing colour rules keep working. Emitted
+   by svgIcon(name) — see the Disc Renewal JS. Change 5 will move the paths
+   into a <symbol> sprite; only svgIcon changes, not the call sites. */
+.icon { width:1em; height:1em; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-0.125em; flex-shrink:0; }
+.icon-flip { transform:rotate(180deg); }
+
 /* DISC RENEWAL TAB */
 .disc-summary-strip { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
 .disc-summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 20px; box-shadow:var(--shadow); flex:1; min-width:140px; position:relative; overflow:hidden; }
@@ -623,6 +630,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-summary-card.ds-red .disc-summary-val { color:var(--red); }
 .disc-summary-card.ds-amber .disc-summary-val { color:var(--amber); }
 .disc-summary-card.ds-green .disc-summary-val { color:var(--green); }
+/* Disc-only additions (disc-visual-polish): the "All valid" box counts VEHICLES
+   (same rule as the collapsed rows) and scrolls to their list. The shared
+   summary-card rules above are untouched — the Maintenance tab uses them too. */
+.disc-summary-card.ds-link { cursor:pointer; transition:border-color 0.15s, box-shadow 0.15s; }
+.disc-summary-card.ds-link:hover { border-color:var(--green); box-shadow:var(--shadow-lg); }
+.disc-summary-card.ds-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.disc-summary-sub { font-size:10px; color:var(--text3); margin-top:2px; }
+.ds-link-arrow { width:16px; height:16px; margin-left:6px; color:var(--text3); vertical-align:middle; }
 .discs-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:14px; }
 .disc-card { background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; animation:fadeUp 0.35s ease both; }
 .disc-card.dc-red { border-left-color:var(--red); }
@@ -641,13 +656,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-info-row { display:flex; justify-content:space-between; align-items:center; font-size:11px; }
 .disc-info-label { color:var(--text3); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
 .disc-info-val { font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--text2); }
-.disc-info-val.dv-red { color:var(--red); }
-.disc-info-val.dv-amber { color:var(--amber); }
-.disc-info-val.dv-green { color:var(--green); }
-.disc-days { font-size:11px; font-weight:700; margin-top:2px; }
-.disc-days.dd-red { color:var(--red); }
-.disc-days.dd-amber { color:var(--amber); }
-.disc-days.dd-green { color:var(--green); }
 .disc-card-footer { display:flex; justify-content:flex-end; gap:6px; padding:8px 14px; border-top:1px solid var(--border); background:var(--surface2); }
 .disc-edit-btn { font-size:11px; padding:3px 9px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); color:var(--text2); cursor:pointer; font-family:var(--font); font-weight:700; transition:border-color 0.15s, color 0.15s; }
 .disc-edit-btn:hover { border-color:var(--accent); color:var(--accent); }
@@ -661,6 +669,26 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-card.dc-archived { border-left-color:var(--border2); background:var(--surface2); }
 .disc-card.dc-archived .disc-card-header, .disc-card.dc-archived .disc-card-body { opacity:0.6; }
 .dcb-archived { background:var(--border); color:var(--text2); }
+/* Collapsed "all valid" rows (disc-visual-polish, 2026-09-04): a vehicle whose
+   three items are all Valid / Not required renders as one slim full-width row
+   in a list BELOW the action cards. Click / Enter / Space expands it into the
+   normal card in place; the header then carries a Collapse chevron. */
+.disc-valid-list { grid-column:1 / -1; display:flex; flex-direction:column; gap:8px; }
+/* Divider above the rows, not a card: muted label + hairline. scroll-margin
+   keeps it clear of the sticky app header when the summary box scrolls here. */
+.disc-valid-head { display:flex; align-items:center; gap:10px; margin-top:6px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text3); scroll-margin-top:76px; outline:none; }
+.disc-valid-head::after { content:''; flex:1; height:1px; background:var(--border); }
+.disc-slim { display:flex; align-items:center; gap:10px; padding:9px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); cursor:pointer; font-size:12px; animation:fadeUp 0.35s ease both; transition:border-color 0.15s; }
+.disc-slim:hover { border-color:var(--border2); }
+.disc-slim:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.disc-slim-tick { width:18px; height:18px; color:var(--green); }
+.disc-slim-plate { font-family:var(--font-mono); font-size:13px; font-weight:700; }
+.disc-slim-text { flex:1; color:var(--text2); }
+.disc-slim-chev { width:16px; height:16px; color:var(--text3); }
+.disc-collapse-btn { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; margin-left:8px; padding:0; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text3); cursor:pointer; transition:border-color 0.15s, color 0.15s; }
+.disc-collapse-btn:hover { border-color:var(--border2); color:var(--text); }
+.disc-collapse-btn .icon { width:16px; height:16px; }
+.disc-card-header-right { display:flex; align-items:center; }
 /* Driver-app out-of-sync strip: only ever rendered when vehicles.active disagrees with archived_at */
 .disc-sync-strip { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 14px; font-size:11px; font-weight:600; color:var(--amber); background:var(--amber-light); border-top:1px solid var(--border); }
 .disc-edit-form { padding:12px 14px; border-top:1px solid var(--border); background:var(--surface2); display:none; flex-direction:column; gap:10px; }
@@ -3405,13 +3433,27 @@ const COMP_ITEMS=[
   {key:'cof',label:'COF',icon:'🛠',expiryField:'cof_expiry',noField:null,costField:'cof_cost',nrField:'cof_not_required'},
   {key:'operating_licence',label:'Operating Licence',icon:'🚏',expiryField:'operating_licence_expiry',noField:'operating_licence_no',costField:'operating_licence_cost',nrField:'operating_licence_not_required'}
 ];
-const COMP_TIER_ORDER={overdue:0,week:1,book:2,soon:3,ok:4,unknown:5,not_required:6};
+// Not set ranks ABOVE Valid (disc-visual-polish, 2026-09-04): a vehicle with a
+// blank date used to get a green "All valid" card because ok outranked unknown.
+const COMP_TIER_ORDER={overdue:0,week:1,book:2,soon:3,unknown:4,ok:5,not_required:6};
 const COMP_ALERT_TIERS=['overdue','week','book','soon'];
 const COMP_TIER_LABEL={overdue:'Overdue',week:'This week',book:'Book now',soon:'Expiring soon',ok:'Valid',unknown:'Not set',not_required:'Not required'};
 let complianceData={};   // by plate
 let discBulkMode=false;
 let discScanMode=false;  // licence-scan approval table open (see LICENCE SCAN below)
 let discShowArchived=false; // "Show archived" tick on Disc Renewal (archive build); read once in renderDiscView
+const discExpanded=new Set(); // plates whose collapsed "all valid" row is open; memory only, cleared on reload
+
+// Inline SVG icons — Tabler Icons outline paths (MIT). Only the icons the
+// Disc Renewal tab needs. Change 5 will turn these into a <symbol> sprite and
+// svgIcon will emit <use href="#icon-NAME"> instead; call sites stay as-is.
+const ICON_PATHS={
+  'circle-check':'<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M9 12l2 2l4 -4"/>',
+  'chevron-down':'<path d="M6 9l6 6l6 -6"/>'
+};
+function svgIcon(name,cls){
+  return`<svg class="icon${cls?' '+cls:''}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICON_PATHS[name]||''}</svg>`;
+}
 
 // Local-date ISO (YYYY-MM-DD). toISOString() would shift a local midnight to
 // the previous day in UTC+2, which the old renew flow silently did.
@@ -3715,7 +3757,32 @@ async function renderDiscsTab(){
   renderAlertBanner();
 }
 
+// Every exit of the render below is followed by syncDiscValidBox, which can
+// only decide the "All Valid" box's affordance once the cards are drawn.
 function renderDiscView(){
+  renderDiscViewBody();
+  syncDiscValidBox();
+}
+
+// "All Valid" box: the arrow, "· view", pointer, tooltip and keyboard role
+// exist only while the divider they scroll to is actually on screen — card
+// view with at least one all-valid vehicle after search / filter. Otherwise
+// the box is a plain stat (no role, no tabindex, no hover).
+function syncDiscValidBox(){
+  const box=document.getElementById('discAllValidBox');
+  if(!box)return;
+  const head=document.getElementById('discValidHead');
+  const live=!!(head&&!head.closest('.hidden'));
+  box.classList.toggle('ds-link',live);
+  if(live){box.setAttribute('role','button');box.setAttribute('tabindex','0');box.title='Show the all-valid vehicles';}
+  else{box.removeAttribute('role');box.removeAttribute('tabindex');box.removeAttribute('title');}
+  const sub=box.querySelector('.disc-summary-sub');
+  if(sub)sub.textContent=live?'vehicles · view':'vehicles';
+  const arrow=box.querySelector('.ds-link-arrow');
+  if(arrow)arrow.classList.toggle('hidden',!live);
+}
+
+function renderDiscViewBody(){
   // "Show archived (n)": live count; hidden and forced off when nothing is archived
   const archivedN=Object.values(complianceData).filter(r=>r.archived_at).length;
   const saWrap=document.getElementById('discShowArchivedWrap'),saCb=document.getElementById('discShowArchivedCb');
@@ -3760,12 +3827,15 @@ function renderDiscView(){
     const rec=complianceData[p]||{};
     COMP_ITEMS.forEach(it=>{c[itemStatus(rec,it).status]++;});
   });
+  // "All Valid" box counts VEHICLES by the collapse rule (every item Valid or
+  // Not required), not valid items — so it matches the slim-row list below.
+  const allValidN=livePlates.filter(p=>discVehicleView(p).quiet).length;
   document.getElementById('discSummaryStrip').innerHTML=`
     <div class="disc-summary-card ds-red"><div class="disc-summary-label">🔴 Overdue</div><div class="disc-summary-val">${c.overdue}</div></div>
     <div class="disc-summary-card ds-red"><div class="disc-summary-label">🚨 This Week</div><div class="disc-summary-val">${c.week}</div></div>
     <div class="disc-summary-card ds-orange"><div class="disc-summary-label">📞 Book Now (≤30 Days)</div><div class="disc-summary-val">${c.book}</div></div>
     <div class="disc-summary-card ds-amber"><div class="disc-summary-label">⚠ Expiring Soon (≤45 Days)</div><div class="disc-summary-val">${c.soon}</div></div>
-    <div class="disc-summary-card ds-green"><div class="disc-summary-label">✅ Valid</div><div class="disc-summary-val">${c.ok}</div></div>
+    <div class="disc-summary-card ds-green" id="discAllValidBox" onclick="scrollToDiscValid()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToDiscValid();}"><div class="disc-summary-label">✅ All Valid</div><div class="disc-summary-val">${allValidN}${svgIcon('chevron-down','ds-link-arrow hidden')}</div><div class="disc-summary-sub">vehicles</div></div>
     <div class="disc-summary-card"><div class="disc-summary-label">📋 Not Set</div><div class="disc-summary-val" style="color:var(--text3);">${c.unknown}</div></div>
     <div class="disc-summary-card"><div class="disc-summary-label">🚘 Vehicles</div><div class="disc-summary-val">${livePlates.length}</div>${discShowArchived?`<div style="font-size:10px;color:var(--text3);">+${plates.length-livePlates.length} archived</div>`:''}</div>
   `;
@@ -3783,57 +3853,136 @@ function renderDiscView(){
   renderDiscCards(plates);
 }
 
+// Per-vehicle view model for the cards (disc-visual-polish, 2026-09-04).
+//  quiet    — every item Valid or Not required → renders as a collapsed slim
+//             row unless the user has opened it (discExpanded). Computed from
+//             the item statuses directly, never from `worst`, so a blank date
+//             can never collapse a vehicle.
+//  nextDays — soonest Valid expiry, for the slim row's "next due in Nd";
+//             null when all three are Not required.
+function discVehicleView(plate){
+  const rec=complianceData[plate]||{plate};
+  const archived=isArchivedPlate(plate);
+  const sts=COMP_ITEMS.map(it=>itemStatus(rec,it));
+  const okDays=sts.filter(s=>s.status==='ok').map(s=>s.days);
+  return{plate,rec,archived,worst:worstComplianceStatus(complianceData[plate]),
+    quiet:!archived&&sts.every(s=>s.status==='ok'||s.status==='not_required'),
+    nextDays:okDays.length?Math.min(...okDays):null};
+}
+
 function renderDiscCards(plates){
   const search=(document.getElementById('discSearch')?.value||'').toLowerCase();
   const filter=document.getElementById('discFilter')?.value||'all';
-  let list=plates.map(p=>({plate:p,rec:complianceData[p]||{plate:p},worst:worstComplianceStatus(complianceData[p]),archived:isArchivedPlate(p)}));
+  let list=plates.map(discVehicleView);
   if(search)list=list.filter(v=>v.plate.toLowerCase().includes(search));
   // Archived cards have no ladder status, so any status filter hides them
   if(filter!=='all')list=list.filter(v=>!v.archived&&COMP_ITEMS.some(it=>itemStatus(v.rec,it).status===filter));
-  // Archived last, then worst-first, then plate
-  list.sort((a,b)=>(a.archived-b.archived)||COMP_TIER_ORDER[a.worst]-COMP_TIER_ORDER[b.worst]||a.plate.localeCompare(b.plate));
+  // Archived last; before them the collapsed all-valid rows; action cards
+  // first, worst-first; plate within each band
+  list.sort((a,b)=>(a.archived-b.archived)||(a.quiet-b.quiet)||COMP_TIER_ORDER[a.worst]-COMP_TIER_ORDER[b.worst]||a.plate.localeCompare(b.plate));
 
   if(list.length===0){
     document.getElementById('discsGrid').innerHTML='<p class="tyre-empty">No vehicles match this search / filter.</p>';
     return;
   }
 
-  document.getElementById('discsGrid').innerHTML=list.map((v,vi)=>{
+  // Three bands in DOM order: action cards (grid cells), ONE full-width list
+  // holding the all-valid rows (or their opened cards), archived cards.
+  const action=list.filter(v=>!v.archived&&!v.quiet),quiet=list.filter(v=>v.quiet),archived=list.filter(v=>v.archived);
+  let vi=0;
+  document.getElementById('discsGrid').innerHTML=
+    action.map(v=>discCardHtml(v,vi++)).join('')+
+    (quiet.length?`<div class="disc-valid-list">
+      <div class="disc-valid-head" id="discValidHead" tabindex="-1">All valid — ${quiet.length} vehicle${quiet.length===1?'':'s'}</div>
+      ${quiet.map(v=>discExpanded.has(v.plate)?discCardHtml(v,vi++):discSlimHtml(v,vi++)).join('')}
+    </div>`:'')+
+    archived.map(v=>discArchivedCardHtml(v,vi++)).join('');
+}
+
+// "All Valid" summary box → scroll to the divider above the slim rows. The
+// divider only exists in card view with at least one all-valid vehicle shown
+// (search / filter respected), so with nothing to jump to this is a no-op.
+function scrollToDiscValid(){
+  const head=document.getElementById('discValidHead');
+  if(!head||head.closest('.hidden'))return;
+  head.scrollIntoView({behavior:'smooth',block:'start'});
+  head.focus({preventScroll:true});
+}
+
+// Open / close one collapsed row in place — no full re-render, so nothing
+// else on the page moves or re-animates. Focus follows the toggle so keyboard
+// users land on the Collapse button (open) or back on the row (close).
+function toggleDiscExpand(plate){
+  const open=!discExpanded.has(plate);
+  if(open)discExpanded.add(plate);else discExpanded.delete(plate);
+  const domId='dcw-'+plateDomId(plate);
+  const el=document.getElementById(domId);
+  const v=discVehicleView(plate);
+  if(!el||!v.quiet){renderDiscView();return;}
+  el.outerHTML=open?discCardHtml(v,0):discSlimHtml(v,0);
+  const next=document.getElementById(domId);
+  if(next)(open?next.querySelector('.disc-collapse-btn'):next)?.focus();
+}
+
+// Driver-app out-of-sync strip — invisible unless vehicles.active disagrees
+// with archived_at (a failed PATCH). Either direction can fail, so it sits
+// on normal and archived cards alike.
+function discSyncStripHtml(plate,pj){
+  const sync=driverAppMismatch(plate);
+  return sync?`<div class="disc-sync-strip"><span>⚠ ${sync==='visible'?'Drivers can still see this vehicle in the driver app.':'Drivers cannot see this vehicle in the driver app yet.'}</span><button class="disc-edit-btn" onclick="retryDriverAppSync(${pj},this)">↻ Retry</button></div>`:'';
+}
+
+// Collapsed all-valid row: tick, plate, one line of text, chevron. A real
+// button for keyboard and screen-reader users (Enter / Space open it).
+function discSlimHtml(v,vi){
+  const pj=escAttr(JSON.stringify(v.plate));
+  const text=v.nextDays==null?'Nothing required':`All valid · next due in ${v.nextDays}d`;
+  return`<div class="disc-slim" id="dcw-${plateDomId(v.plate)}" role="button" tabindex="0" aria-expanded="false" title="Show details" style="animation-delay:${Math.min(vi,20)*0.03}s" onclick="toggleDiscExpand(${pj})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleDiscExpand(${pj});}">
+    ${svgIcon('circle-check','disc-slim-tick')}
+    <span class="disc-slim-plate">${escapeHtml(v.plate)}</span>
+    <span class="disc-slim-text">${text}</span>
+    ${svgIcon('chevron-down','disc-slim-chev')}
+  </div>`;
+}
+
+function discArchivedCardHtml(v,vi){
+  const{plate,rec}=v;
+  const pj=escAttr(JSON.stringify(plate));
+  // Read-only: dates for reference only — no chips, no renew / Not required,
+  // no edit or renewal forms. Controls: Restore, and Archive as a re-run.
+  const rowsRO=COMP_ITEMS.map(it=>`<div class="comp-row">
+    <span class="comp-item-label">${it.icon} ${it.label}</span>
+    <span class="comp-date">${rec[it.nrField]?'Not required':rec[it.expiryField]?fmtDDMMYYYY(rec[it.expiryField]):'—'}</span>
+  </div>`).join('');
+  return`<div class="disc-card dc-archived" style="animation-delay:${Math.min(vi,20)*0.03}s">
+    <div class="disc-card-header">
+      <span class="disc-card-plate">${escapeHtml(plate)}</span>
+      <span class="disc-card-badge dcb-archived">Archived ${fmtDDMMYYYY(rec.archived_at)}</span>
+    </div>
+    <div class="disc-card-body">
+      ${rowsRO}
+      ${rec.make_model?`<div class="disc-info-row" style="margin-top:4px;"><span class="disc-info-label">Make / Model</span><span class="disc-info-val">${escapeHtml(rec.make_model)}</span></div>`:''}
+    </div>
+    ${discSyncStripHtml(plate,pj)}
+    <div class="disc-card-footer"><button class="disc-edit-btn disc-archive-btn" onclick="archiveComplianceVehicle(${pj},this)" title="Re-run the archive">🗄 Archive</button><button class="disc-edit-btn" onclick="restoreComplianceVehicle(${pj},this)">↩ Restore</button></div>
+  </div>`;
+}
+
+// The full card. Structure unchanged from Stage 2 / archive build; an opened
+// all-valid card (v.quiet) additionally carries id dcw-* and a Collapse button.
+function discCardHtml(v,vi){
     const{plate,rec,worst}=v;
     const id=plateDomId(plate);
     const pj=escAttr(JSON.stringify(plate));
+    const syncStrip=discSyncStripHtml(plate,pj);
 
-    // Driver-app out-of-sync strip — invisible unless vehicles.active disagrees
-    // with archived_at (a failed PATCH). Either direction can fail, so it sits
-    // on normal and archived cards alike.
-    const sync=driverAppMismatch(plate);
-    const syncStrip=sync?`<div class="disc-sync-strip"><span>⚠ ${sync==='visible'?'Drivers can still see this vehicle in the driver app.':'Drivers cannot see this vehicle in the driver app yet.'}</span><button class="disc-edit-btn" onclick="retryDriverAppSync(${pj},this)">↻ Retry</button></div>`:'';
-
-    if(v.archived){
-      // Read-only: dates for reference only — no chips, no renew / Not required,
-      // no edit or renewal forms. Controls: Restore, and Archive as a re-run.
-      const rowsRO=COMP_ITEMS.map(it=>`<div class="comp-row">
-        <span class="comp-item-label">${it.icon} ${it.label}</span>
-        <span class="comp-date">${rec[it.nrField]?'Not required':rec[it.expiryField]?fmtDDMMYYYY(rec[it.expiryField]):'—'}</span>
-      </div>`).join('');
-      return`<div class="disc-card dc-archived" style="animation-delay:${Math.min(vi,20)*0.03}s">
-        <div class="disc-card-header">
-          <span class="disc-card-plate">${escapeHtml(plate)}</span>
-          <span class="disc-card-badge dcb-archived">Archived ${fmtDDMMYYYY(rec.archived_at)}</span>
-        </div>
-        <div class="disc-card-body">
-          ${rowsRO}
-          ${rec.make_model?`<div class="disc-info-row" style="margin-top:4px;"><span class="disc-info-label">Make / Model</span><span class="disc-info-val">${escapeHtml(rec.make_model)}</span></div>`:''}
-        </div>
-        ${syncStrip}
-        <div class="disc-card-footer"><button class="disc-edit-btn disc-archive-btn" onclick="archiveComplianceVehicle(${pj},this)" title="Re-run the archive">🗄 Archive</button><button class="disc-edit-btn" onclick="restoreComplianceVehicle(${pj},this)">↩ Restore</button></div>
-      </div>`;
-    }
-
-    // Card colour / badge from the worst item (Stage 2 ladder)
+    // Card colour / badge from the worst item (Stage 2 ladder). Not set gets
+    // the grey pill and default border — no longer green "All valid".
     const cardClass={overdue:'dc-red',week:'dc-red',book:'dc-orange',soon:'dc-amber',ok:'dc-green'}[worst]||'';
-    const badgeClass={overdue:'dcb-expired',week:'dcb-expired',book:'dcb-book',soon:'dcb-warn',ok:'dcb-ok',not_required:'dcb-nr'}[worst]||'';
+    const badgeClass={overdue:'dcb-expired',week:'dcb-expired',book:'dcb-book',soon:'dcb-warn',ok:'dcb-ok',unknown:'dcb-nr',not_required:'dcb-nr'}[worst]||'';
     const badgeText=worst==='ok'?'All valid':COMP_TIER_LABEL[worst];
+    const badge=`<span class="disc-card-badge ${badgeClass}">${badgeText}</span>`;
+    const headerRight=v.quiet?`<span class="disc-card-header-right">${badge}<button class="disc-collapse-btn" onclick="toggleDiscExpand(${pj})" aria-label="Collapse" title="Collapse">${svgIcon('chevron-down','icon-flip')}</button></span>`:badge;
 
     const rowsHtml=COMP_ITEMS.map(it=>{
       const st=itemStatus(rec,it);
@@ -3854,10 +4003,10 @@ function renderDiscCards(plates){
     // Edit form: one "Not required" checkbox per item beside its date
     const nrBox=it=>`<label class="ce-nr"><input type="checkbox" id="ce-nr-${it.key}-${id}" ${rec[it.nrField]?'checked':''}> Not required</label>`;
 
-    return`<div class="disc-card ${cardClass}" style="animation-delay:${Math.min(vi,20)*0.03}s">
+    return`<div class="disc-card ${cardClass}"${v.quiet?` id="dcw-${id}"`:''} style="animation-delay:${Math.min(vi,20)*0.03}s">
       <div class="disc-card-header">
         <span class="disc-card-plate">${escapeHtml(plate)}</span>
-        <span class="disc-card-badge ${badgeClass}">${badgeText}</span>
+        ${headerRight}
       </div>
       <div class="disc-card-body">
         ${rowsHtml}
@@ -3889,7 +4038,6 @@ function renderDiscCards(plates){
         <button class="def-save" onclick="saveComplianceEdit(${pj})">💾 Save</button>
       </div>
     </div>`;
-  }).join('');
 }
 
 // ── Stage 2: "Not required" per item ─────────────────────────────────────────
