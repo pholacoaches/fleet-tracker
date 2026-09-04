@@ -5,7 +5,7 @@
  * forwarded any body on any path to Anthropic with CORS "*" and no auth,
  * and that still exposed the legacy /login and /auth/* OTP routes.
  *
- * Exactly two call paths exist:
+ * Exactly three call paths exist:
  *
  *   POST /ai/dashboard   Fuel-statement PDF extraction from index.html.
  *                        Caller must be a signed-in FleetDesk user:
@@ -19,12 +19,18 @@
  *                        The code is validated with the driver_page_init
  *                        RPC (returns null for unknown / inactive codes).
  *
+ *   POST /ai/compliance  Licence-document photo reading from index.html
+ *                        (Disc Renewal → Scan Licences, 2026-09-04).
+ *                        Same auth + rate-limit bindings as /ai/dashboard;
+ *                        same body contract as /ai/driver (one image only,
+ *                        prompt pinned here).
+ *
  * Everything else — including "/", "/login", "/auth/*" — is 404.
  *
  * Model and max_tokens are pinned here and the client's values ignored.
- * The driver path also pins the prompt: the client may only send the
- * photo, so a leaked driver code is worth nothing more than "read an
- * odometer".
+ * The driver and compliance paths also pin the prompt: the client may only
+ * send the photo, so a leaked driver code is worth nothing more than "read
+ * an odometer".
  *
  * Secrets / vars (see wrangler.jsonc + README.md):
  *   ANTHROPIC_API_KEY   secret — Anthropic key (existing)
@@ -58,6 +64,34 @@ const DRIVER_PROMPT =
   'Respond with ONLY strict JSON, no markdown, no code fences, exactly this shape: ' +
   '{"odometer": <integer or null>, "confidence": "high"|"medium"|"low"}';
 
+// Compliance scan (2026-09-04). Same model as the other two routes for now;
+// if real licence photos misread, upgrade THIS route (model + structured
+// output) with evidence. The office approves every value in a table before
+// it is saved, so a misread is caught there, not here.
+const COMPLIANCE_MODEL = 'claude-sonnet-4-6';
+const COMPLIANCE_MAX_TOKENS = 300;
+
+// The document repeats dates: an issue / transaction "Date" sits right next
+// to each "Date of expiry". The prompt names the expiry labels explicitly
+// and forbids guessing — a null is far cheaper than a wrong expiry date.
+const COMPLIANCE_PROMPT =
+  'This is a photo of a South African combined "Motor Vehicle Licence, Licence Disc and Operator Card" document ' +
+  '(one page, English/Afrikaans). Read these fields:\n' +
+  '1. plate: the vehicle registration printed in the "Licence number" field (e.g. RPF655W). Uppercase letters and digits only, no spaces.\n' +
+  '2. disc_expiry: the licence disc expiry date — the line labelled "Roadworthy expiry date" in the licence section.\n' +
+  '3. cof_expiry: the "Date of expiry / Vervaldatum" printed under the LEFT circle at the bottom (Certificate of Fitness / roadworthy).\n' +
+  '4. op_licence_expiry: the "Date of expiry / Vervaldatum" printed under the RIGHT circle at the bottom (Operator card).\n' +
+  '5. disc_no: the licence disc number, if printed and clearly legible.\n' +
+  '6. op_licence_no: the operator card / operating licence number, if printed and clearly legible.\n' +
+  '7. make_model: the vehicle make and model, if printed.\n' +
+  'CRITICAL: the document repeats dates. Near each circle there is also a transaction or issue "Date" (for example "Date 2026-03-27") — ' +
+  'that is NOT an expiry date and must be ignored. Use only values explicitly labelled as an expiry ("Date of expiry", "Vervaldatum", "expiry date"). ' +
+  'Write every date as YYYY-MM-DD. If any value is missing, obscured or not clearly legible, use null for that field — never guess, infer or copy a value from elsewhere on the page. ' +
+  'Respond with ONLY strict JSON, no markdown, no code fences, exactly this shape: ' +
+  '{"plate": <string or null>, "disc_expiry": <"YYYY-MM-DD" or null>, "cof_expiry": <"YYYY-MM-DD" or null>, ' +
+  '"op_licence_expiry": <"YYYY-MM-DD" or null>, "disc_no": <string or null>, "op_licence_no": <string or null>, ' +
+  '"make_model": <string or null>, "confidence": "high"|"medium"|"low"}';
+
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // The allowlist comes from the ALLOWED_ORIGINS var in wrangler.jsonc, a
 // comma-separated list, so it differs per environment (2026-09-02):
@@ -80,6 +114,9 @@ const ANTHROPIC_VERSION = '2023-06-01';
 // usually well under 5 MB; driver photos are compressed to ~200 KB client-side.
 const MAX_BODY_DASHBOARD = 20 * 1024 * 1024;
 const MAX_BODY_DRIVER = 2 * 1024 * 1024;
+// Licence photos are compressed to ~400 KB client-side (small print needs
+// more pixels than an odometer); base64 adds a third.
+const MAX_BODY_COMPLIANCE = 3 * 1024 * 1024;
 
 const DRIVER_CODE_RE = /^[A-Z]{3}-[0-9]{4}$/;
 
@@ -280,6 +317,38 @@ async function handleDriver(request, env, cors) {
   });
 }
 
+// ── Route: POST /ai/compliance ───────────────────────────────────────────────
+// Licence-document photo from the signed-in dashboard (Disc Renewal → Scan
+// Licences). Auth and throttles are the dashboard's (Supabase JWT, the
+// DASHBOARD_* bindings — the per-IP one is applied in the router); the body
+// contract is the driver's (ONE image block, everything else dropped, prompt
+// pinned above). Response passes straight through like the other routes.
+async function handleCompliance(request, env, cors) {
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!token) return jsonError(cors, 401, 'authentication_error', 'Sign in to scan licence documents.');
+
+  const user = await verifySupabaseUser(env, token);
+  if (!user) return jsonError(cors, 401, 'authentication_error', 'Your session is not valid. Please log in again.');
+
+  // Per signed-in user (20/min, shared with PDF extraction). The scanner
+  // sends photos one at a time and each read takes several seconds, so a
+  // genuine batch stays well under this; the client backs off on 429.
+  if (await rateLimited(env, 'DASHBOARD_USER_LIMIT', user.id)) return rateLimitResponse(cors);
+
+  const { body, error } = await readJsonBody(request, MAX_BODY_COMPLIANCE);
+  if (error) return jsonError(cors, 400, 'invalid_request_error', error);
+
+  const image = extractSingleImage(body && body.messages);
+  if (!image) return jsonError(cors, 400, 'invalid_request_error', 'Request must contain one JPEG image of the licence document.');
+
+  return callAnthropic(env, cors, {
+    model: COMPLIANCE_MODEL,
+    max_tokens: COMPLIANCE_MAX_TOKENS,
+    messages: [{ role: 'user', content: [image, { type: 'text', text: COMPLIANCE_PROMPT }] }],
+  });
+}
+
 // ── Content whitelisting ─────────────────────────────────────────────────────
 const BASE64_RE = /^[A-Za-z0-9+/=\r\n]+$/;
 
@@ -337,7 +406,9 @@ export default {
     const url = new URL(request.url);
     const origin = request.headers.get('Origin');
     const path = url.pathname.replace(/\/+$/, '') || '/';
-    const known = path === '/ai/dashboard' || path === '/ai/driver';
+    const known = path === '/ai/dashboard' || path === '/ai/driver' || path === '/ai/compliance';
+    // Both signed-in routes share the dashboard throttles (same identity).
+    const dashboardLike = path === '/ai/dashboard' || path === '/ai/compliance';
 
     // {} unless the Origin is on this environment's allowlist.
     const cors = corsHeaders(env, origin);
@@ -361,7 +432,7 @@ export default {
     // call. Driver 60/min (SA mobile carriers put many phones behind one
     // address, so this stays loose); dashboard 40/min (also blunts a token
     // spray against Supabase Auth through us).
-    const ipBinding = path === '/ai/dashboard' ? 'DASHBOARD_IP_LIMIT' : 'DRIVER_IP_LIMIT';
+    const ipBinding = dashboardLike ? 'DASHBOARD_IP_LIMIT' : 'DRIVER_IP_LIMIT';
     if (await rateLimited(env, ipBinding, clientIp(request))) return rateLimitResponse(cors);
 
     if (!env.ANTHROPIC_API_KEY || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
@@ -370,6 +441,7 @@ export default {
 
     try {
       if (path === '/ai/dashboard') return await handleDashboard(request, env, cors);
+      if (path === '/ai/compliance') return await handleCompliance(request, env, cors);
       return await handleDriver(request, env, cors);
     } catch (err) {
       // Never echo internals to the client.
