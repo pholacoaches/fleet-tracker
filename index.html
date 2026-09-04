@@ -719,8 +719,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .cc-unknown { background:var(--surface2); color:var(--text3); }
 .cc-not_required { background:var(--surface2); color:var(--text3); border:1px dashed var(--border2); }
 .comp-illegal { font-size:10px; font-weight:700; color:var(--red); padding:0 0 6px 0; }
-.comp-renew-btn { font-size:10px; padding:2px 9px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); color:var(--text2); cursor:pointer; font-family:var(--font); font-weight:700; white-space:nowrap; transition:border-color 0.15s,color 0.15s; }
-.comp-renew-btn:hover { border-color:var(--green); color:var(--green); }
+/* Change 2 (disc-visual-polish): icon-only row actions, only on rows that need
+   action. Quiet by default, always visible (no hover-only — touch devices);
+   tick goes green on hover, minus goes dark. */
+.comp-icon-btn { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; padding:0; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text3); cursor:pointer; transition:border-color 0.15s, color 0.15s; }
+.comp-icon-btn .icon { width:15px; height:15px; }
+.comp-icon-btn.cib-renew:hover { color:var(--green); border-color:var(--green); }
+.comp-icon-btn.cib-nr:hover { color:var(--text); border-color:var(--text2); }
+.comp-icon-btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .comp-nr-link { font-size:9px; padding:2px 6px; border:none; background:none; color:var(--text3); cursor:pointer; font-family:var(--font); font-weight:700; white-space:nowrap; text-decoration:underline dotted; }
 .comp-nr-link:hover { color:var(--text); }
 .ce-nr { display:inline-flex; align-items:center; gap:4px; font-size:10px !important; color:var(--text3) !important; margin-top:3px; font-weight:600 !important; }
@@ -3449,7 +3455,9 @@ const discExpanded=new Set(); // plates whose collapsed "all valid" row is open;
 // svgIcon will emit <use href="#icon-NAME"> instead; call sites stay as-is.
 const ICON_PATHS={
   'circle-check':'<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M9 12l2 2l4 -4"/>',
-  'chevron-down':'<path d="M6 9l6 6l6 -6"/>'
+  'chevron-down':'<path d="M6 9l6 6l6 -6"/>',
+  'check':'<path d="M5 12l5 5l10 -10"/>',
+  'minus':'<path d="M5 12l14 0"/>'
 };
 function svgIcon(name,cls){
   return`<svg class="icon${cls?' '+cls:''}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICON_PATHS[name]||''}</svg>`;
@@ -3988,15 +3996,20 @@ function discCardHtml(v,vi){
       const st=itemStatus(rec,it);
       const nr=st.status==='not_required';
       const exp=nr?null:rec[it.expiryField];
-      // Not required: grey chip instead of the date, no renew, "Required" undoes it.
-      const renewBtn=nr?'':`<button class="comp-renew-btn" onclick="openRenewForm(${pj},'${it.key}')" title="Record a renewal">✓ Renewed</button>`;
-      const nrLink=`<button class="comp-nr-link" onclick="setNotRequired(${pj},'${it.key}',${nr?'false':'true'})" title="${nr?'Mark this item as required for this vehicle':'Mark this item as not required for this vehicle (e.g. a trailer has no COF)'}">${nr?'Required':'Not required'}</button>`;
+      // Change 2: icon buttons ONLY where something is due — the alert tiers
+      // and Not set. A Valid row shows its status alone; a Not required row
+      // keeps a text link to undo. Handlers unchanged: openRenewForm and
+      // setNotRequired (which now confirms before flagging).
+      const needs=COMP_ALERT_TIERS.includes(st.status)||st.status==='unknown';
+      const actions=needs
+        ?`<button class="comp-icon-btn cib-renew" onclick="openRenewForm(${pj},'${it.key}')" aria-label="Mark renewed" title="Mark renewed">${svgIcon('check')}</button><button class="comp-icon-btn cib-nr" onclick="setNotRequired(${pj},'${it.key}',true)" aria-label="Mark not required" title="Mark not required">${svgIcon('minus')}</button>`
+        :nr?`<button class="comp-nr-link" onclick="setNotRequired(${pj},'${it.key}',false)" title="Mark this item as required for this vehicle">Mark required</button>`:'';
       const illegal=st.status==='overdue'?`<div class="comp-illegal">⛔ Not road-legal — this vehicle may not legally be operated until the ${escapeHtml(it.label.toLowerCase())} is renewed.</div>`:'';
       return`<div class="comp-row">
         <span class="comp-item-label">${it.icon} ${it.label}</span>
         <span class="comp-date">${exp?fmtDDMMYYYY(exp):nr?'':'—'}</span>
         <span class="comp-chip cc-${st.status}">${escapeHtml(st.chip)}</span>
-        <span class="comp-actions">${renewBtn}${nrLink}</span>
+        ${actions?`<span class="comp-actions">${actions}</span>`:''}
       </div>${illegal}`;
     }).join('');
 
@@ -4022,17 +4035,17 @@ function discCardHtml(v,vi){
           <div><label>Licence Disc No.</label><input type="text" id="ce-dno-${id}" value="${escapeHtml(rec.licence_disc_no||'')}" placeholder="e.g. GP-2021-447"></div>
         </div>
         <div class="def-row">
-          <div><label>💿 Disc Expiry</label><input type="date" id="ce-dexp-${id}" value="${rec.licence_disc_expiry||''}">${nrBox(COMP_ITEMS[0])}</div>
-          <div><label>Disc Cost (R)</label><input type="number" id="ce-dcost-${id}" min="0" step="0.01" value="${rec.licence_disc_cost||''}"></div>
+          <div><label>💿 Disc Expiry</label><input type="date" id="ce-dexp-${id}" value="${escAttr(rec.licence_disc_expiry||'')}">${nrBox(COMP_ITEMS[0])}</div>
+          <div><label>Disc Cost (R)</label><input type="number" id="ce-dcost-${id}" min="0" step="0.01" value="${escAttr(rec.licence_disc_cost||'')}"></div>
         </div>
         <div class="def-row">
-          <div><label>🛠 COF Expiry</label><input type="date" id="ce-cexp-${id}" value="${rec.cof_expiry||''}">${nrBox(COMP_ITEMS[1])}</div>
-          <div><label>COF Cost (R)</label><input type="number" id="ce-ccost-${id}" min="0" step="0.01" value="${rec.cof_cost||''}"></div>
+          <div><label>🛠 COF Expiry</label><input type="date" id="ce-cexp-${id}" value="${escAttr(rec.cof_expiry||'')}">${nrBox(COMP_ITEMS[1])}</div>
+          <div><label>COF Cost (R)</label><input type="number" id="ce-ccost-${id}" min="0" step="0.01" value="${escAttr(rec.cof_cost||'')}"></div>
         </div>
         <div class="def-row">
-          <div><label>🚏 Operating Licence Expiry</label><input type="date" id="ce-oexp-${id}" value="${rec.operating_licence_expiry||''}">${nrBox(COMP_ITEMS[2])}</div>
+          <div><label>🚏 Operating Licence Expiry</label><input type="date" id="ce-oexp-${id}" value="${escAttr(rec.operating_licence_expiry||'')}">${nrBox(COMP_ITEMS[2])}</div>
           <div><label>Op. Licence No.</label><input type="text" id="ce-ono-${id}" value="${escapeHtml(rec.operating_licence_no||'')}"></div>
-          <div><label>Op. Licence Cost (R)</label><input type="number" id="ce-ocost-${id}" min="0" step="0.01" value="${rec.operating_licence_cost||''}"></div>
+          <div><label>Op. Licence Cost (R)</label><input type="number" id="ce-ocost-${id}" min="0" step="0.01" value="${escAttr(rec.operating_licence_cost||'')}"></div>
         </div>
         <div><label>Notes</label><input type="text" id="ce-notes-${id}" value="${escapeHtml(rec.notes||'')}" placeholder="Optional"></div>
         <button class="def-save" onclick="saveComplianceEdit(${pj})">💾 Save</button>
@@ -4046,6 +4059,9 @@ function discCardHtml(v,vi){
 async function setNotRequired(plate,key,flag){
   const item=COMP_ITEMS.find(i=>i.key===key);
   if(!item)return;
+  // Change 2: the minus icon is easy to hit by mistake, so flagging asks
+  // first. Undo ("Mark required") does not — it only brings alerts back.
+  if(flag&&!confirm(`Mark the ${item.label} for ${plate} as not required?\n\nIt will stop counting towards alerts. Any saved date is kept, and you can undo this from the card or Edit Details.`))return;
   const row={plate,[item.nrField]:!!flag};
   if(!await upsertCompliance([row])){alert('Could not save. Please check your connection and try again.');return;}
   complianceData[plate]={...(complianceData[plate]||{}),...row};
@@ -4072,12 +4088,12 @@ async function archiveComplianceVehicle(plate,btn){
     if(!confirm(msg))return;
   }
   compBusyPlates.add(plate);
-  const label=btn?btn.textContent:'';
+  const label=btn?btn.innerHTML:''; // innerHTML: the label may carry an SVG icon later
   if(btn){btn.disabled=true;btn.textContent='Archiving…';}
   const r=await setPlateArchived(plate,true);
   compBusyPlates.delete(plate);
   if(!r.ok){
-    if(btn){btn.disabled=false;btn.textContent=label;}
+    if(btn){btn.disabled=false;btn.innerHTML=label;}
     alert(`Could not archive ${plate}. Please check your connection and try again.`);
     return;
   }
@@ -4088,12 +4104,12 @@ async function archiveComplianceVehicle(plate,btn){
 async function restoreComplianceVehicle(plate,btn){
   if(compBusyPlates.has(plate))return;
   compBusyPlates.add(plate);
-  const label=btn?btn.textContent:'';
+  const label=btn?btn.innerHTML:''; // innerHTML: the label may carry an SVG icon later
   if(btn){btn.disabled=true;btn.textContent='Restoring…';}
   const r=await setPlateArchived(plate,false);
   compBusyPlates.delete(plate);
   if(!r.ok){
-    if(btn){btn.disabled=false;btn.textContent=label;}
+    if(btn){btn.disabled=false;btn.innerHTML=label;}
     alert(`Could not restore ${plate}. Please check your connection and try again.`);
     return;
   }
@@ -4110,7 +4126,7 @@ async function retryDriverAppSync(plate,btn){
   const ok=await patchVehicleActive(plate,!isArchivedPlate(plate));
   compBusyPlates.delete(plate);
   if(!ok){
-    if(btn){btn.disabled=false;btn.textContent='↻ Retry';}
+    if(btn){btn.disabled=false;btn.innerHTML='↻ Retry';}
     alert(`The driver app still could not be updated for ${plate}. Please check your connection and try again.`);
     return;
   }
@@ -4217,10 +4233,10 @@ function renderDiscBulk(plates){
         return`<tr data-plate="${escapeHtml(p)}">
           <td class="bp">${escapeHtml(p)}</td>
           <td><input type="text" id="bk-make-${id}" value="${escapeHtml(r.make_model||'')}"></td>
-          <td><input type="date" id="bk-dexp-${id}" value="${r.licence_disc_expiry||''}"></td>
+          <td><input type="date" id="bk-dexp-${id}" value="${escAttr(r.licence_disc_expiry||'')}"></td>
           <td><input type="text" id="bk-dno-${id}" value="${escapeHtml(r.licence_disc_no||'')}"></td>
-          <td><input type="date" id="bk-cexp-${id}" value="${r.cof_expiry||''}"></td>
-          <td><input type="date" id="bk-oexp-${id}" value="${r.operating_licence_expiry||''}"></td>
+          <td><input type="date" id="bk-cexp-${id}" value="${escAttr(r.cof_expiry||'')}"></td>
+          <td><input type="date" id="bk-oexp-${id}" value="${escAttr(r.operating_licence_expiry||'')}"></td>
           <td><input type="text" id="bk-ono-${id}" value="${escapeHtml(r.operating_licence_no||'')}"></td>
         </tr>`;
       }).join('')}</tbody>
