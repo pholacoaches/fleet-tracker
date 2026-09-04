@@ -648,9 +648,21 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-days.dd-red { color:var(--red); }
 .disc-days.dd-amber { color:var(--amber); }
 .disc-days.dd-green { color:var(--green); }
-.disc-card-footer { display:flex; justify-content:flex-end; padding:8px 14px; border-top:1px solid var(--border); background:var(--surface2); }
+.disc-card-footer { display:flex; justify-content:flex-end; gap:6px; padding:8px 14px; border-top:1px solid var(--border); background:var(--surface2); }
 .disc-edit-btn { font-size:11px; padding:3px 9px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); color:var(--text2); cursor:pointer; font-family:var(--font); font-weight:700; transition:border-color 0.15s, color 0.15s; }
 .disc-edit-btn:hover { border-color:var(--accent); color:var(--accent); }
+.disc-edit-btn:disabled { opacity:0.6; cursor:default; }
+/* Archive: quiet ghost variant — reversible, so not red, but it must not
+   compete with Edit Details beside it */
+.disc-edit-btn.disc-archive-btn { border-color:transparent; background:transparent; color:var(--text3); font-weight:600; }
+.disc-edit-btn.disc-archive-btn:hover { border-color:var(--border2); color:var(--text2); }
+.disc-show-archived { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:var(--text2); cursor:pointer; white-space:nowrap; }
+/* Archived card: greyed, read-only, no ladder colour on the left edge */
+.disc-card.dc-archived { border-left-color:var(--border2); background:var(--surface2); }
+.disc-card.dc-archived .disc-card-header, .disc-card.dc-archived .disc-card-body { opacity:0.6; }
+.dcb-archived { background:var(--border); color:var(--text2); }
+/* Driver-app out-of-sync strip: only ever rendered when vehicles.active disagrees with archived_at */
+.disc-sync-strip { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 14px; font-size:11px; font-weight:600; color:var(--amber); background:var(--amber-light); border-top:1px solid var(--border); }
 .disc-edit-form { padding:12px 14px; border-top:1px solid var(--border); background:var(--surface2); display:none; flex-direction:column; gap:10px; }
 .disc-edit-form.open { display:flex; }
 .disc-edit-form label { font-size:11px; font-weight:700; color:var(--text2); display:block; margin-bottom:3px; }
@@ -1119,6 +1131,10 @@ input[type=file] { display: none; }
         <option value="unknown">📋 Not set</option>
         <option value="not_required">➖ Not required</option>
       </select>
+      <!-- Archive build: hidden entirely while nothing is archived (renderDiscView) -->
+      <label class="disc-show-archived hidden" id="discShowArchivedWrap" title="Archived vehicles are out of service; nothing is deleted">
+        <input type="checkbox" id="discShowArchivedCb" onchange="discShowArchived=this.checked;renderDiscView()"> Show archived (<span id="discArchivedCount">0</span>)
+      </label>
       <button class="btn btn-outline" onclick="toggleDiscBulk()" id="discBulkBtn" style="font-size:11px;padding:6px 12px;">≡ Bulk Edit</button>
       <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;">📥 45-Day CSV</button>
       <button class="btn btn-outline" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;">＋ Add Vehicle</button>
@@ -3395,6 +3411,7 @@ const COMP_TIER_LABEL={overdue:'Overdue',week:'This week',book:'Book now',soon:'
 let complianceData={};   // by plate
 let discBulkMode=false;
 let discScanMode=false;  // licence-scan approval table open (see LICENCE SCAN below)
+let discShowArchived=false; // "Show archived" tick on Disc Renewal (archive build); read once in renderDiscView
 
 // Local-date ISO (YYYY-MM-DD). toISOString() would shift a local midnight to
 // the previous day in UTC+2, which the old renew flow silently did.
@@ -3436,6 +3453,7 @@ function worstComplianceStatus(rec){
 async function fetchCompliance(){
   await fetchFleetPlates();
   try{
+    // select=* already brings archived_at (archive build) into complianceData
     const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_compliance?select=*`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
@@ -3450,16 +3468,36 @@ async function fetchCompliance(){
 // Current fleet (2026-09-04): the tenant's ACTIVE vehicles. The compliance
 // tab lists these plus any plate with a compliance row — never plates that
 // only ever appeared in an old fuel report. RLS scopes the read to the
-// tenant. On failure the previous set is kept so the tab does not empty out.
+// tenant. On failure the previous sets are kept so the tab does not empty out.
+//
+// Two structures on purpose (archive build, 2026-09-04):
+//  fleetPlates   — ONLY active rows. This is what the Disc Renewal list unions
+//                  in, so a retired vehicle must never land here (sw v69 fix).
+//  fleetPlateRaw — ALL rows, active and inactive, normalised → plate exactly
+//                  as stored in `vehicles`. Needed to word the archive confirm
+//                  (does a vehicles row exist?) and to PATCH the right row on
+//                  archive / restore, since Demo/Savika store plates with hyphens.
 let fleetPlates=new Set();
+let fleetPlateRaw={};
 async function fetchFleetPlates(){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?select=plate&active=eq.true`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?select=plate,active`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(!res.ok){console.error('[FleetDesk] fetchFleetPlates failed:',res.status);return;}
     const rows=await res.json();
-    fleetPlates=new Set(rows.map(r=>normalisePlate(r.plate)).filter(Boolean));
+    const raw={},active=new Set();
+    rows.forEach(r=>{
+      const n=normalisePlate(r.plate);
+      if(!n)return;
+      // Two stored spellings of one plate (e.g. "ABC 123 GP" and "ABC123GP")
+      // would collapse here and the archive PATCH would hit only one row.
+      if(raw[n]!==undefined&&raw[n]!==r.plate)console.warn('[FleetDesk] vehicles: plates',raw[n],'and',r.plate,'normalise to the same value',n);
+      raw[n]=r.plate;
+      if(r.active)active.add(n);
+    });
+    fleetPlateRaw=raw;
+    fleetPlates=active;
   }catch(err){console.error('[FleetDesk] fetchFleetPlates failed:',err);}
 }
 
@@ -3492,21 +3530,79 @@ async function upsertCompliance(rows){
   }catch(err){console.error('[FleetDesk] Compliance save error:',err);return false;}
 }
 
+// ── Archive / restore (2026-09-04) ───────────────────────────────────────────
+// archived_at on vehicle_compliance: NULL = active, timestamp = archived.
+// Nothing is deleted. Both writes are tenant-scoped by RLS.
+function isArchivedPlate(plate){return !!(complianceData[plate]&&complianceData[plate].archived_at);}
+
+// vehicles.active := active for the tenant's row behind this normalised plate.
+// return=representation so a filter that matched nothing (0 rows back) is a
+// failure, not a silent 204 — the local mirror only moves when the DB did.
+async function patchVehicleActive(plate,active){
+  const raw=fleetPlateRaw[plate];
+  if(raw===undefined)return true; // no vehicles row → nothing to do
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicles?plate=eq.${encodeURIComponent(raw)}&select=plate`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({active})
+    });
+    if(!res.ok){console.error('[FleetDesk] vehicles.active update failed:',res.status,await res.text());return false;}
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){console.error('[FleetDesk] vehicles.active update matched no row for',raw);return false;}
+  }catch(err){console.error('[FleetDesk] vehicles.active update failed:',err);return false;}
+  if(active)fleetPlates.add(plate);else fleetPlates.delete(plate);
+  return true;
+}
+
+// Compliance row first (upsert creates it if the plate only lived in
+// `vehicles`), then vehicles.active follows where a vehicles row exists.
+// upsertCompliance passes an explicit null through, so restore writes a real
+// NULL. Returns {ok, vehicleFailed} so the caller can warn when the driver
+// app's picker did not change even though the compliance side did.
+async function setPlateArchived(plate,archived){
+  // Retry on an already-archived plate keeps the original stamp, so only the
+  // vehicles PATCH is effectively re-run.
+  const stamp=archived?((complianceData[plate]&&complianceData[plate].archived_at)||new Date().toISOString()):null;
+  if(!await upsertCompliance([{plate,archived_at:stamp}]))return{ok:false,vehicleFailed:false};
+  complianceData[plate]={...(complianceData[plate]||{plate}),archived_at:stamp};
+  const vehicleFailed=!await patchVehicleActive(plate,!archived);
+  return{ok:true,vehicleFailed};
+}
+
+// Driver-app sync check for a card. null = consistent, or no vehicles row.
+// 'visible' = archived but drivers still see it; 'hidden' = restored but not yet.
+// Only a failed / no-row vehicles PATCH (or a direct DB edit) can produce a
+// non-null here — in normal use every card returns null.
+function driverAppMismatch(plate){
+  if(fleetPlateRaw[plate]===undefined)return null;
+  const active=fleetPlates.has(plate),archived=isArchivedPlate(plate);
+  if(archived&&active)return'visible';
+  if(!archived&&!active)return'hidden';
+  return null;
+}
+
 // Plates the compliance tab lists (2026-09-04): the tenant's active vehicles
 // (vehicles table) plus every plate with a compliance row. Fuel-report plates
 // are NOT unioned any more — 22 vehicles no longer run kept resurfacing as
 // "Not set". Shared by the summary strip, cards, bulk table, CSV, the scan
 // table's plate list and the Maintenance tab's COF loop.
-function getCompliancePlates(){
+//
+// Archive build: archived plates are EXCLUDED by default — the safe failure
+// for a call site that forgets the option. Only the scan flow passes
+// {includeArchived:true}, so a scanned plate that matches an archived row is
+// recognised instead of being flagged as a new vehicle.
+function getCompliancePlates({includeArchived=false}={}){
   const plates=new Set(fleetPlates);
   Object.keys(complianceData).forEach(p=>plates.add(p));
-  return[...plates].sort();
+  return[...plates].filter(p=>includeArchived||!isArchivedPlate(p)).sort();
 }
 
 // Item counts per ladder tier across every vehicle (Not required excluded).
 function getComplianceAlertCounts(){
   const c={overdue:0,week:0,book:0,soon:0,ok:0,unknown:0,not_required:0};
   Object.values(complianceData).forEach(rec=>{
+    if(rec.archived_at)return; // archived = out of service, never "not road-legal"
     COMP_ITEMS.forEach(it=>{c[itemStatus(rec,it).status]++;});
   });
   return c;
@@ -3596,7 +3692,7 @@ async function addComplianceVehicle(){
 // Stage 2: everything overdue or inside the 45-day ladder (Not required excluded).
 function exportComplianceCSV(){
   const rows=[['Plate','Item','Expiry Date','Days Left','Status','Licence No']];
-  getCompliancePlates().forEach(plate=>{
+  getCompliancePlates().forEach(plate=>{ // archived excluded (default)
     const rec=complianceData[plate]||{};
     COMP_ITEMS.forEach(it=>{
       const st=itemStatus(rec,it);
@@ -3620,7 +3716,18 @@ async function renderDiscsTab(){
 }
 
 function renderDiscView(){
-  const plates=getCompliancePlates();
+  // "Show archived (n)": live count; hidden and forced off when nothing is archived
+  const archivedN=Object.values(complianceData).filter(r=>r.archived_at).length;
+  const saWrap=document.getElementById('discShowArchivedWrap'),saCb=document.getElementById('discShowArchivedCb');
+  if(archivedN===0){discShowArchived=false;if(saCb)saCb.checked=false;}
+  if(saWrap)saWrap.classList.toggle('hidden',archivedN===0);
+  const saCount=document.getElementById('discArchivedCount');
+  if(saCount)saCount.textContent=archivedN;
+  // Read the "Show archived" state once. `plates` feeds the cards; `livePlates`
+  // (archived removed) feeds the summary strip and the bulk table, so archived
+  // rows never inflate the counts and never become editable in bulk.
+  const plates=getCompliancePlates({includeArchived:discShowArchived});
+  const livePlates=discShowArchived?plates.filter(p=>!isArchivedPlate(p)):plates;
   const grid=document.getElementById('discsGrid');
   const bulkWrap=document.getElementById('discBulkWrap');
   const bulkBtn=document.getElementById('discBulkBtn');
@@ -3649,7 +3756,7 @@ function renderDiscView(){
   // Summary counts across all 3 items per vehicle — ladder tiers (Stage 2).
   // Vehicles that exist only in fuel reports (no compliance row) count as Not set.
   const c={overdue:0,week:0,book:0,soon:0,ok:0,unknown:0,not_required:0};
-  plates.forEach(p=>{
+  livePlates.forEach(p=>{
     const rec=complianceData[p]||{};
     COMP_ITEMS.forEach(it=>{c[itemStatus(rec,it).status]++;});
   });
@@ -3660,14 +3767,14 @@ function renderDiscView(){
     <div class="disc-summary-card ds-amber"><div class="disc-summary-label">⚠ Expiring Soon (≤45 Days)</div><div class="disc-summary-val">${c.soon}</div></div>
     <div class="disc-summary-card ds-green"><div class="disc-summary-label">✅ Valid</div><div class="disc-summary-val">${c.ok}</div></div>
     <div class="disc-summary-card"><div class="disc-summary-label">📋 Not Set</div><div class="disc-summary-val" style="color:var(--text3);">${c.unknown}</div></div>
-    <div class="disc-summary-card"><div class="disc-summary-label">🚘 Vehicles</div><div class="disc-summary-val">${plates.length}</div></div>
+    <div class="disc-summary-card"><div class="disc-summary-label">🚘 Vehicles</div><div class="disc-summary-val">${livePlates.length}</div>${discShowArchived?`<div style="font-size:10px;color:var(--text3);">+${plates.length-livePlates.length} archived</div>`:''}</div>
   `;
 
   if(discBulkMode){
     grid.classList.add('hidden');
     bulkWrap.classList.remove('hidden');
     if(bulkBtn)bulkBtn.textContent='⊞ Card View';
-    renderDiscBulk(plates);
+    renderDiscBulk(livePlates); // archived rows are read-only, never in the bulk editor
     return;
   }
   grid.classList.remove('hidden');
@@ -3679,10 +3786,12 @@ function renderDiscView(){
 function renderDiscCards(plates){
   const search=(document.getElementById('discSearch')?.value||'').toLowerCase();
   const filter=document.getElementById('discFilter')?.value||'all';
-  let list=plates.map(p=>({plate:p,rec:complianceData[p]||{plate:p},worst:worstComplianceStatus(complianceData[p])}));
+  let list=plates.map(p=>({plate:p,rec:complianceData[p]||{plate:p},worst:worstComplianceStatus(complianceData[p]),archived:isArchivedPlate(p)}));
   if(search)list=list.filter(v=>v.plate.toLowerCase().includes(search));
-  if(filter!=='all')list=list.filter(v=>COMP_ITEMS.some(it=>itemStatus(v.rec,it).status===filter));
-  list.sort((a,b)=>COMP_TIER_ORDER[a.worst]-COMP_TIER_ORDER[b.worst]||a.plate.localeCompare(b.plate));
+  // Archived cards have no ladder status, so any status filter hides them
+  if(filter!=='all')list=list.filter(v=>!v.archived&&COMP_ITEMS.some(it=>itemStatus(v.rec,it).status===filter));
+  // Archived last, then worst-first, then plate
+  list.sort((a,b)=>(a.archived-b.archived)||COMP_TIER_ORDER[a.worst]-COMP_TIER_ORDER[b.worst]||a.plate.localeCompare(b.plate));
 
   if(list.length===0){
     document.getElementById('discsGrid').innerHTML='<p class="tyre-empty">No vehicles match this search / filter.</p>';
@@ -3693,6 +3802,34 @@ function renderDiscCards(plates){
     const{plate,rec,worst}=v;
     const id=plateDomId(plate);
     const pj=escAttr(JSON.stringify(plate));
+
+    // Driver-app out-of-sync strip — invisible unless vehicles.active disagrees
+    // with archived_at (a failed PATCH). Either direction can fail, so it sits
+    // on normal and archived cards alike.
+    const sync=driverAppMismatch(plate);
+    const syncStrip=sync?`<div class="disc-sync-strip"><span>⚠ ${sync==='visible'?'Drivers can still see this vehicle in the driver app.':'Drivers cannot see this vehicle in the driver app yet.'}</span><button class="disc-edit-btn" onclick="retryDriverAppSync(${pj},this)">↻ Retry</button></div>`:'';
+
+    if(v.archived){
+      // Read-only: dates for reference only — no chips, no renew / Not required,
+      // no edit or renewal forms. Controls: Restore, and Archive as a re-run.
+      const rowsRO=COMP_ITEMS.map(it=>`<div class="comp-row">
+        <span class="comp-item-label">${it.icon} ${it.label}</span>
+        <span class="comp-date">${rec[it.nrField]?'Not required':rec[it.expiryField]?fmtDDMMYYYY(rec[it.expiryField]):'—'}</span>
+      </div>`).join('');
+      return`<div class="disc-card dc-archived" style="animation-delay:${Math.min(vi,20)*0.03}s">
+        <div class="disc-card-header">
+          <span class="disc-card-plate">${escapeHtml(plate)}</span>
+          <span class="disc-card-badge dcb-archived">Archived ${fmtDDMMYYYY(rec.archived_at)}</span>
+        </div>
+        <div class="disc-card-body">
+          ${rowsRO}
+          ${rec.make_model?`<div class="disc-info-row" style="margin-top:4px;"><span class="disc-info-label">Make / Model</span><span class="disc-info-val">${escapeHtml(rec.make_model)}</span></div>`:''}
+        </div>
+        ${syncStrip}
+        <div class="disc-card-footer"><button class="disc-edit-btn disc-archive-btn" onclick="archiveComplianceVehicle(${pj},this)" title="Re-run the archive">🗄 Archive</button><button class="disc-edit-btn" onclick="restoreComplianceVehicle(${pj},this)">↩ Restore</button></div>
+      </div>`;
+    }
+
     // Card colour / badge from the worst item (Stage 2 ladder)
     const cardClass={overdue:'dc-red',week:'dc-red',book:'dc-orange',soon:'dc-amber',ok:'dc-green'}[worst]||'';
     const badgeClass={overdue:'dcb-expired',week:'dcb-expired',book:'dcb-book',soon:'dcb-warn',ok:'dcb-ok',not_required:'dcb-nr'}[worst]||'';
@@ -3728,7 +3865,8 @@ function renderDiscCards(plates){
         ${rec.notes?`<div style="font-size:11px;color:var(--amber);font-style:italic;margin-top:4px;">📝 ${escapeHtml(rec.notes)}</div>`:''}
       </div>
       <div class="disc-renew-form" id="crf-${id}"></div>
-      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleComplianceEdit(${pj})">✎ Edit Details</button></div>
+      ${syncStrip}
+      <div class="disc-card-footer"><button class="disc-edit-btn disc-archive-btn" onclick="archiveComplianceVehicle(${pj},this)" title="Take this vehicle out of service — it leaves the list but nothing is deleted">🗄 Archive</button><button class="disc-edit-btn" onclick="toggleComplianceEdit(${pj})">✎ Edit Details</button></div>
       <div class="disc-edit-form" id="cef-${id}">
         <div class="def-row">
           <div><label>Make / Model</label><input type="text" id="ce-make-${id}" value="${escapeHtml(rec.make_model||'')}" placeholder="e.g. Yutong ZK6122H"></div>
@@ -3764,6 +3902,71 @@ async function setNotRequired(plate,key,flag){
   if(!await upsertCompliance([row])){alert('Could not save. Please check your connection and try again.');return;}
   complianceData[plate]={...(complianceData[plate]||{}),...row};
   renderDiscView();updateDiscTabBadge();renderAlertBanner();
+}
+
+// ── Archive / restore actions (2026-09-04) ───────────────────────────────────
+// confirm() / alert() match the other destructive-looking flows on this page
+// (delete report, close scan). The plate is data, not markup, so it goes into
+// the dialog text as-is. Re-render is the same triad every save path uses:
+// cards + summary strip, tab badge, Overview banner. The Maintenance tab
+// recomputes its COF flags on entry, so it needs nothing here.
+//
+// Double-click guard: setPlateArchived is two round trips, so a plate that is
+// mid-flight is refused and the clicked button is disabled until it settles.
+const compBusyPlates=new Set();
+async function archiveComplianceVehicle(plate,btn){
+  if(compBusyPlates.has(plate))return;
+  const retry=isArchivedPlate(plate); // already archived → vehicles PATCH failed earlier, just retry it
+  if(!retry){
+    const inVehicles=!!fleetPlateRaw[plate];
+    let msg=`Archive ${plate}?\n\nIt will leave the Disc Renewal list and stop counting towards alerts. Nothing is deleted — tick "Show archived" to see or restore it later.`;
+    if(inVehicles)msg+=`\n\n⚠ ${plate} is also a fleet vehicle: it will disappear from the driver app's vehicle picker until it is restored.`;
+    if(!confirm(msg))return;
+  }
+  compBusyPlates.add(plate);
+  const label=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Archiving…';}
+  const r=await setPlateArchived(plate,true);
+  compBusyPlates.delete(plate);
+  if(!r.ok){
+    if(btn){btn.disabled=false;btn.textContent=label;}
+    alert(`Could not archive ${plate}. Please check your connection and try again.`);
+    return;
+  }
+  if(r.vehicleFailed)alert(`${plate} is archived, but drivers can still see it in the driver app. Its card shows a Retry.`);
+  renderDiscView();updateDiscTabBadge();renderAlertBanner();
+}
+
+async function restoreComplianceVehicle(plate,btn){
+  if(compBusyPlates.has(plate))return;
+  compBusyPlates.add(plate);
+  const label=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Restoring…';}
+  const r=await setPlateArchived(plate,false);
+  compBusyPlates.delete(plate);
+  if(!r.ok){
+    if(btn){btn.disabled=false;btn.textContent=label;}
+    alert(`Could not restore ${plate}. Please check your connection and try again.`);
+    return;
+  }
+  if(r.vehicleFailed)alert(`${plate} is restored, but drivers cannot see it in the driver app yet. Its card shows a Retry.`);
+  renderDiscView();updateDiscTabBadge();renderAlertBanner();
+}
+
+// Retry strip action: re-run only the vehicles PATCH, toward the compliance
+// state (archived → inactive, not archived → active).
+async function retryDriverAppSync(plate,btn){
+  if(compBusyPlates.has(plate))return;
+  compBusyPlates.add(plate);
+  if(btn){btn.disabled=true;btn.textContent='Retrying…';}
+  const ok=await patchVehicleActive(plate,!isArchivedPlate(plate));
+  compBusyPlates.delete(plate);
+  if(!ok){
+    if(btn){btn.disabled=false;btn.textContent='↻ Retry';}
+    alert(`The driver app still could not be updated for ${plate}. Please check your connection and try again.`);
+    return;
+  }
+  renderDiscView();
 }
 
 // ── Stage 2: renewal form (replaces the confirm()/prompt() flow) ─────────────
@@ -4139,7 +4342,9 @@ function applyScanResult(row,res){
   const anyDate=SCAN_FIELDS.some(x=>x.date&&f[x.key]);
   if(!f.plate&&!anyDate){row.status='unreadable';row.note='Nothing readable — retake with the whole document in frame';row.selected=false;return;}
   row.status='done';row.note='';
-  row.selected=SCAN_PLATE_RE.test(f.plate);   // no plate → cannot save → starts unticked
+  // no plate → cannot save → starts unticked; an ARCHIVED match also starts
+  // unticked so its data is never written unless the user opts in to restore
+  row.selected=SCAN_PLATE_RE.test(f.plate)&&!isArchivedPlate(f.plate);
 }
 
 function retryScanRow(id){
@@ -4174,7 +4379,10 @@ async function rotateScanRow(id){
 function scanField(id,key,value){
   const row=scanRows.find(r=>r.id===id);
   if(!row)return;
+  const wasArchived=key==='plate'&&isArchivedPlate(row.fields.plate);
   row.fields[key]=key==='plate'?normalisePlate(value):value;
+  // Plate edited onto an archived vehicle → untick, same default as a fresh read
+  if(key==='plate'&&!wasArchived&&isArchivedPlate(row.fields.plate))row.selected=false;
   updateScanStatus(row);
   updateScanSaveBtn();
 }
@@ -4207,15 +4415,20 @@ function scanStatusHtml(row){
     case 'limited':return`<span class="scan-status-warn">⏸ ${escapeHtml(row.note)}</span>${retry}`;
     case 'error':return`<span class="scan-status-bad">⚠ ${escapeHtml(row.note)}</span>${retry}`;
     case 'unreadable':return`<span class="scan-status-bad">⚠ ${escapeHtml(row.note)}</span>${retry}`;
-    case 'saved':return'<span class="scan-status-ok">✅ Saved</span>';
+    case 'saved':return row.restored?'<span class="scan-status-ok">✅ Restored &amp; saved</span>':'<span class="scan-status-ok">✅ Saved</span>';
     case 'done':{
       const flags=scanRowFlags(row);
       const plate=row.fields.plate;
       const known=plate&&complianceData[plate];
-      const inFleet=plate&&getCompliancePlates().includes(plate);
+      const inFleet=plate&&getCompliancePlates({includeArchived:true}).includes(plate);
+      // Archived is checked BEFORE known/inFleet: an archived plate is a
+      // decision to restore, never "Update" and never "New vehicle".
+      const archived=plate&&isArchivedPlate(plate);
       const parts=[];
       if(flags.length)parts.push(`<span class="scan-status-warn">⚠ Check: ${escapeHtml(flags.join(', '))}</span>`);
-      if(plate)parts.push(known?'<span class="scan-status-ok">Update</span>':inFleet?'<span class="scan-status-ok">New record</span>':'<span class="scan-status-warn">New vehicle</span>');
+      if(plate)parts.push(archived
+        ?'<span class="scan-status-warn" title="This vehicle is archived. Tick the row to restore it and apply the scanned values; leave it unticked to keep it archived and save nothing.">🗄 Archived — restore?</span>'
+        :known?'<span class="scan-status-ok">Update</span>':inFleet?'<span class="scan-status-ok">New record</span>':'<span class="scan-status-warn">New vehicle</span>');
       if(row.confidence==='low')parts.push('<span class="scan-status-warn">low confidence</span>');
       // Stage 2: a date read for an item this vehicle has marked Not required
       // is saved but stays hidden behind the flag — say so here.
@@ -4253,7 +4466,7 @@ function scanRowHtml(row){
 
 function renderScanTable(){
   const wrap=document.getElementById('discScanWrap');
-  const plates=getCompliancePlates();
+  const plates=getCompliancePlates({includeArchived:true}); // datalist must offer archived plates too
   wrap.innerHTML=`
     <div class="disc-scan-bar">
       <div class="disc-scan-hint" id="discScanHint"></div>
@@ -4287,6 +4500,9 @@ function updateScanStatus(row){
   const cell=tr.querySelector('.scan-status');
   if(cell)cell.innerHTML=scanStatusHtml(row);
   tr.className=scanRowFlags(row).length?'scan-flag':'';
+  // Mirror row.selected — scanField may have unticked an archived match
+  const cb=tr.querySelector('.scan-cb input');
+  if(cb)cb.checked=!!row.selected;
   const plateInput=tr.querySelector('input[list="scanPlateList"]');
   if(plateInput){const v=row.fields.plate;plateInput.className=SCAN_PLATE_RE.test(v)?'':(v?'scan-bad':'scan-empty');}
   SCAN_FIELDS.filter(x=>x.date).forEach((x,i)=>{
@@ -4349,19 +4565,41 @@ async function saveLicenceScan(){
   if(problems.length){alert('Please fix before saving:\n\n'+problems.join('\n'));return;}
   const btn=document.getElementById('discScanSaveBtn');
   btn.disabled=true;btn.textContent='Saving…';
-  const failed=[];
+  const failed=[],restored=[],driverAppFailed=[];
   for(const r of rows){
-    const payload={plate:r.fields.plate};
+    const plate=r.fields.plate;
+    // Belt and braces: an unticked archived row must never be written. The
+    // filter above already excludes it; this guards the loop against future edits.
+    if(!r.selected)continue;
+    if(isArchivedPlate(plate)){
+      // Ticked archived row = restore first (compliance, then vehicles.active via
+      // the shared path). If the restore fails the scanned data is NOT written,
+      // so the archived row stays exactly as it was.
+      if(compBusyPlates.has(plate)){failed.push(plate);updateScanRow(r);continue;}
+      compBusyPlates.add(plate);
+      const res=await setPlateArchived(plate,false);
+      compBusyPlates.delete(plate);
+      if(!res.ok){failed.push(plate);updateScanRow(r);continue;}
+      if(res.vehicleFailed)driverAppFailed.push(plate);
+      r.restored=true;restored.push(plate);
+    }
+    const payload={plate};
     SCAN_FIELDS.forEach(x=>{if(x.key!=='plate'&&r.fields[x.key])payload[x.col]=r.fields[x.key].trim();});
     if(await upsertCompliance([payload])){
-      complianceData[payload.plate]={...(complianceData[payload.plate]||{}),...payload};
+      complianceData[plate]={...(complianceData[plate]||{}),...payload};
       r.status='saved';r.selected=false;
-    }else failed.push(payload.plate);
+    }else failed.push(plate);
     updateScanRow(r);
   }
   updateDiscTabBadge();renderAlertBanner();
+  // One end-of-save summary, shown only when there is something to say:
+  // restores (back in service), driver-app sync failures, and save failures.
+  const summary=[];
+  if(restored.length)summary.push(`${restored.join(', ')} restored and updated — back in service.`);
+  if(driverAppFailed.length)summary.push(`${driverAppFailed.join(', ')} restored, but drivers cannot see ${driverAppFailed.length===1?'it':'them'} in the driver app yet. The card shows a Retry.`);
+  if(failed.length)summary.push(`Saved ${rows.length-failed.length} of ${rows.length}. Could not save: ${failed.join(', ')}. Check your connection and try again.`);
+  if(summary.length)alert(summary.join('\n\n'));
   if(failed.length){
-    alert(`Saved ${rows.length-failed.length} of ${rows.length}. Could not save: ${failed.join(', ')}. Check your connection and try again.`);
     updateScanSaveBtn();
     return;
   }
@@ -4779,7 +5017,7 @@ function computeMaintFlags(){
   // falls back to an estimate from its last COF job (+ COMP_RENEW_MONTHS),
   // labelled as such. Same plate list as the Disc Renewal tab (active
   // vehicles + compliance rows), so the two tabs always agree.
-  getCompliancePlates().forEach(plate=>{
+  getCompliancePlates().forEach(plate=>{ // archived excluded (default)
     const rec=complianceData[plate];
     if(rec&&rec.cof_not_required)return;
     let expiryIso=rec&&rec.cof_expiry?rec.cof_expiry:null,estimated=false;
