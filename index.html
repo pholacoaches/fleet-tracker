@@ -3395,6 +3395,7 @@ const COMP_TIER_LABEL={overdue:'Overdue',week:'This week',book:'Book now',soon:'
 let complianceData={};   // by plate
 let discBulkMode=false;
 let discScanMode=false;  // licence-scan approval table open (see LICENCE SCAN below)
+let discShowArchived=false; // "Show archived" tick on Disc Renewal (archive build); read once in renderDiscView
 
 // Local-date ISO (YYYY-MM-DD). toISOString() would shift a local midnight to
 // the previous day in UTC+2, which the old renew flow silently did.
@@ -3549,10 +3550,15 @@ async function setPlateArchived(plate,archived){
 // are NOT unioned any more — 22 vehicles no longer run kept resurfacing as
 // "Not set". Shared by the summary strip, cards, bulk table, CSV, the scan
 // table's plate list and the Maintenance tab's COF loop.
-function getCompliancePlates(){
+//
+// Archive build: archived plates are EXCLUDED by default — the safe failure
+// for a call site that forgets the option. Only the scan flow passes
+// {includeArchived:true}, so a scanned plate that matches an archived row is
+// recognised instead of being flagged as a new vehicle.
+function getCompliancePlates({includeArchived=false}={}){
   const plates=new Set(fleetPlates);
   Object.keys(complianceData).forEach(p=>plates.add(p));
-  return[...plates].sort();
+  return[...plates].filter(p=>includeArchived||!isArchivedPlate(p)).sort();
 }
 
 // Item counts per ladder tier across every vehicle (Not required excluded).
@@ -3649,7 +3655,7 @@ async function addComplianceVehicle(){
 // Stage 2: everything overdue or inside the 45-day ladder (Not required excluded).
 function exportComplianceCSV(){
   const rows=[['Plate','Item','Expiry Date','Days Left','Status','Licence No']];
-  getCompliancePlates().forEach(plate=>{
+  getCompliancePlates().forEach(plate=>{ // archived excluded (default)
     const rec=complianceData[plate]||{};
     COMP_ITEMS.forEach(it=>{
       const st=itemStatus(rec,it);
@@ -3673,7 +3679,9 @@ async function renderDiscsTab(){
 }
 
 function renderDiscView(){
-  const plates=getCompliancePlates();
+  // Read the "Show archived" state once; summary strip, bulk table and cards
+  // all work from this one array.
+  const plates=getCompliancePlates({includeArchived:discShowArchived});
   const grid=document.getElementById('discsGrid');
   const bulkWrap=document.getElementById('discBulkWrap');
   const bulkBtn=document.getElementById('discBulkBtn');
@@ -4265,7 +4273,7 @@ function scanStatusHtml(row){
       const flags=scanRowFlags(row);
       const plate=row.fields.plate;
       const known=plate&&complianceData[plate];
-      const inFleet=plate&&getCompliancePlates().includes(plate);
+      const inFleet=plate&&getCompliancePlates({includeArchived:true}).includes(plate);
       const parts=[];
       if(flags.length)parts.push(`<span class="scan-status-warn">⚠ Check: ${escapeHtml(flags.join(', '))}</span>`);
       if(plate)parts.push(known?'<span class="scan-status-ok">Update</span>':inFleet?'<span class="scan-status-ok">New record</span>':'<span class="scan-status-warn">New vehicle</span>');
@@ -4306,7 +4314,7 @@ function scanRowHtml(row){
 
 function renderScanTable(){
   const wrap=document.getElementById('discScanWrap');
-  const plates=getCompliancePlates();
+  const plates=getCompliancePlates({includeArchived:true}); // datalist must offer archived plates too
   wrap.innerHTML=`
     <div class="disc-scan-bar">
       <div class="disc-scan-hint" id="discScanHint"></div>
@@ -4832,7 +4840,7 @@ function computeMaintFlags(){
   // falls back to an estimate from its last COF job (+ COMP_RENEW_MONTHS),
   // labelled as such. Same plate list as the Disc Renewal tab (active
   // vehicles + compliance rows), so the two tabs always agree.
-  getCompliancePlates().forEach(plate=>{
+  getCompliancePlates().forEach(plate=>{ // archived excluded (default)
     const rec=complianceData[plate];
     if(rec&&rec.cof_not_required)return;
     let expiryIso=rec&&rec.cof_expiry?rec.cof_expiry:null,estimated=false;
