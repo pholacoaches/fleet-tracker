@@ -112,7 +112,11 @@ const COMPLIANCE_PROMPT =
   'This is a photo of a South African combined "Motor Vehicle Licence, Licence Disc and Operator Card" document ' +
   '(one page, English/Afrikaans). The photo may be rotated sideways or upside down — read it anyway.\n' +
   'The bottom of the page has two circles: the bottom-LEFT circle is the Licence Disc & Roadworthy Certificate; ' +
-  'the bottom-RIGHT circle is the Operator Card. Read these fields:\n' +
+  'the bottom-RIGHT circle is the Operator Card. ' +
+  'Some documents (trailers, light vehicles) have only ONE circle — a licence disc with no roadworthy ' +
+  'certificate and no operator card. Then disc_expiry is that circle\'s "Date of expiry / Vervaldatum", ' +
+  'and cof_expiry and op_licence_expiry are both null.\n' +
+  'Read these fields:\n' +
   '1. plate: the value of the "Licence number / Lisensienommer" field ONLY. This is the registration mark on the ' +
   'number plate, in the format letters-digits-letters such as LY14YHGP or DJ17PTGP (Gauteng plates end in GP). ' +
   'The "Vehicle register number / Voertuigregisternommer" field (values like NVP102W or RPF655W) is an internal ' +
@@ -125,6 +129,7 @@ const COMPLIANCE_PROMPT =
   '5. disc_no: the licence disc number, if printed and clearly legible.\n' +
   '6. op_licence_no: the operator card / operating licence number, if printed and clearly legible.\n' +
   '7. make_model: the vehicle make and model, if printed.\n' +
+  'A "Roadworthy test date", "Date of test" or "Datum van toets" is NEVER an expiry — ignore it. ' +
   'Write every date as YYYY-MM-DD. If any value is missing, obscured or not clearly legible, use null for that ' +
   'field — never guess, infer or copy a value from elsewhere on the page. ' +
   'ALWAYS answer with the JSON object and nothing else — even if the photo is rotated, blurry, or nothing at all ' +

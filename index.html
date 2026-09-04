@@ -614,7 +614,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 20px; box-shadow:var(--shadow); flex:1; min-width:140px; position:relative; overflow:hidden; }
 .disc-summary-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--accent); }
 .disc-summary-card.ds-red::before { background:var(--red); }
-.disc-summary-card.ds-amber::before { background:var(--amber); }
+.disc-summary-card.ds-amber::before { background:#F59F00; }
+.disc-summary-card.ds-orange::before { background:#D9480F; }
+.disc-summary-card.ds-orange .disc-summary-val { color:#D9480F; }
 .disc-summary-card.ds-green::before { background:var(--green); }
 .disc-summary-label { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text3); font-weight:700; margin-bottom:6px; }
 .disc-summary-val { font-family:var(--font-mono); font-size:26px; font-weight:700; color:var(--accent); }
@@ -624,14 +626,17 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .discs-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:14px; }
 .disc-card { background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; animation:fadeUp 0.35s ease both; }
 .disc-card.dc-red { border-left-color:var(--red); }
-.disc-card.dc-amber { border-left-color:var(--amber); }
+.disc-card.dc-orange { border-left-color:#D9480F; }
+.disc-card.dc-amber { border-left-color:#F59F00; }
 .disc-card.dc-green { border-left-color:var(--green); }
 .disc-card-header { display:flex; align-items:center; justify-content:space-between; padding:11px 14px; background:var(--surface2); border-bottom:1px solid var(--border); }
 .disc-card-plate { font-family:var(--font-mono); font-size:14px; font-weight:700; }
 .disc-card-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; }
 .dcb-expired { background:var(--red-light); color:var(--red); }
-.dcb-warn { background:var(--amber-light); color:var(--amber); }
+.dcb-book { background:#FFE8CC; color:#D9480F; }
+.dcb-warn { background:#FFF3BF; color:#7C5C00; }
 .dcb-ok { background:var(--green-light); color:var(--green); }
+.dcb-nr { background:var(--surface2); color:var(--text3); }
 .disc-card-body { padding:11px 14px; display:flex; flex-direction:column; gap:6px; }
 .disc-info-row { display:flex; justify-content:space-between; align-items:center; font-size:11px; }
 .disc-info-label { color:var(--text3); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
@@ -658,18 +663,41 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-edit-form input[type=date] { font-family:var(--font-mono); }
 
 /* COMPLIANCE ROWS (3 items per vehicle) */
-.comp-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); }
+.comp-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); flex-wrap:wrap; row-gap:4px; }
 .comp-row:last-child { border-bottom:none; }
+/* Stage 2: renew + not-required sit together and drop to their own line when the row is tight */
+.comp-actions { display:flex; align-items:center; gap:6px; margin-left:auto; }
 .comp-item-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); flex:0 0 118px; }
 .comp-date { font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--text2); flex:1; }
 .comp-chip { font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap; }
-.cc-expired { background:var(--red); color:#fff; }
-.cc-urgent { background:var(--red-light); color:var(--red); }
-.cc-warn { background:var(--amber-light); color:var(--amber); }
+/* Stage 2 ladder chips: overdue (solid red) → week (red) → book (orange) → soon (amber) → ok → not set / not required (grey) */
+.cc-overdue { background:var(--red); color:#fff; }
+.cc-week { background:var(--red-light); color:var(--red); }
+.cc-book { background:#FFE8CC; color:#D9480F; }
+.cc-soon { background:#FFF3BF; color:#7C5C00; }
 .cc-ok { background:var(--green-light); color:var(--green); }
 .cc-unknown { background:var(--surface2); color:var(--text3); }
+.cc-not_required { background:var(--surface2); color:var(--text3); border:1px dashed var(--border2); }
+.comp-illegal { font-size:10px; font-weight:700; color:var(--red); padding:0 0 6px 0; }
 .comp-renew-btn { font-size:10px; padding:2px 9px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); color:var(--text2); cursor:pointer; font-family:var(--font); font-weight:700; white-space:nowrap; transition:border-color 0.15s,color 0.15s; }
 .comp-renew-btn:hover { border-color:var(--green); color:var(--green); }
+.comp-nr-link { font-size:9px; padding:2px 6px; border:none; background:none; color:var(--text3); cursor:pointer; font-family:var(--font); font-weight:700; white-space:nowrap; text-decoration:underline dotted; }
+.comp-nr-link:hover { color:var(--text); }
+.ce-nr { display:inline-flex; align-items:center; gap:4px; font-size:10px !important; color:var(--text3) !important; margin-top:3px; font-weight:600 !important; }
+.ce-nr input { width:auto !important; margin:0; }
+/* Renewal form (Stage 2) — same look as the edit form */
+.disc-renew-form { padding:12px 14px; border-top:1px solid var(--border); background:var(--green-light); display:none; flex-direction:column; gap:10px; }
+.disc-renew-form.open { display:flex; }
+.disc-renew-form label { font-size:11px; font-weight:700; color:var(--text2); display:block; margin-bottom:3px; }
+.disc-renew-form input { width:100%; padding:6px 10px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; color:var(--text); background:var(--surface); outline:none; }
+.disc-renew-form input:focus { border-color:var(--accent); }
+.disc-renew-form input[type=date] { font-family:var(--font-mono); }
+.disc-renew-form input:disabled { color:var(--text3); background:var(--surface2); }
+.drf-title { font-size:12px; font-weight:700; color:var(--green); }
+.drf-hint { font-size:10px; color:var(--text3); margin-top:3px; }
+.drf-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.drf-msg { font-size:11px; color:var(--text3); }
+.drf-msg.bad { color:var(--red); font-weight:700; }
 
 /* BULK EDIT TABLE */
 .disc-bulk-wrap { overflow-x:auto; }
@@ -1083,14 +1111,16 @@ input[type=file] { display: none; }
         style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-family:var(--font);font-size:12px;outline:none;width:150px;color:var(--text);background:var(--surface2);">
       <select id="discFilter" onchange="renderDiscView()" class="sort-select">
         <option value="all">All statuses</option>
-        <option value="expired">🔴 Expired</option>
-        <option value="urgent">🚨 Urgent (≤14 days)</option>
-        <option value="warn">⚠ Due soon (≤60 days)</option>
+        <option value="overdue">🔴 Overdue</option>
+        <option value="week">🚨 This week (≤7 days)</option>
+        <option value="book">📞 Book now (≤30 days)</option>
+        <option value="soon">⚠ Expiring soon (≤45 days)</option>
         <option value="ok">✅ Valid</option>
         <option value="unknown">📋 Not set</option>
+        <option value="not_required">➖ Not required</option>
       </select>
       <button class="btn btn-outline" onclick="toggleDiscBulk()" id="discBulkBtn" style="font-size:11px;padding:6px 12px;">≡ Bulk Edit</button>
-      <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;">📥 60-Day CSV</button>
+      <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;">📥 45-Day CSV</button>
       <button class="btn btn-outline" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;">＋ Add Vehicle</button>
       <!-- Compliance photo-scan Stage 1: multi-select, no capture attribute so
            desktop gets a file picker and phones still offer the camera. -->
@@ -3340,35 +3370,65 @@ async function pollForNewSubmissions(){
 }
 
 // ── DISC RENEWAL / COMPLIANCE (Supabase-backed) ──────────────────────────────
-const COMP_WARN_DAYS=60;
-const COMP_URGENT_DAYS=14;
+// Compliance Stage 2 (2026-09-04): alert ladder. Replaces the old 14/60-day
+// windows. Per item, then per vehicle = worst item. "Not required" (per-item
+// boolean on the row) is a seventh state that never counts and never alerts.
+//   overdue   past expiry            solid red   "not road-legal"
+//   week      0–7 days               red         "expires this week"
+//   book      8–30 days              orange      "book now"
+//   soon      31–45 days             amber       "expiring soon"
+//   ok        beyond 45 days         green
+//   unknown   no date                grey        "Not set"
+//   not_required                     grey        "Not required"
+const COMP_LADDER_DAYS={week:7,book:30,soon:45};
+// Suggested next expiry for EVERY item's renewal form and for the
+// Maintenance tab's jobs-derived COF estimate. Never a hardcoded 6.
+const COMP_RENEW_MONTHS=12;
 const COMP_ITEMS=[
-  {key:'licence_disc',label:'Licence Disc',icon:'💿',expiryField:'licence_disc_expiry',noField:'licence_disc_no',costField:'licence_disc_cost',renewMonths:12},
-  {key:'cof',label:'COF (6-monthly)',icon:'🛠',expiryField:'cof_expiry',noField:null,costField:'cof_cost',renewMonths:6},
-  {key:'operating_licence',label:'Operating Licence',icon:'🚏',expiryField:'operating_licence_expiry',noField:'operating_licence_no',costField:'operating_licence_cost',renewMonths:null}
+  {key:'licence_disc',label:'Licence Disc',icon:'💿',expiryField:'licence_disc_expiry',noField:'licence_disc_no',costField:'licence_disc_cost',nrField:'licence_disc_not_required'},
+  {key:'cof',label:'COF',icon:'🛠',expiryField:'cof_expiry',noField:null,costField:'cof_cost',nrField:'cof_not_required'},
+  {key:'operating_licence',label:'Operating Licence',icon:'🚏',expiryField:'operating_licence_expiry',noField:'operating_licence_no',costField:'operating_licence_cost',nrField:'operating_licence_not_required'}
 ];
+const COMP_TIER_ORDER={overdue:0,week:1,book:2,soon:3,ok:4,unknown:5,not_required:6};
+const COMP_ALERT_TIERS=['overdue','week','book','soon'];
+const COMP_TIER_LABEL={overdue:'Overdue',week:'This week',book:'Book now',soon:'Expiring soon',ok:'Valid',unknown:'Not set',not_required:'Not required'};
 let complianceData={};   // by plate
 let discBulkMode=false;
 let discScanMode=false;  // licence-scan approval table open (see LICENCE SCAN below)
 
-function complianceStatus(expiry){  // expiry: 'YYYY-MM-DD' or null
-  if(!expiry)return{status:'unknown',days:null};
-  const d=new Date(expiry+'T00:00:00');
-  if(isNaN(d))return{status:'unknown',days:null};
-  const today=new Date();today.setHours(0,0,0,0);
-  const days=Math.round((d-today)/(1000*60*60*24));
-  if(days<0)return{status:'expired',days};
-  if(days<=COMP_URGENT_DAYS)return{status:'urgent',days};
-  if(days<=COMP_WARN_DAYS)return{status:'warn',days};
-  return{status:'ok',days};
+// Local-date ISO (YYYY-MM-DD). toISOString() would shift a local midnight to
+// the previous day in UTC+2, which the old renew flow silently did.
+function isoLocal(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function addMonthsIso(iso,months){
+  const d=iso?new Date(iso+'T00:00:00'):new Date();
+  if(isNaN(d))return null;
+  d.setHours(0,0,0,0);d.setMonth(d.getMonth()+months);
+  return isoLocal(d);
 }
 
+// expiry: 'YYYY-MM-DD' or null; notRequired: the item's flag on the row.
+// Returns {status, days, chip (card chip text), label (report / CSV word)}.
+function complianceStatus(expiry,notRequired){
+  if(notRequired)return{status:'not_required',days:null,chip:'Not required',label:COMP_TIER_LABEL.not_required};
+  if(!expiry)return{status:'unknown',days:null,chip:'Not set',label:COMP_TIER_LABEL.unknown};
+  const d=new Date(expiry+'T00:00:00');
+  if(isNaN(d))return{status:'unknown',days:null,chip:'Not set',label:COMP_TIER_LABEL.unknown};
+  const today=new Date();today.setHours(0,0,0,0);
+  const days=Math.round((d-today)/(1000*60*60*24));
+  if(days<0)return{status:'overdue',days,chip:`${-days}d overdue`,label:COMP_TIER_LABEL.overdue};
+  if(days<=COMP_LADDER_DAYS.week)return{status:'week',days,chip:days===0?'expires today':`${days}d · this week`,label:COMP_TIER_LABEL.week};
+  if(days<=COMP_LADDER_DAYS.book)return{status:'book',days,chip:`${days}d · book now`,label:COMP_TIER_LABEL.book};
+  if(days<=COMP_LADDER_DAYS.soon)return{status:'soon',days,chip:`${days}d · expiring soon`,label:COMP_TIER_LABEL.soon};
+  return{status:'ok',days,chip:`${days}d`,label:COMP_TIER_LABEL.ok};
+}
+// Status of one item on one vehicle record (flag-aware).
+function itemStatus(rec,it){return complianceStatus(rec?rec[it.expiryField]:null,!!(rec&&rec[it.nrField]));}
+
 function worstComplianceStatus(rec){
-  const order={expired:0,urgent:1,warn:2,ok:3,unknown:4};
-  let worst='unknown';
+  let worst='not_required';
   COMP_ITEMS.forEach(it=>{
-    const s=complianceStatus(rec?rec[it.expiryField]:null).status;
-    if(order[s]<order[worst])worst=s;
+    const s=itemStatus(rec,it).status;
+    if(COMP_TIER_ORDER[s]<COMP_TIER_ORDER[worst])worst=s;
   });
   return worst;
 }
@@ -3423,24 +3483,20 @@ function getCompliancePlates(){
   return[...plates].sort();
 }
 
+// Item counts per ladder tier across every vehicle (Not required excluded).
 function getComplianceAlertCounts(){
-  let expired=0,urgent=0,warn=0;
+  const c={overdue:0,week:0,book:0,soon:0,ok:0,unknown:0,not_required:0};
   Object.values(complianceData).forEach(rec=>{
-    COMP_ITEMS.forEach(it=>{
-      const s=complianceStatus(rec[it.expiryField]).status;
-      if(s==='expired')expired++;
-      else if(s==='urgent')urgent++;
-      else if(s==='warn')warn++;
-    });
+    COMP_ITEMS.forEach(it=>{c[itemStatus(rec,it).status]++;});
   });
-  return{expired,urgent,warn};
+  return c;
 }
 
 function updateDiscTabBadge(){
   const badge=document.getElementById('discTabBadge');
   if(!badge)return;
   const c=getComplianceAlertCounts();
-  const total=c.expired+c.urgent+c.warn;
+  const total=COMP_ALERT_TIERS.reduce((n,t)=>n+c[t],0);
   if(total>0){badge.textContent=total>99?'99+':total;badge.style.display='flex';}
   else{badge.style.display='none';}
 }
@@ -3458,9 +3514,10 @@ function renderAlertBanner(){
   if(highSpend.length>0)alerts.push(`🔴 ${highSpend.length} vehicle(s) are significantly above fleet average spend`);
   if(competitor.length>0)alerts.push(`⛽ ${competitor.length} vehicle(s) used competitor fuel stations`);
   const cc=getComplianceAlertCounts();
-  if(cc.expired>0)alerts.push(`📋 ${cc.expired} compliance item(s) EXPIRED — disc, COF or operating licence`);
-  if(cc.urgent>0)alerts.push(`🚨 ${cc.urgent} compliance item(s) expire within 14 days`);
-  if(cc.warn>0)alerts.push(`📋 ${cc.warn} compliance item(s) due within 60 days`);
+  if(cc.overdue>0)alerts.push(`🔴 ${cc.overdue} compliance item(s) OVERDUE — vehicle(s) not road-legal until renewed`);
+  if(cc.week>0)alerts.push(`🚨 ${cc.week} compliance item(s) expire this week`);
+  if(cc.book>0)alerts.push(`📋 ${cc.book} compliance item(s) due within 30 days — book now`);
+  if(cc.soon>0)alerts.push(`📋 ${cc.soon} compliance item(s) expiring within 45 days`);
   if(alerts.length>0){
     ab.classList.remove('hidden');
     ab.innerHTML=`<div style="font-size:16px">⚠</div><div><strong>Attention Required</strong><br>${alerts.join(' &nbsp;·&nbsp; ')}</div>`;
@@ -3491,6 +3548,8 @@ async function saveComplianceEdit(plate){
     operating_licence_cost:num(g('ocost')),
     notes:g('notes')||null
   };
+  // Stage 2: per-item "Not required" checkboxes
+  COMP_ITEMS.forEach(it=>{const cb=document.getElementById('ce-nr-'+it.key+'-'+id);row[it.nrField]=!!(cb&&cb.checked);});
   if(await upsertCompliance([row])){
     complianceData[plate]={...(complianceData[plate]||{}),...row};
     renderDiscView();updateDiscTabBadge();renderAlertBanner();
@@ -3499,35 +3558,8 @@ async function saveComplianceEdit(plate){
   }
 }
 
-async function renewComplianceItem(plate,key){
-  const item=COMP_ITEMS.find(i=>i.key===key);
-  if(!item||!item.renewMonths)return;
-  const rec=complianceData[plate]||{plate};
-  const cur=rec[item.expiryField]||null;
-  // Roll forward from the current expiry if still valid, otherwise from today
-  const base=cur&&new Date(cur+'T00:00:00')>new Date()?new Date(cur+'T00:00:00'):new Date();
-  base.setMonth(base.getMonth()+item.renewMonths);
-  const newIso=base.toISOString().slice(0,10);
-  if(!confirm(`Mark ${item.label} for ${plate} as renewed?\n\nNew expiry: ${fmtDDMMYYYY(newIso)}`))return;
-  const costRaw=prompt('Renewal cost in Rands (optional — leave blank to skip):','');
-  const cost=costRaw&&!isNaN(parseFloat(costRaw))?parseFloat(costRaw):null;
-  const row={plate,[item.expiryField]:newIso};
-  if(cost!=null)row[item.costField]=cost;
-  if(!await upsertCompliance([row])){
-    alert('Could not save the renewal. Please try again.');
-    return;
-  }
-  complianceData[plate]={...(complianceData[plate]||{}),...row};
-  // Audit trail
-  try{
-    await fetch(`${SUPABASE_URL}/rest/v1/compliance_history`,{
-      method:'POST',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({plate,item:key,old_expiry:cur,new_expiry:newIso,cost})
-    });
-  }catch(err){console.error('[FleetDesk] History save failed:',err);}
-  renderDiscView();updateDiscTabBadge();renderAlertBanner();
-}
+// (Stage 2: renewComplianceItem — confirm()/prompt() flow — replaced by
+//  openRenewForm / saveRenewal below renderDiscCards.)
 
 async function addComplianceVehicle(){
   const plate=(prompt('Vehicle registration / plate:')||'').trim().toUpperCase();
@@ -3541,22 +3573,22 @@ async function addComplianceVehicle(){
   }
 }
 
+// Stage 2: everything overdue or inside the 45-day ladder (Not required excluded).
 function exportComplianceCSV(){
   const rows=[['Plate','Item','Expiry Date','Days Left','Status','Licence No']];
   getCompliancePlates().forEach(plate=>{
     const rec=complianceData[plate]||{};
     COMP_ITEMS.forEach(it=>{
-      const st=complianceStatus(rec[it.expiryField]);
-      if(st.days==null||st.days>COMP_WARN_DAYS)return;
-      const label=st.status==='expired'?'EXPIRED':st.status==='urgent'?'Urgent':'Due soon';
-      rows.push([plate,it.label,fmtDDMMYYYY(rec[it.expiryField]),st.days,label,it.noField?(rec[it.noField]||''):'']);
+      const st=itemStatus(rec,it);
+      if(!COMP_ALERT_TIERS.includes(st.status))return;
+      rows.push([plate,it.label,fmtDDMMYYYY(rec[it.expiryField]),st.days,st.label,it.noField?(rec[it.noField]||''):'']);
     });
   });
-  if(rows.length===1){alert('Nothing expires in the next 60 days — no CSV to export.');return;}
+  if(rows.length===1){alert('Nothing is overdue or due within 45 days — no CSV to export.');return;}
   const csv=rows.map(r=>r.map(csvCell).join(',')).join('\n');
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-  a.download='compliance_expiring_60days_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.download='compliance_due_45days_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click();
 }
 
@@ -3594,25 +3626,20 @@ function renderDiscView(){
     return;
   }
 
-  // Summary counts across all 3 items per vehicle
-  let expired=0,urgent=0,warn=0,ok=0,notSet=0;
+  // Summary counts across all 3 items per vehicle — ladder tiers (Stage 2).
+  // Vehicles that exist only in fuel reports (no compliance row) count as Not set.
+  const c={overdue:0,week:0,book:0,soon:0,ok:0,unknown:0,not_required:0};
   plates.forEach(p=>{
     const rec=complianceData[p]||{};
-    COMP_ITEMS.forEach(it=>{
-      const s=complianceStatus(rec[it.expiryField]).status;
-      if(s==='expired')expired++;
-      else if(s==='urgent')urgent++;
-      else if(s==='warn')warn++;
-      else if(s==='ok')ok++;
-      else notSet++;
-    });
+    COMP_ITEMS.forEach(it=>{c[itemStatus(rec,it).status]++;});
   });
   document.getElementById('discSummaryStrip').innerHTML=`
-    <div class="disc-summary-card ds-red"><div class="disc-summary-label">🔴 Expired</div><div class="disc-summary-val">${expired}</div></div>
-    <div class="disc-summary-card ds-red"><div class="disc-summary-label">🚨 Urgent (≤14 Days)</div><div class="disc-summary-val">${urgent}</div></div>
-    <div class="disc-summary-card ds-amber"><div class="disc-summary-label">⚠ Due Within 60 Days</div><div class="disc-summary-val">${warn}</div></div>
-    <div class="disc-summary-card ds-green"><div class="disc-summary-label">✅ Valid</div><div class="disc-summary-val">${ok}</div></div>
-    <div class="disc-summary-card"><div class="disc-summary-label">📋 Not Set</div><div class="disc-summary-val" style="color:var(--text3);">${notSet}</div></div>
+    <div class="disc-summary-card ds-red"><div class="disc-summary-label">🔴 Overdue</div><div class="disc-summary-val">${c.overdue}</div></div>
+    <div class="disc-summary-card ds-red"><div class="disc-summary-label">🚨 This Week</div><div class="disc-summary-val">${c.week}</div></div>
+    <div class="disc-summary-card ds-orange"><div class="disc-summary-label">📞 Book Now (≤30 Days)</div><div class="disc-summary-val">${c.book}</div></div>
+    <div class="disc-summary-card ds-amber"><div class="disc-summary-label">⚠ Expiring Soon (≤45 Days)</div><div class="disc-summary-val">${c.soon}</div></div>
+    <div class="disc-summary-card ds-green"><div class="disc-summary-label">✅ Valid</div><div class="disc-summary-val">${c.ok}</div></div>
+    <div class="disc-summary-card"><div class="disc-summary-label">📋 Not Set</div><div class="disc-summary-val" style="color:var(--text3);">${c.unknown}</div></div>
     <div class="disc-summary-card"><div class="disc-summary-label">🚘 Vehicles</div><div class="disc-summary-val">${plates.length}</div></div>
   `;
 
@@ -3632,12 +3659,10 @@ function renderDiscView(){
 function renderDiscCards(plates){
   const search=(document.getElementById('discSearch')?.value||'').toLowerCase();
   const filter=document.getElementById('discFilter')?.value||'all';
-  const order={expired:0,urgent:1,warn:2,ok:3,unknown:4};
-
   let list=plates.map(p=>({plate:p,rec:complianceData[p]||{plate:p},worst:worstComplianceStatus(complianceData[p])}));
   if(search)list=list.filter(v=>v.plate.toLowerCase().includes(search));
-  if(filter!=='all')list=list.filter(v=>COMP_ITEMS.some(it=>complianceStatus(v.rec[it.expiryField]).status===filter));
-  list.sort((a,b)=>order[a.worst]-order[b.worst]||a.plate.localeCompare(b.plate));
+  if(filter!=='all')list=list.filter(v=>COMP_ITEMS.some(it=>itemStatus(v.rec,it).status===filter));
+  list.sort((a,b)=>COMP_TIER_ORDER[a.worst]-COMP_TIER_ORDER[b.worst]||a.plate.localeCompare(b.plate));
 
   if(list.length===0){
     document.getElementById('discsGrid').innerHTML='<p class="tyre-empty">No vehicles match this search / filter.</p>';
@@ -3647,23 +3672,30 @@ function renderDiscCards(plates){
   document.getElementById('discsGrid').innerHTML=list.map((v,vi)=>{
     const{plate,rec,worst}=v;
     const id=plateDomId(plate);
-    const cardClass=worst==='expired'||worst==='urgent'?'dc-red':worst==='warn'?'dc-amber':worst==='ok'?'dc-green':'';
-    const badgeClass=worst==='expired'||worst==='urgent'?'dcb-expired':worst==='warn'?'dcb-warn':worst==='ok'?'dcb-ok':'';
-    const badgeText=worst==='expired'?'Expired':worst==='urgent'?'Urgent':worst==='warn'?'Due Soon':worst==='ok'?'All Valid':'Not Set';
+    const pj=escAttr(JSON.stringify(plate));
+    // Card colour / badge from the worst item (Stage 2 ladder)
+    const cardClass={overdue:'dc-red',week:'dc-red',book:'dc-orange',soon:'dc-amber',ok:'dc-green'}[worst]||'';
+    const badgeClass={overdue:'dcb-expired',week:'dcb-expired',book:'dcb-book',soon:'dcb-warn',ok:'dcb-ok',not_required:'dcb-nr'}[worst]||'';
+    const badgeText=worst==='ok'?'All valid':COMP_TIER_LABEL[worst];
 
     const rowsHtml=COMP_ITEMS.map(it=>{
-      const exp=rec[it.expiryField];
-      const st=complianceStatus(exp);
-      const chipClass='cc-'+st.status;
-      const chipText=st.status==='expired'?`${Math.abs(st.days)}d over`:st.status==='unknown'?'Not set':st.status==='ok'?`${st.days}d`:`${st.days}d left`;
-      const renewBtn=it.renewMonths?`<button class="comp-renew-btn" onclick="renewComplianceItem(${escAttr(JSON.stringify(plate))},'${it.key}')">✓ Renewed</button>`:'';
+      const st=itemStatus(rec,it);
+      const nr=st.status==='not_required';
+      const exp=nr?null:rec[it.expiryField];
+      // Not required: grey chip instead of the date, no renew, "Required" undoes it.
+      const renewBtn=nr?'':`<button class="comp-renew-btn" onclick="openRenewForm(${pj},'${it.key}')" title="Record a renewal">✓ Renewed</button>`;
+      const nrLink=`<button class="comp-nr-link" onclick="setNotRequired(${pj},'${it.key}',${nr?'false':'true'})" title="${nr?'Mark this item as required for this vehicle':'Mark this item as not required for this vehicle (e.g. a trailer has no COF)'}">${nr?'Required':'Not required'}</button>`;
+      const illegal=st.status==='overdue'?`<div class="comp-illegal">⛔ Not road-legal — this vehicle may not legally be operated until the ${escapeHtml(it.label.toLowerCase())} is renewed.</div>`:'';
       return`<div class="comp-row">
         <span class="comp-item-label">${it.icon} ${it.label}</span>
-        <span class="comp-date">${exp?fmtDDMMYYYY(exp):'—'}</span>
-        <span class="comp-chip ${chipClass}">${chipText}</span>
-        ${renewBtn}
-      </div>`;
+        <span class="comp-date">${exp?fmtDDMMYYYY(exp):nr?'':'—'}</span>
+        <span class="comp-chip cc-${st.status}">${escapeHtml(st.chip)}</span>
+        <span class="comp-actions">${renewBtn}${nrLink}</span>
+      </div>${illegal}`;
     }).join('');
+
+    // Edit form: one "Not required" checkbox per item beside its date
+    const nrBox=it=>`<label class="ce-nr"><input type="checkbox" id="ce-nr-${it.key}-${id}" ${rec[it.nrField]?'checked':''}> Not required</label>`;
 
     return`<div class="disc-card ${cardClass}" style="animation-delay:${Math.min(vi,20)*0.03}s">
       <div class="disc-card-header">
@@ -3675,30 +3707,122 @@ function renderDiscCards(plates){
         ${rec.make_model?`<div class="disc-info-row" style="margin-top:4px;"><span class="disc-info-label">Make / Model</span><span class="disc-info-val">${escapeHtml(rec.make_model)}</span></div>`:''}
         ${rec.notes?`<div style="font-size:11px;color:var(--amber);font-style:italic;margin-top:4px;">📝 ${escapeHtml(rec.notes)}</div>`:''}
       </div>
-      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleComplianceEdit(${escAttr(JSON.stringify(plate))})">✎ Edit Details</button></div>
+      <div class="disc-renew-form" id="crf-${id}"></div>
+      <div class="disc-card-footer"><button class="disc-edit-btn" onclick="toggleComplianceEdit(${pj})">✎ Edit Details</button></div>
       <div class="disc-edit-form" id="cef-${id}">
         <div class="def-row">
           <div><label>Make / Model</label><input type="text" id="ce-make-${id}" value="${escapeHtml(rec.make_model||'')}" placeholder="e.g. Yutong ZK6122H"></div>
           <div><label>Licence Disc No.</label><input type="text" id="ce-dno-${id}" value="${escapeHtml(rec.licence_disc_no||'')}" placeholder="e.g. GP-2021-447"></div>
         </div>
         <div class="def-row">
-          <div><label>💿 Disc Expiry</label><input type="date" id="ce-dexp-${id}" value="${rec.licence_disc_expiry||''}"></div>
+          <div><label>💿 Disc Expiry</label><input type="date" id="ce-dexp-${id}" value="${rec.licence_disc_expiry||''}">${nrBox(COMP_ITEMS[0])}</div>
           <div><label>Disc Cost (R)</label><input type="number" id="ce-dcost-${id}" min="0" step="0.01" value="${rec.licence_disc_cost||''}"></div>
         </div>
         <div class="def-row">
-          <div><label>🛠 COF Expiry</label><input type="date" id="ce-cexp-${id}" value="${rec.cof_expiry||''}"></div>
+          <div><label>🛠 COF Expiry</label><input type="date" id="ce-cexp-${id}" value="${rec.cof_expiry||''}">${nrBox(COMP_ITEMS[1])}</div>
           <div><label>COF Cost (R)</label><input type="number" id="ce-ccost-${id}" min="0" step="0.01" value="${rec.cof_cost||''}"></div>
         </div>
         <div class="def-row">
-          <div><label>🚏 Operating Licence Expiry</label><input type="date" id="ce-oexp-${id}" value="${rec.operating_licence_expiry||''}"></div>
+          <div><label>🚏 Operating Licence Expiry</label><input type="date" id="ce-oexp-${id}" value="${rec.operating_licence_expiry||''}">${nrBox(COMP_ITEMS[2])}</div>
           <div><label>Op. Licence No.</label><input type="text" id="ce-ono-${id}" value="${escapeHtml(rec.operating_licence_no||'')}"></div>
           <div><label>Op. Licence Cost (R)</label><input type="number" id="ce-ocost-${id}" min="0" step="0.01" value="${rec.operating_licence_cost||''}"></div>
         </div>
         <div><label>Notes</label><input type="text" id="ce-notes-${id}" value="${escapeHtml(rec.notes||'')}" placeholder="Optional"></div>
-        <button class="def-save" onclick="saveComplianceEdit(${escAttr(JSON.stringify(plate))})">💾 Save</button>
+        <button class="def-save" onclick="saveComplianceEdit(${pj})">💾 Save</button>
       </div>
     </div>`;
   }).join('');
+}
+
+// ── Stage 2: "Not required" per item ─────────────────────────────────────────
+// Flag only — any stored date stays in the row (hidden by the chip), so the
+// choice is reversible from the card or the edit form.
+async function setNotRequired(plate,key,flag){
+  const item=COMP_ITEMS.find(i=>i.key===key);
+  if(!item)return;
+  const row={plate,[item.nrField]:!!flag};
+  if(!await upsertCompliance([row])){alert('Could not save. Please check your connection and try again.');return;}
+  complianceData[plate]={...(complianceData[plate]||{}),...row};
+  renderDiscView();updateDiscTabBadge();renderAlertBanner();
+}
+
+// ── Stage 2: renewal form (replaces the confirm()/prompt() flow) ─────────────
+// Inline panel in the card. New expiry is SUGGESTED as current expiry + 12
+// months (or today + 12 months with no current expiry) and must be confirmed
+// or edited. Saving writes the expiry (+ cost / number) and appends a
+// compliance_history row — the table's first real use.
+function openRenewForm(plate,key){
+  const item=COMP_ITEMS.find(i=>i.key===key);
+  const rec=complianceData[plate]||{plate};
+  const id=plateDomId(plate);
+  const box=document.getElementById('crf-'+id);
+  if(!item||!box)return;
+  const cur=rec[item.expiryField]||null;
+  const suggested=addMonthsIso(cur,COMP_RENEW_MONTHS)||'';
+  const pj=escAttr(JSON.stringify(plate));
+  box.innerHTML=`
+    <div class="drf-title">↻ Renew ${escapeHtml(item.label)} — ${escapeHtml(plate)}</div>
+    <div class="def-row">
+      <div><label>Current expiry</label><input type="text" value="${cur?escAttr(fmtDDMMYYYY(cur)):'Not set'}" disabled></div>
+      <div><label>New expiry</label><input type="date" id="rf-exp-${id}" value="${escAttr(suggested)}">
+        <div class="drf-hint">Suggested: ${COMP_RENEW_MONTHS} months from the ${cur?'current expiry':'date of renewal'}. Confirm or change before saving.</div></div>
+    </div>
+    <div class="def-row">
+      <div><label>Cost (R)</label><input type="number" id="rf-cost-${id}" min="0" step="0.01" placeholder="Optional"></div>
+      ${item.noField?`<div><label>New ${escapeHtml(item.label)} No.</label><input type="text" id="rf-no-${id}" value="${escAttr(rec[item.noField]||'')}" placeholder="Optional"></div>`:''}
+    </div>
+    <div><label>Notes</label><input type="text" id="rf-notes-${id}" placeholder="Optional — e.g. receipt number, testing station"></div>
+    <div class="drf-actions">
+      <button class="def-save" id="rf-save-${id}" onclick="saveRenewal(${pj},'${item.key}')">💾 Save renewal</button>
+      <button class="disc-edit-btn" onclick="closeRenewForm(${pj})">Cancel</button>
+      <span class="drf-msg" id="rf-msg-${id}"></span>
+    </div>`;
+  box.classList.add('open');
+  document.getElementById('rf-exp-'+id)?.focus();
+}
+
+function closeRenewForm(plate){
+  const box=document.getElementById('crf-'+plateDomId(plate));
+  if(box){box.classList.remove('open');box.innerHTML='';}
+}
+
+async function saveRenewal(plate,key){
+  const item=COMP_ITEMS.find(i=>i.key===key);
+  const id=plateDomId(plate);
+  const g=f=>{const el=document.getElementById('rf-'+f+'-'+id);return el?el.value.trim():'';};
+  const msg=document.getElementById('rf-msg-'+id);
+  const say=(t,bad)=>{if(msg){msg.textContent=t;msg.className='drf-msg'+(bad?' bad':'');}};
+  if(!item)return;
+  const rec=complianceData[plate]||{plate};
+  const cur=rec[item.expiryField]||null;
+  const newIso=g('exp');
+  if(!SCAN_DATE_RE.test(newIso)||isNaN(new Date(newIso+'T00:00:00'))){say('Enter the new expiry date.',true);return;}
+  if(cur&&newIso<=cur){say('The new expiry is not after the current one. Use Edit Details to correct a date instead.',true);return;}
+  const costRaw=g('cost');
+  const cost=costRaw&&!isNaN(parseFloat(costRaw))?parseFloat(costRaw):null;
+  const newNo=item.noField?g('no'):'';
+  const notes=g('notes');
+  const row={plate,[item.expiryField]:newIso};
+  if(cost!=null)row[item.costField]=cost;
+  if(item.noField&&newNo)row[item.noField]=newNo;
+  const btn=document.getElementById('rf-save-'+id);
+  if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  if(!await upsertCompliance([row])){
+    if(btn){btn.disabled=false;btn.textContent='💾 Save renewal';}
+    say('Could not save. Please check your connection and try again.',true);
+    return;
+  }
+  complianceData[plate]={...(complianceData[plate]||{}),...row};
+  // Audit trail — compliance_history (tenant stamped by the column default)
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/compliance_history`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({plate,item:key,old_expiry:cur,new_expiry:newIso,cost,notes:notes||null})
+    });
+    if(!res.ok)console.error('[FleetDesk] History save failed:',res.status,await res.text());
+  }catch(err){console.error('[FleetDesk] History save failed:',err);}
+  renderDiscView();updateDiscTabBadge();renderAlertBanner();
 }
 
 function toggleDiscBulk(){
@@ -4073,6 +4197,9 @@ function scanStatusHtml(row){
       if(flags.length)parts.push(`<span class="scan-status-warn">⚠ Check: ${escapeHtml(flags.join(', '))}</span>`);
       if(plate)parts.push(known?'<span class="scan-status-ok">Update</span>':inFleet?'<span class="scan-status-ok">New record</span>':'<span class="scan-status-warn">New vehicle</span>');
       if(row.confidence==='low')parts.push('<span class="scan-status-warn">low confidence</span>');
+      // Stage 2: a date read for an item this vehicle has marked Not required
+      // is saved but stays hidden behind the flag — say so here.
+      if(known)COMP_ITEMS.forEach(it=>{if(known[it.nrField]&&row.fields[it.key==='licence_disc'?'disc_expiry':it.key==='cof'?'cof_expiry':'op_licence_expiry'])parts.push(`<span class="scan-status-warn">${escapeHtml(it.label)} marked Not required</span>`);});
       // A read row can still be sideways-and-wrong: offer the rotate here too.
       return (parts.join(' · ')||'✓ Read')+rotate;
     }
@@ -4523,7 +4650,9 @@ const COMPONENT_LIFE={
 };
 const MAINT_DEFAULT_LIFE={km:30000,months:6};
 const MAINT_DEFAULT_SERVICE_INTERVAL=15000;
-const COF_VALID_MONTHS=6;
+// (Stage 2: COF_VALID_MONTHS=6 removed — the Maintenance tab reads the COF
+//  expiry from vehicle_compliance through the shared ladder, and the
+//  jobs-derived fallback estimate uses COMP_RENEW_MONTHS.)
 
 let maintJobs=[];
 let maintPartsByJob={};
@@ -4624,19 +4753,32 @@ function computeMaintFlags(){
     }
   });
 
-  // 5: COF expiring within 30 days (or expired) — 6-month validity from last COF job
-  plates.forEach(plate=>{
-    const cofJobs=maintJobs.filter(j=>j.plate===plate&&j.category==='cof').sort((a,b)=>new Date(b.date_in)-new Date(a.date_in));
-    if(cofJobs.length===0)return;
-    const expiry=new Date(cofJobs[0].date_in);
-    expiry.setMonth(expiry.getMonth()+COF_VALID_MONTHS);
-    const daysLeft=Math.ceil((expiry-Date.now())/(1000*60*60*24));
-    if(daysLeft<0){
+  // 5: COF — single source of truth (Stage 2, 2026-09-04). The COF date on
+  // vehicle_compliance goes through the same ladder as the Disc Renewal tab
+  // (respecting cof_not_required). Only a vehicle with NO COF date on file
+  // falls back to an estimate from its last COF job (+ COMP_RENEW_MONTHS),
+  // labelled as such. Vehicles known only to compliance are included too.
+  new Set([...plates,...Object.keys(complianceData)]).forEach(plate=>{
+    const rec=complianceData[plate];
+    if(rec&&rec.cof_not_required)return;
+    let expiryIso=rec&&rec.cof_expiry?rec.cof_expiry:null,estimated=false;
+    if(!expiryIso){
+      const cofJobs=maintJobs.filter(j=>j.plate===plate&&j.category==='cof').sort((a,b)=>new Date(b.date_in)-new Date(a.date_in));
+      if(cofJobs.length===0)return;
+      expiryIso=addMonthsIso(String(cofJobs[0].date_in).slice(0,10),COMP_RENEW_MONTHS);
+      if(!expiryIso)return;
+      estimated=true;
+    }
+    const st=complianceStatus(expiryIso);
+    if(!COMP_ALERT_TIERS.includes(st.status))return;
+    const src=estimated?' — estimated from last COF job':'';
+    if(st.status==='overdue'){
       flags.push({type:'cof',severity:'red',plate,icon:'📋',
-        html:`<strong>COF EXPIRED:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expired ${Math.abs(daysLeft)} day(s) ago (${fmtDDMMYYYY(expiry)}). This vehicle may not legally be operated.`});
-    }else if(daysLeft<=30){
-      flags.push({type:'cof',severity:'amber',plate,icon:'📋',
-        html:`<strong>COF due soon:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expires in ${daysLeft} day(s) (${fmtDDMMYYYY(expiry)}). Book the inspection now.`});
+        html:`<strong>COF OVERDUE:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expired ${Math.abs(st.days)} day(s) ago (${fmtDDMMYYYY(expiryIso)}${src}). This vehicle may not legally be operated.`});
+    }else{
+      const action=st.status==='soon'?'Plan the inspection.':'Book the inspection now.';
+      flags.push({type:'cof',severity:st.status==='week'?'red':'amber',plate,icon:'📋',
+        html:`<strong>COF ${escapeHtml(st.label.toLowerCase())}:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expires in ${st.days} day(s) (${fmtDDMMYYYY(expiryIso)}${src}). ${action}`});
     }
   });
 
@@ -4706,6 +4848,8 @@ function getMaintPlates(){
 
 async function renderMaintTab(){
   await fetchMaintData();
+  // Stage 2: COF flags read vehicle_compliance — make sure it is loaded
+  if(Object.keys(complianceData).length===0)await fetchCompliance();
   maintFlags=computeMaintFlags();
   const plates=getMaintPlates();
 
@@ -5222,9 +5366,11 @@ function closeDriverHistory(){
 
 function driverExpiryCell(dateStr){
   if(!dateStr)return'<span class="drv-exp-blank">—</span>';
+  // Driver documents keep their own 60-day amber rule; only the past-expiry
+  // tier name follows the Stage 2 ladder ('overdue').
   const st=complianceStatus(dateStr);
   const txt=fmtDDMMYYYY(dateStr);
-  if(st.status==='expired')return`<span class="drv-exp-red">${txt} · expired</span>`;
+  if(st.status==='overdue')return`<span class="drv-exp-red">${txt} · expired</span>`;
   if(st.days!=null&&st.days<=60)return`<span class="drv-exp-amber">${txt} · ${st.days} day${st.days===1?'':'s'}</span>`;
   return`<span>${txt}</span>`;
 }
@@ -5483,8 +5629,8 @@ async function generateReport(){
     if(sections.includes('compliance')){
       let gcPlates=Object.keys(complianceData);
       if(vehFilter!=='__all__')gcPlates=gcPlates.filter(p=>p===vehFilter);
-      let exp=0;gcPlates.forEach(p=>COMP_ITEMS.forEach(it=>{if(complianceStatus(complianceData[p][it.expiryField]).status==='expired')exp++;}));
-      attention.push(`<strong>${exp}</strong> expired compliance item${exp===1?'':'s'}`);
+      let exp=0;gcPlates.forEach(p=>COMP_ITEMS.forEach(it=>{if(itemStatus(complianceData[p],it).status==='overdue')exp++;}));
+      attention.push(`<strong>${exp}</strong> overdue compliance item${exp===1?'':'s'}`);
     }
     if(sections.includes('maint')||sections.includes('flags')){
       let gFlags=computeMaintFlags();
@@ -5616,11 +5762,10 @@ async function generateReport(){
     plates.sort().forEach(p=>{
       const rec=complianceData[p];
       COMP_ITEMS.forEach(it=>{
-        const exp=rec[it.expiryField];
-        const st=complianceStatus(exp);
-        const label=st.status==='expired'?'EXPIRED':st.status==='urgent'?'Urgent':st.status==='warn'?'Due soon':st.status==='ok'?'Valid':'Not set';
-        const chipCls=st.status==='expired'?'red':st.status==='urgent'||st.status==='warn'?'amber':st.status==='ok'?'green':'grey';
-        rows.push([p,it.label,exp?fmtDDMMYYYY(exp):'—',st.days==null?'—':st.days<0?Math.abs(st.days)+' days over':st.days+' days',`<span class="rep-chip ${chipCls}">${escapeHtml(label)}</span>`]);
+        const st=itemStatus(rec,it);
+        const exp=st.status==='not_required'?null:rec[it.expiryField];
+        const chipCls={overdue:'red',week:'red',book:'amber',soon:'amber',ok:'green'}[st.status]||'grey';
+        rows.push([p,it.label,exp?fmtDDMMYYYY(exp):'—',st.days==null?'—':st.days<0?Math.abs(st.days)+' days overdue':st.days+' days',`<span class="rep-chip ${chipCls}">${escapeHtml(st.label)}</span>`]);
       });
     });
     body.push({title:'Disc & Compliance Status',html:rows.length?repTable(['Vehicle','Item','Expiry','Remaining','Status'],rows,[3],[4]):'<p class="rep-empty">No compliance records captured yet.</p>'});

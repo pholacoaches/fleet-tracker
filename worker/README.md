@@ -21,7 +21,10 @@ forced to YYYY-MM-DD). Moved on evidence from real photos — Sonnet returned
 the receipt date as the COF expiry and the "Vehicle register number" as the
 plate on 2 of 3 documents. The client's `model`/`max_tokens` are ignored on
 every route. The office approves every scanned value in a table before it
-is saved.
+is saved. Compliance Stage 2 (same day) taught the prompt single-circle
+documents (trailers, light vehicles: disc expiry only, COF and operator
+card null) and that a "Roadworthy test date / Date of test" is never an
+expiry.
 
 CORS is environment-based (see "Environments"). Production allows
 `https://pholacoaches.github.io` only. Requests without an allowed `Origin`
