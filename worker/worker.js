@@ -69,14 +69,20 @@ const DRIVER_PROMPT =
 // output) with evidence. The office approves every value in a table before
 // it is saved, so a misread is caught there, not here.
 const COMPLIANCE_MODEL = 'claude-sonnet-4-6';
-const COMPLIANCE_MAX_TOKENS = 300;
+// 600 (was 300, fix-scan-rotation 2026-09-04): the JSON answer is ~130
+// tokens, but on a hard photo the model may open with a sentence before the
+// object; 300 cut such replies mid-JSON and the client saw "Unexpected answer".
+const COMPLIANCE_MAX_TOKENS = 600;
 
 // The document repeats dates: an issue / transaction "Date" sits right next
 // to each "Date of expiry". The prompt names the expiry labels explicitly
 // and forbids guessing — a null is far cheaper than a wrong expiry date.
+// fix-scan-rotation (2026-09-04): sideways photos produced prose instead of
+// JSON — the prompt now says the photo may be rotated and that the answer is
+// ALWAYS the JSON object, nulls included, never prose.
 const COMPLIANCE_PROMPT =
   'This is a photo of a South African combined "Motor Vehicle Licence, Licence Disc and Operator Card" document ' +
-  '(one page, English/Afrikaans). Read these fields:\n' +
+  '(one page, English/Afrikaans). The photo may be rotated sideways or upside down — read it anyway. Read these fields:\n' +
   '1. plate: the vehicle registration printed in the "Licence number" field (e.g. RPF655W). Uppercase letters and digits only, no spaces.\n' +
   '2. disc_expiry: the licence disc expiry date — the line labelled "Roadworthy expiry date" in the licence section.\n' +
   '3. cof_expiry: the "Date of expiry / Vervaldatum" printed under the LEFT circle at the bottom (Certificate of Fitness / roadworthy).\n' +
@@ -87,6 +93,8 @@ const COMPLIANCE_PROMPT =
   'CRITICAL: the document repeats dates. Near each circle there is also a transaction or issue "Date" (for example "Date 2026-03-27") — ' +
   'that is NOT an expiry date and must be ignored. Use only values explicitly labelled as an expiry ("Date of expiry", "Vervaldatum", "expiry date"). ' +
   'Write every date as YYYY-MM-DD. If any value is missing, obscured or not clearly legible, use null for that field — never guess, infer or copy a value from elsewhere on the page. ' +
+  'ALWAYS answer with the JSON object below and nothing else — even if the photo is rotated, blurry, or nothing at all is legible (then every field is null). ' +
+  'Never reply with prose, an explanation or an apology. ' +
   'Respond with ONLY strict JSON, no markdown, no code fences, exactly this shape: ' +
   '{"plate": <string or null>, "disc_expiry": <"YYYY-MM-DD" or null>, "cof_expiry": <"YYYY-MM-DD" or null>, ' +
   '"op_licence_expiry": <"YYYY-MM-DD" or null>, "disc_no": <string or null>, "op_licence_no": <string or null>, ' +
