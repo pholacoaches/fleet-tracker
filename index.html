@@ -4342,7 +4342,9 @@ function applyScanResult(row,res){
   const anyDate=SCAN_FIELDS.some(x=>x.date&&f[x.key]);
   if(!f.plate&&!anyDate){row.status='unreadable';row.note='Nothing readable — retake with the whole document in frame';row.selected=false;return;}
   row.status='done';row.note='';
-  row.selected=SCAN_PLATE_RE.test(f.plate);   // no plate → cannot save → starts unticked
+  // no plate → cannot save → starts unticked; an ARCHIVED match also starts
+  // unticked so its data is never written unless the user opts in to restore
+  row.selected=SCAN_PLATE_RE.test(f.plate)&&!isArchivedPlate(f.plate);
 }
 
 function retryScanRow(id){
@@ -4377,7 +4379,10 @@ async function rotateScanRow(id){
 function scanField(id,key,value){
   const row=scanRows.find(r=>r.id===id);
   if(!row)return;
+  const wasArchived=key==='plate'&&isArchivedPlate(row.fields.plate);
   row.fields[key]=key==='plate'?normalisePlate(value):value;
+  // Plate edited onto an archived vehicle → untick, same default as a fresh read
+  if(key==='plate'&&!wasArchived&&isArchivedPlate(row.fields.plate))row.selected=false;
   updateScanStatus(row);
   updateScanSaveBtn();
 }
@@ -4410,15 +4415,20 @@ function scanStatusHtml(row){
     case 'limited':return`<span class="scan-status-warn">⏸ ${escapeHtml(row.note)}</span>${retry}`;
     case 'error':return`<span class="scan-status-bad">⚠ ${escapeHtml(row.note)}</span>${retry}`;
     case 'unreadable':return`<span class="scan-status-bad">⚠ ${escapeHtml(row.note)}</span>${retry}`;
-    case 'saved':return'<span class="scan-status-ok">✅ Saved</span>';
+    case 'saved':return row.restored?'<span class="scan-status-ok">✅ Restored &amp; saved</span>':'<span class="scan-status-ok">✅ Saved</span>';
     case 'done':{
       const flags=scanRowFlags(row);
       const plate=row.fields.plate;
       const known=plate&&complianceData[plate];
       const inFleet=plate&&getCompliancePlates({includeArchived:true}).includes(plate);
+      // Archived is checked BEFORE known/inFleet: an archived plate is a
+      // decision to restore, never "Update" and never "New vehicle".
+      const archived=plate&&isArchivedPlate(plate);
       const parts=[];
       if(flags.length)parts.push(`<span class="scan-status-warn">⚠ Check: ${escapeHtml(flags.join(', '))}</span>`);
-      if(plate)parts.push(known?'<span class="scan-status-ok">Update</span>':inFleet?'<span class="scan-status-ok">New record</span>':'<span class="scan-status-warn">New vehicle</span>');
+      if(plate)parts.push(archived
+        ?'<span class="scan-status-warn" title="This vehicle is archived. Tick the row to restore it and apply the scanned values; leave it unticked to keep it archived and save nothing.">🗄 Archived — restore?</span>'
+        :known?'<span class="scan-status-ok">Update</span>':inFleet?'<span class="scan-status-ok">New record</span>':'<span class="scan-status-warn">New vehicle</span>');
       if(row.confidence==='low')parts.push('<span class="scan-status-warn">low confidence</span>');
       // Stage 2: a date read for an item this vehicle has marked Not required
       // is saved but stays hidden behind the flag — say so here.
@@ -4490,6 +4500,9 @@ function updateScanStatus(row){
   const cell=tr.querySelector('.scan-status');
   if(cell)cell.innerHTML=scanStatusHtml(row);
   tr.className=scanRowFlags(row).length?'scan-flag':'';
+  // Mirror row.selected — scanField may have unticked an archived match
+  const cb=tr.querySelector('.scan-cb input');
+  if(cb)cb.checked=!!row.selected;
   const plateInput=tr.querySelector('input[list="scanPlateList"]');
   if(plateInput){const v=row.fields.plate;plateInput.className=SCAN_PLATE_RE.test(v)?'':(v?'scan-bad':'scan-empty');}
   SCAN_FIELDS.filter(x=>x.date).forEach((x,i)=>{
@@ -4552,19 +4565,41 @@ async function saveLicenceScan(){
   if(problems.length){alert('Please fix before saving:\n\n'+problems.join('\n'));return;}
   const btn=document.getElementById('discScanSaveBtn');
   btn.disabled=true;btn.textContent='Saving…';
-  const failed=[];
+  const failed=[],restored=[],driverAppFailed=[];
   for(const r of rows){
-    const payload={plate:r.fields.plate};
+    const plate=r.fields.plate;
+    // Belt and braces: an unticked archived row must never be written. The
+    // filter above already excludes it; this guards the loop against future edits.
+    if(!r.selected)continue;
+    if(isArchivedPlate(plate)){
+      // Ticked archived row = restore first (compliance, then vehicles.active via
+      // the shared path). If the restore fails the scanned data is NOT written,
+      // so the archived row stays exactly as it was.
+      if(compBusyPlates.has(plate)){failed.push(plate);updateScanRow(r);continue;}
+      compBusyPlates.add(plate);
+      const res=await setPlateArchived(plate,false);
+      compBusyPlates.delete(plate);
+      if(!res.ok){failed.push(plate);updateScanRow(r);continue;}
+      if(res.vehicleFailed)driverAppFailed.push(plate);
+      r.restored=true;restored.push(plate);
+    }
+    const payload={plate};
     SCAN_FIELDS.forEach(x=>{if(x.key!=='plate'&&r.fields[x.key])payload[x.col]=r.fields[x.key].trim();});
     if(await upsertCompliance([payload])){
-      complianceData[payload.plate]={...(complianceData[payload.plate]||{}),...payload};
+      complianceData[plate]={...(complianceData[plate]||{}),...payload};
       r.status='saved';r.selected=false;
-    }else failed.push(payload.plate);
+    }else failed.push(plate);
     updateScanRow(r);
   }
   updateDiscTabBadge();renderAlertBanner();
+  // One end-of-save summary, shown only when there is something to say:
+  // restores (back in service), driver-app sync failures, and save failures.
+  const summary=[];
+  if(restored.length)summary.push(`${restored.join(', ')} restored and updated — back in service.`);
+  if(driverAppFailed.length)summary.push(`${driverAppFailed.join(', ')} restored, but drivers cannot see ${driverAppFailed.length===1?'it':'them'} in the driver app yet. The card shows a Retry.`);
+  if(failed.length)summary.push(`Saved ${rows.length-failed.length} of ${rows.length}. Could not save: ${failed.join(', ')}. Check your connection and try again.`);
+  if(summary.length)alert(summary.join('\n\n'));
   if(failed.length){
-    alert(`Saved ${rows.length-failed.length} of ${rows.length}. Could not save: ${failed.join(', ')}. Check your connection and try again.`);
     updateScanSaveBtn();
     return;
   }
