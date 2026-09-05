@@ -2072,6 +2072,24 @@ function fmtTimeHM(d){
   d=new Date(d);
   return`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
+// Disc Renewal display format (disc-visual-polish Change 3, 2026-09-05):
+// "26 Sep 2026". Fixed English months, never the browser locale. Accepts a
+// date-only ISO string (parsed as LOCAL midnight — bare new Date('YYYY-MM-DD')
+// is UTC and would show the previous day west of Greenwich) or a full
+// timestamp such as archived_at. CSV / Maintenance / Reports keep fmtDDMMYYYY.
+const MONTHS_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDayMonYear(d){
+  if(!d)return'—';
+  d=new Date(/^\d{4}-\d{2}-\d{2}$/.test(d)?d+'T00:00:00':d);
+  if(isNaN(d))return'—';
+  return`${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+// Day count → "22 days left" / "1 day left" / "expires today" / "3 days overdue".
+function fmtDaysLeft(days){
+  if(days===0)return'expires today';
+  const n=Math.abs(days);
+  return`${n} day${n===1?'':'s'} ${days<0?'overdue':'left'}`;
+}
 // escapeHtml / escAttr live in esc.js (shared with driver.html).
 // Plate → DOM-id fragment: [A-Za-z0-9_-] only, so a plate-derived id can never
 // carry markup. Writer and readers of an id must both use this.
@@ -3482,11 +3500,16 @@ function complianceStatus(expiry,notRequired){
   if(isNaN(d))return{status:'unknown',days:null,chip:'Not set',label:COMP_TIER_LABEL.unknown};
   const today=new Date();today.setHours(0,0,0,0);
   const days=Math.round((d-today)/(1000*60*60*24));
-  if(days<0)return{status:'overdue',days,chip:`${-days}d overdue`,label:COMP_TIER_LABEL.overdue};
-  if(days<=COMP_LADDER_DAYS.week)return{status:'week',days,chip:days===0?'expires today':`${days}d · this week`,label:COMP_TIER_LABEL.week};
-  if(days<=COMP_LADDER_DAYS.book)return{status:'book',days,chip:`${days}d · book now`,label:COMP_TIER_LABEL.book};
-  if(days<=COMP_LADDER_DAYS.soon)return{status:'soon',days,chip:`${days}d · expiring soon`,label:COMP_TIER_LABEL.soon};
-  return{status:'ok',days,chip:`${days}d`,label:COMP_TIER_LABEL.ok};
+  // Change 3: the chip is the day count alone ("22 days left"). The tier is
+  // already carried by the chip colour and the card badge, so it is not
+  // repeated in text. `label` (the tier word) is unchanged — Maintenance,
+  // Reports and the CSV read it.
+  const chip=fmtDaysLeft(days);
+  if(days<0)return{status:'overdue',days,chip,label:COMP_TIER_LABEL.overdue};
+  if(days<=COMP_LADDER_DAYS.week)return{status:'week',days,chip,label:COMP_TIER_LABEL.week};
+  if(days<=COMP_LADDER_DAYS.book)return{status:'book',days,chip,label:COMP_TIER_LABEL.book};
+  if(days<=COMP_LADDER_DAYS.soon)return{status:'soon',days,chip,label:COMP_TIER_LABEL.soon};
+  return{status:'ok',days,chip,label:COMP_TIER_LABEL.ok};
 }
 // Status of one item on one vehicle record (flag-aware).
 function itemStatus(rec,it){return complianceStatus(rec?rec[it.expiryField]:null,!!(rec&&rec[it.nrField]));}
@@ -3866,16 +3889,18 @@ function renderDiscViewBody(){
 //             row unless the user has opened it (discExpanded). Computed from
 //             the item statuses directly, never from `worst`, so a blank date
 //             can never collapse a vehicle.
-//  nextDays — soonest Valid expiry, for the slim row's "next due in Nd";
-//             null when all three are Not required.
+//  next     — the Valid item with the soonest expiry, {label, days}, for the
+//             slim row's "All valid · COF due in 177 days"; null when all
+//             three are Not required.
 function discVehicleView(plate){
   const rec=complianceData[plate]||{plate};
   const archived=isArchivedPlate(plate);
   const sts=COMP_ITEMS.map(it=>itemStatus(rec,it));
-  const okDays=sts.filter(s=>s.status==='ok').map(s=>s.days);
+  let next=null;
+  sts.forEach((s,i)=>{if(s.status==='ok'&&(!next||s.days<next.days))next={label:COMP_ITEMS[i].label,days:s.days};});
   return{plate,rec,archived,worst:worstComplianceStatus(complianceData[plate]),
     quiet:!archived&&sts.every(s=>s.status==='ok'||s.status==='not_required'),
-    nextDays:okDays.length?Math.min(...okDays):null};
+    next};
 }
 
 function renderDiscCards(plates){
@@ -3944,7 +3969,7 @@ function discSyncStripHtml(plate,pj){
 // button for keyboard and screen-reader users (Enter / Space open it).
 function discSlimHtml(v,vi){
   const pj=escAttr(JSON.stringify(v.plate));
-  const text=v.nextDays==null?'Nothing required':`All valid · next due in ${v.nextDays}d`;
+  const text=v.next?`All valid · ${escapeHtml(v.next.label)} due in ${v.next.days} day${v.next.days===1?'':'s'}`:'Nothing required';
   return`<div class="disc-slim" id="dcw-${plateDomId(v.plate)}" role="button" tabindex="0" aria-expanded="false" title="Show details" style="animation-delay:${Math.min(vi,20)*0.03}s" onclick="toggleDiscExpand(${pj})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleDiscExpand(${pj});}">
     ${svgIcon('circle-check','disc-slim-tick')}
     <span class="disc-slim-plate">${escapeHtml(v.plate)}</span>
@@ -3960,12 +3985,12 @@ function discArchivedCardHtml(v,vi){
   // no edit or renewal forms. Controls: Restore, and Archive as a re-run.
   const rowsRO=COMP_ITEMS.map(it=>`<div class="comp-row">
     <span class="comp-item-label">${it.icon} ${it.label}</span>
-    <span class="comp-date">${rec[it.nrField]?'Not required':rec[it.expiryField]?fmtDDMMYYYY(rec[it.expiryField]):'—'}</span>
+    <span class="comp-date">${rec[it.nrField]?'Not required':rec[it.expiryField]?fmtDayMonYear(rec[it.expiryField]):'—'}</span>
   </div>`).join('');
   return`<div class="disc-card dc-archived" style="animation-delay:${Math.min(vi,20)*0.03}s">
     <div class="disc-card-header">
       <span class="disc-card-plate">${escapeHtml(plate)}</span>
-      <span class="disc-card-badge dcb-archived">Archived ${fmtDDMMYYYY(rec.archived_at)}</span>
+      <span class="disc-card-badge dcb-archived">Archived ${fmtDayMonYear(rec.archived_at)}</span>
     </div>
     <div class="disc-card-body">
       ${rowsRO}
@@ -4007,7 +4032,7 @@ function discCardHtml(v,vi){
       const illegal=st.status==='overdue'?`<div class="comp-illegal">⛔ Not road-legal — this vehicle may not legally be operated until the ${escapeHtml(it.label.toLowerCase())} is renewed.</div>`:'';
       return`<div class="comp-row">
         <span class="comp-item-label">${it.icon} ${it.label}</span>
-        <span class="comp-date">${exp?fmtDDMMYYYY(exp):nr?'':'—'}</span>
+        <span class="comp-date">${exp?fmtDayMonYear(exp):nr?'':'—'}</span>
         <span class="comp-chip cc-${st.status}">${escapeHtml(st.chip)}</span>
         ${actions?`<span class="comp-actions">${actions}</span>`:''}
       </div>${illegal}`;
@@ -4150,7 +4175,7 @@ function openRenewForm(plate,key){
   box.innerHTML=`
     <div class="drf-title">↻ Renew ${escapeHtml(item.label)} — ${escapeHtml(plate)}</div>
     <div class="def-row">
-      <div><label>Current expiry</label><input type="text" value="${cur?escAttr(fmtDDMMYYYY(cur)):'Not set'}" disabled></div>
+      <div><label>Current expiry</label><input type="text" value="${cur?escAttr(fmtDayMonYear(cur)):'Not set'}" disabled></div>
       <div><label>New expiry</label><input type="date" id="rf-exp-${id}" value="${escAttr(suggested)}">
         <div class="drf-hint">Suggested: ${COMP_RENEW_MONTHS} months from the ${cur?'current expiry':'date of renewal'}. Confirm or change before saving.</div></div>
     </div>
