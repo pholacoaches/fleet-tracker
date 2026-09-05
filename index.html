@@ -645,7 +645,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-card.dc-amber { border-left-color:#F59F00; }
 .disc-card.dc-green { border-left-color:var(--green); }
 .disc-card-header { display:flex; align-items:center; justify-content:space-between; padding:11px 14px; background:var(--surface2); border-bottom:1px solid var(--border); }
-.disc-card-plate { font-family:var(--font-mono); font-size:14px; font-weight:700; }
+/* Change 4 (disc-visual-polish): no monospace on the cards — plates, dates,
+   make / model and the edit / renew date pickers use the page font. The
+   summary-strip numbers (.disc-summary-val, shared with Maintenance), the
+   bulk table and the scan table keep theirs. */
+.disc-card-plate { font-size:14px; font-weight:700; letter-spacing:0.5px; }
 .disc-card-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; }
 .dcb-expired { background:var(--red-light); color:var(--red); }
 .dcb-book { background:#FFE8CC; color:#D9480F; }
@@ -655,7 +659,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-card-body { padding:11px 14px; display:flex; flex-direction:column; gap:6px; }
 .disc-info-row { display:flex; justify-content:space-between; align-items:center; font-size:11px; }
 .disc-info-label { color:var(--text3); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
-.disc-info-val { font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--text2); }
+.disc-info-val { font-size:11px; font-weight:700; color:var(--text2); }
 .disc-card-footer { display:flex; justify-content:flex-end; gap:6px; padding:8px 14px; border-top:1px solid var(--border); background:var(--surface2); }
 .disc-edit-btn { font-size:11px; padding:3px 9px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); color:var(--text2); cursor:pointer; font-family:var(--font); font-weight:700; transition:border-color 0.15s, color 0.15s; }
 .disc-edit-btn:hover { border-color:var(--accent); color:var(--accent); }
@@ -682,7 +686,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-slim:hover { border-color:var(--border2); }
 .disc-slim:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .disc-slim-tick { width:18px; height:18px; color:var(--green); }
-.disc-slim-plate { font-family:var(--font-mono); font-size:13px; font-weight:700; }
+.disc-slim-plate { font-size:13px; font-weight:700; letter-spacing:0.5px; }
 .disc-slim-text { flex:1; color:var(--text2); }
 .disc-slim-chev { width:16px; height:16px; color:var(--text3); }
 .disc-collapse-btn { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; margin-left:8px; padding:0; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text3); cursor:pointer; transition:border-color 0.15s, color 0.15s; }
@@ -700,7 +704,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .def-row > div { flex:1; min-width:120px; }
 .def-save { padding:7px 16px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; font-weight:700; cursor:pointer; align-self:flex-start; transition:background 0.15s; }
 .def-save:hover { background:var(--accent2); }
-.disc-edit-form input[type=date] { font-family:var(--font-mono); }
 
 /* COMPLIANCE ROWS (3 items per vehicle) */
 .comp-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); flex-wrap:wrap; row-gap:4px; }
@@ -708,7 +711,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 /* Stage 2: renew + not-required sit together and drop to their own line when the row is tight */
 .comp-actions { display:flex; align-items:center; gap:6px; margin-left:auto; }
 .comp-item-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); flex:0 0 118px; }
-.comp-date { font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--text2); flex:1; }
+.comp-date { font-size:11px; font-weight:700; color:var(--text2); flex:1; }
 .comp-chip { font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap; }
 /* Stage 2 ladder chips: overdue (solid red) → week (red) → book (orange) → soon (amber) → ok → not set / not required (grey) */
 .cc-overdue { background:var(--red); color:#fff; }
@@ -737,7 +740,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-renew-form label { font-size:11px; font-weight:700; color:var(--text2); display:block; margin-bottom:3px; }
 .disc-renew-form input { width:100%; padding:6px 10px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; color:var(--text); background:var(--surface); outline:none; }
 .disc-renew-form input:focus { border-color:var(--accent); }
-.disc-renew-form input[type=date] { font-family:var(--font-mono); }
 .disc-renew-form input:disabled { color:var(--text3); background:var(--surface2); }
 .drf-title { font-size:12px; font-weight:700; color:var(--green); }
 .drf-hint { font-size:10px; color:var(--text3); margin-top:3px; }
