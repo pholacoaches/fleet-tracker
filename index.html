@@ -10,6 +10,10 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1971C2">
 <meta name="apple-mobile-web-app-title" content="FleetDesk">
+<!-- Error monitoring: self-hosted Sentry SDK + FleetDesk init/scrub. First
+     scripts on the page so the global handlers cover everything below. -->
+<script src="sentry.bundle.min.js"></script>
+<script src="monitor.js"></script>
 <style>
 @font-face {
   font-family: 'Century Gothic';
@@ -1473,6 +1477,7 @@ async function initTenant(){
     }
   }catch{/* offline — cached tenant (same user) stays in effect */}
   if(!TENANT)return false;
+  FleetDesk.setTenant(TENANT.id); // error monitoring: tenant UUID tag (never the name)
   migrateLegacyLocalData();
   reloadTenantState();
   return true;
@@ -3775,7 +3780,11 @@ async function patchVehicleActive(plate,active){
     });
     if(!res.ok){console.error('[FleetDesk] vehicles.active update failed:',res.status,await res.text());return false;}
     const rows=await res.json();
-    if(!Array.isArray(rows)||rows.length===0){console.error('[FleetDesk] vehicles.active update matched no row for',raw);return false;}
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] vehicles.active update matched no row for',raw);
+      FleetDesk.reportError('vehicles.active PATCH matched no row',{endpoint:'/rest/v1/vehicles',status:res.status}); // plate deliberately not sent
+      return false;
+    }
   }catch(err){console.error('[FleetDesk] vehicles.active update failed:',err);return false;}
   if(active)fleetPlates.add(plate);else fleetPlates.delete(plate);
   return true;

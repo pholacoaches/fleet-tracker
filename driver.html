@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Odometer Submission</title>
+<script src="sentry.bundle.min.js"></script>
+<script src="monitor.js"></script>
 <style>
 @font-face { font-family: 'Century Gothic'; src: local('Century Gothic'), local('CenturyGothic'); }
 :root {
@@ -361,6 +363,7 @@ async function init(){
     if(!data){showScreen('invalidScreen');return;}
     // tenant_id namespaces the photo upload path (build #4b bucket scoping)
     driver={name:data.name,personal_code:code,tenant_id:data.tenant_id||null};
+    FleetDesk.setTenant(driver.tenant_id); // error monitoring: tenant UUID tag
     applyDriverBranding(data.branding);
     vehicleList=data.vehicles||[];
     // Buses with fleet numbers first (drivers know those best), sorted numerically

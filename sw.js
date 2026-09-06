@@ -1,9 +1,11 @@
-const CACHE = 'fleetdesk-v72';
+const CACHE = 'fleetdesk-v73';
 const PRECACHE = [
   '/fleet-tracker/',
   '/fleet-tracker/index.html',
   '/fleet-tracker/driver.html',
   '/fleet-tracker/esc.js',
+  '/fleet-tracker/monitor.js',
+  '/fleet-tracker/sentry.bundle.min.js',
   '/fleet-tracker/manifest.json',
   '/fleet-tracker/hero.jpg',
   '/fleet-tracker/savika-hero.jpg',
