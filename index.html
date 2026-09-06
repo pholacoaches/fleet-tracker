@@ -242,6 +242,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   font-family: var(--font);
 }
 .stat-value { font-family: var(--font-mono); font-size: 24px; font-weight: 700; color: var(--accent); line-height: 1; margin-bottom: 4px; }
+/* Total Fuel Spend is rendered twice: .sv-desk with cents (desktop) and
+   .sv-phone rounded to the rand, "R468 140" (phone). The 600px rule swaps them. */
+.sv-phone { display: none; }
 .stat-sub { font-size: 11px; color: var(--text3); }
 .stat-delta { font-size: 11px; margin-top: 6px; font-weight: 600; }
 .stat-delta.up { color: var(--red); }
@@ -960,6 +963,13 @@ input[type=file] { display: none; }
   #tab-discs .section-actions > #discFilter,
   #tab-discs .section-actions > .disc-show-archived { grid-column:1 / -1; width:100%; }
   #tab-discs .section-actions > .btn { justify-content:center; width:100%; white-space:nowrap; }
+
+  /* Overview stat cards sit two per row (~157px each); the 24px monospace
+     "R468,139.52" needed 158px and was clipped by the card's overflow:hidden.
+     Smaller number, and Total Fuel Spend shows the rounded "R468 140" form. */
+  .stat-value { font-size:17px; }
+  .sv-desk { display:none; }
+  .sv-phone { display:inline; }
 }
 @media print {
   .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs { display: none !important; }
@@ -2592,7 +2602,7 @@ function renderDashboard(){
   document.getElementById('statsGrid').innerHTML=`
     <div class="stat-card">
       <div class="stat-label">Total Fuel Spend</div>
-      <div class="stat-value">R${totalSpend.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="stat-value"><span class="sv-desk">R${totalSpend.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span><span class="sv-phone">R${Math.round(totalSpend).toLocaleString('en-US').replace(/,/g,'\u202F')}</span></div>
       <div class="stat-sub">This period</div>${deltaSpend}
     </div>
     <div class="stat-card">
