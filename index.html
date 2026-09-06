@@ -623,6 +623,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-sync-strip .icon, .comp-illegal .icon, .disc-note .icon, .drf-title .icon, .scan-status .icon { width:13px; height:13px; margin-right:3px; vertical-align:-2px; }
 
 /* DISC RENEWAL TAB */
+/* Toolbar search box — was an inline style until mobile-layout (2026-09-06); same values */
+#discSearch { border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; font-family:var(--font); font-size:12px; outline:none; width:150px; color:var(--text); background:var(--surface2); }
 .disc-summary-strip { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
 .disc-summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 20px; box-shadow:var(--shadow); flex:1; min-width:140px; position:relative; overflow:hidden; }
 .disc-summary-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--accent); }
@@ -945,6 +947,19 @@ input[type=file] { display: none; }
   .hs-num { font-size:18px; letter-spacing:-0.5px; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .hs-lbl { font-size:9px; letter-spacing:0.6px; white-space:nowrap; }
   .hs-actions { justify-content:center; padding:8px 8px 10px; border-top:1px solid rgba(255,255,255,0.12); }
+
+  /* Toolbar rows: .section-actions had no flex-wrap, so the Vehicle Blocks
+     (580px) and Disc Renewal (689px) toolbars widened the page. Wrap them. */
+  .section-actions { flex-wrap:wrap; }
+  /* Disc Renewal toolbar: search and status dropdown full-width on their own
+     rows, then Bulk Edit | 45-Day CSV over Add Vehicle | Scan Licences in a
+     2x2 grid of equal widths. Icons and labels stay. "Show archived" (only
+     shown when something is archived) takes a full row of its own. */
+  #tab-discs .section-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; margin-left:0; }
+  #tab-discs .section-actions > #discSearch,
+  #tab-discs .section-actions > #discFilter,
+  #tab-discs .section-actions > .disc-show-archived { grid-column:1 / -1; width:100%; }
+  #tab-discs .section-actions > .btn { justify-content:center; width:100%; white-space:nowrap; }
 }
 @media print {
   .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs { display: none !important; }
@@ -1223,8 +1238,8 @@ input[type=file] { display: none; }
   <div class="section-header">
     <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc & Compliance Renewal</div>
     <div class="section-actions">
-      <input type="text" id="discSearch" placeholder="Search plate..." oninput="renderDiscView()"
-        style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-family:var(--font);font-size:12px;outline:none;width:150px;color:var(--text);background:var(--surface2);">
+      <!-- mobile-layout: inline style moved to #discSearch in <style> so the phone rule can make it full-width -->
+      <input type="text" id="discSearch" placeholder="Search plate..." oninput="renderDiscView()">
       <select id="discFilter" onchange="renderDiscView()" class="sort-select">
         <option value="all">All statuses</option>
         <option value="overdue">Overdue</option>
