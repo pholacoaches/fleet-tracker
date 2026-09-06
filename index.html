@@ -242,6 +242,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   font-family: var(--font);
 }
 .stat-value { font-family: var(--font-mono); font-size: 24px; font-weight: 700; color: var(--accent); line-height: 1; margin-bottom: 4px; }
+/* Total Fuel Spend is rendered twice: .sv-desk with cents (desktop) and
+   .sv-phone rounded to the rand, "R468 140" (phone). The 600px rule swaps them. */
+.sv-phone { display: none; }
 .stat-sub { font-size: 11px; color: var(--text3); }
 .stat-delta { font-size: 11px; margin-top: 6px; font-weight: 600; }
 .stat-delta.up { color: var(--red); }
@@ -623,6 +626,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-sync-strip .icon, .comp-illegal .icon, .disc-note .icon, .drf-title .icon, .scan-status .icon { width:13px; height:13px; margin-right:3px; vertical-align:-2px; }
 
 /* DISC RENEWAL TAB */
+/* Toolbar search box — was an inline style until mobile-layout (2026-09-06); same values */
+#discSearch { border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; font-family:var(--font); font-size:12px; outline:none; width:150px; color:var(--text); background:var(--surface2); }
 .disc-summary-strip { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
 .disc-summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 20px; box-shadow:var(--shadow); flex:1; min-width:140px; position:relative; overflow:hidden; }
 .disc-summary-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--accent); }
@@ -913,14 +918,86 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .backup-dl { flex-shrink:0; }
 .backups-empty { font-size:13px; color:var(--text3); padding:6px 0; }
 
+/* HERO STATS STRIP (blue sticky bar under the hero). These were inline
+   style attributes until mobile-layout (2026-09-06); moved here unchanged so
+   the phone media query below can re-flow the bar. Desktop is identical. */
+.hs-inner { max-width:1320px; margin:0 auto; padding:0 28px; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; width:100%; }
+.hs-stats { display:flex; align-items:stretch; gap:0; }
+.hs-cell { display:flex; flex-direction:column; justify-content:center; padding:12px 32px; border-right:1px solid rgba(255,255,255,0.12); }
+.hs-cell:first-child { padding-left:0; }
+.hs-num { font-family:var(--font-mono); font-size:24px; font-weight:700; color:white; }
+.hs-lbl { font-size:9px; color:rgba(255,255,255,0.5); text-transform:uppercase; letter-spacing:1.2px; margin-top:2px; }
+.hs-actions { display:flex; align-items:center; justify-content:flex-end; padding:0 8px; }
+
 .hidden { display: none !important; }
 input[type=file] { display: none; }
+/* PHONE LAYOUT (mobile-layout, 2026-09-06). Everything in here is phone-only;
+   desktop rules above are untouched. */
 @media (max-width: 600px) {
   .app-header { padding: 0 16px; }
   .main { padding: 16px; }
   .vehicles-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .top-vehicles { grid-template-columns: 1fr; }
+
+  /* Blue stats bar → two rows: three equal, centred stat columns with thin
+     dividers between them, then the bell / Account / Log out row. The desktop
+     1fr|auto|1fr grid needs ~660px and was why EVERY tab scrolled sideways. */
+  .hs-inner { display:block; padding:0; }
+  .hs-stats { display:grid; grid-template-columns:1fr 1fr 1fr; }
+  .hs-cell, .hs-cell:first-child { padding:10px 4px; align-items:center; text-align:center; }
+  .hs-cell:last-child { border-right:none; }
+  .hs-num { font-size:18px; letter-spacing:-0.5px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .hs-lbl { font-size:9px; letter-spacing:0.6px; white-space:nowrap; }
+  .hs-actions { justify-content:center; padding:8px 8px 10px; border-top:1px solid rgba(255,255,255,0.12); }
+
+  /* Toolbar rows: .section-actions had no flex-wrap, so the Vehicle Blocks
+     (580px) and Disc Renewal (689px) toolbars widened the page. Wrap them. */
+  .section-actions { flex-wrap:wrap; }
+  /* Disc Renewal toolbar: search and status dropdown full-width on their own
+     rows, then Bulk Edit | 45-Day CSV over Add Vehicle | Scan Licences in a
+     2x2 grid of equal widths. Icons and labels stay. "Show archived" (only
+     shown when something is archived) takes a full row of its own. */
+  #tab-discs .section-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; margin-left:0; }
+  #tab-discs .section-actions > #discSearch,
+  #tab-discs .section-actions > #discFilter,
+  #tab-discs .section-actions > .disc-show-archived { grid-column:1 / -1; width:100%; }
+  #tab-discs .section-actions > .btn { justify-content:center; width:100%; white-space:nowrap; }
+
+  /* Overview stat cards sit two per row (~157px each); the 24px monospace
+     "R468,139.52" needed 158px and was clipped by the card's overflow:hidden.
+     Smaller number, and Total Fuel Spend shows the rounded "R468 140" form. */
+  .stat-value { font-size:17px; }
+  .sv-desk { display:none; }
+  .sv-phone { display:inline; }
+
+  /* Disc Renewal slim rows: the text column had ~146px for "All valid ·
+     Licence Disc due in 175 days", so long labels wrapped and short ones did
+     not. On phones every row is two lines by design: tick, plate, chevron on
+     the first; the status text full-width on the second, aligned under the
+     plate (tick 18px + gap 10px). Text itself unchanged. */
+  .disc-slim { flex-wrap:wrap; row-gap:4px; }
+  .disc-slim-plate { flex:1; }
+  .disc-slim-text { flex:0 0 100%; order:2; padding-left:28px; }
+  /* Disc card grid has a 320px minimum column, which overflows a 320px
+     screen (288px of room). One column on phones, like .vehicles-grid. */
+  .discs-grid { grid-template-columns:1fr; }
+
+  /* Drivers table: the browser squeezed the Name and Phone columns until
+     "Alphas Hadebe" and "082 123 4567" broke across lines. Keep each on one
+     line; the table gets a little wider and scrolls inside its wrapper,
+     which is the intended behaviour for wide tables. */
+  .drivers-table td:nth-child(1), .drivers-table td:nth-child(2) { white-space:nowrap; }
+
+  /* Period tabs ("02.12.2024" …) cannot break inside a label. Four of them
+     already overhang the page padding at 360px; a fifth report would widen
+     every tab again. Let the row wrap onto a second line on phones. */
+  .period-tabs { flex-wrap:wrap; }
+
+  /* Bell panel: fixed 360px wide and 20px from the right edge, so on a
+     360px phone its left 20px sat off-screen. Screen width minus 20px,
+     10px in from each side. */
+  .notif-panel { width:calc(100vw - 20px); right:10px; }
 }
 @media print {
   .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs { display: none !important; }
@@ -1064,24 +1141,26 @@ input[type=file] { display: none; }
   <div class="loading-sub" id="loadingSub">This may take a few moments</div>
 </div>
 
+<!-- mobile-layout (2026-09-06): the strip's inline styles moved to the .hs-*
+     classes in <style> so the phone media query can re-flow it. -->
 <div id="heroStatsStrip" style="display:none;background:var(--accent-deep);border-bottom:1px solid rgba(255,255,255,0.1);position:sticky;top:0;z-index:99;">
-  <div style="max-width:1320px;margin:0 auto;padding:0 28px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;width:100%;">
+  <div class="hs-inner">
 <div></div>
-<div style="display:flex;align-items:stretch;gap:0;">
-    <div style="display:flex;flex-direction:column;justify-content:center;padding:12px 32px 12px 0;border-right:1px solid rgba(255,255,255,0.12);">
-      <div style="font-family:var(--font-mono);font-size:24px;font-weight:700;color:white;" id="heroSpend">—</div>
-      <div style="font-size:9px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1.2px;margin-top:2px;">Total Spend</div>
+<div class="hs-stats">
+    <div class="hs-cell">
+      <div class="hs-num" id="heroSpend">—</div>
+      <div class="hs-lbl">Total Spend</div>
     </div>
-    <div style="display:flex;flex-direction:column;justify-content:center;padding:12px 32px;border-right:1px solid rgba(255,255,255,0.12);">
-      <div style="font-family:var(--font-mono);font-size:24px;font-weight:700;color:white;" id="heroLitres">—</div>
-      <div style="font-size:9px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1.2px;margin-top:2px;">Total Litres</div>
+    <div class="hs-cell">
+      <div class="hs-num" id="heroLitres">—</div>
+      <div class="hs-lbl">Total Litres</div>
     </div>
-    <div style="display:flex;flex-direction:column;justify-content:center;padding:12px 32px;border-right:1px solid rgba(255,255,255,0.12);">
-      <div style="font-family:var(--font-mono);font-size:24px;font-weight:700;color:white;" id="heroVehicles">—</div>
-      <div style="font-size:9px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1.2px;margin-top:2px;">Vehicles</div>
+    <div class="hs-cell">
+      <div class="hs-num" id="heroVehicles">—</div>
+      <div class="hs-lbl">Vehicles</div>
     </div>
     </div>
-<div style="display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
+<div class="hs-actions">
       <button class="notif-btn" id="notifBtn" onclick="toggleNotifPanel()" style="position:relative;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.4);border-radius:8px;padding:6px 14px;cursor:pointer;color:white;font-family:var(--font);font-weight:700;font-size:13px;margin-right:8px;">
   🔔 <span id="notifBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#C92A2A;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;align-items:center;justify-content:center;">0</span>
 </button>
@@ -1197,8 +1276,8 @@ input[type=file] { display: none; }
   <div class="section-header">
     <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc & Compliance Renewal</div>
     <div class="section-actions">
-      <input type="text" id="discSearch" placeholder="Search plate..." oninput="renderDiscView()"
-        style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-family:var(--font);font-size:12px;outline:none;width:150px;color:var(--text);background:var(--surface2);">
+      <!-- mobile-layout: inline style moved to #discSearch in <style> so the phone rule can make it full-width -->
+      <input type="text" id="discSearch" placeholder="Search plate..." oninput="renderDiscView()">
       <select id="discFilter" onchange="renderDiscView()" class="sort-select">
         <option value="all">All statuses</option>
         <option value="overdue">Overdue</option>
@@ -2495,6 +2574,18 @@ function hasApprovedReadings(){
   return (approvedData||[]).some(n=>n.status==='approved'&&n.plate&&n.odometer);
 }
 
+// mobile-layout (2026-09-06): money and litre TOTALS render twice — the exact
+// figure in .sv-desk (desktop, unchanged text) and a rounded one in .sv-phone
+// (nearest rand / whole litre, narrow no-break space between thousands). The
+// 600px CSS rule shows one or the other; nothing is recalculated. Rates
+// (R/L, R/km, km/L, L/fill) and per-fill rows never go through these.
+function _grp(n){return Math.round(n).toLocaleString('en-US').replace(/,/g,'\u202F');}
+function fmtTotalR(x){
+  if(x==null||x==='')return '—';
+  return `<span class="sv-desk">R${Number(x).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span><span class="sv-phone">R${_grp(x)}</span>`;
+}
+function fmtTotalL(x){return `<span class="sv-desk">${Number(x).toFixed(2)} L</span><span class="sv-phone">${_grp(x)} L</span>`;}
+
 function renderDashboard(){
   recomputeAllStats();
   const readingsOnlyMode=state.reports.length===0&&hasApprovedReadings();
@@ -2517,7 +2608,10 @@ function renderDashboard(){
   const _hTotal=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
   const _hLitres=r.vehicles.reduce((s,v)=>s+v.totalLitres,0);
   document.getElementById('heroSpend').textContent='R'+Math.round(_hTotal/1000)+'k';
-  document.getElementById('heroLitres').textContent=_hLitres.toFixed(0)+' L';
+  // "14 393 L": thousands grouped with a narrow no-break space and a no-break
+  // space before the unit, so the figure can never wrap mid-number on a phone.
+  // Same rounding as before (toFixed(0)); only the separators are new.
+  document.getElementById('heroLitres').textContent=Number(_hLitres.toFixed(0)).toLocaleString('en-US').replace(/,/g,'\u202F')+'\u00A0L';
   // In readings-only mode the vehicle count reflects the readings-only blocks,
   // not the (empty) report.
   document.getElementById('heroVehicles').textContent=readingsOnlyMode?vehiclesWithDriverSubmissions().length:r.vehicles.length;
@@ -2548,12 +2642,12 @@ function renderDashboard(){
   document.getElementById('statsGrid').innerHTML=`
     <div class="stat-card">
       <div class="stat-label">Total Fuel Spend</div>
-      <div class="stat-value">R${totalSpend.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="stat-value">${fmtTotalR(totalSpend)}</div>
       <div class="stat-sub">This period</div>${deltaSpend}
     </div>
     <div class="stat-card">
       <div class="stat-label">Total Litres</div>
-      <div class="stat-value">${totalLitres.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="stat-value"><span class="sv-desk">${totalLitres.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span><span class="sv-phone">${_grp(totalLitres)}</span></div>
       <div class="stat-sub">Litres purchased</div>
     </div>
     <div class="stat-card">
@@ -2583,8 +2677,8 @@ function renderDashboard(){
     <div class="top-vehicle-card rank-${i+1}">
       <div class="top-rank">${['🥇 1st','🥈 2nd','🥉 3rd'][i]} Highest Spend</div>
       <div class="top-plate">${escapeHtml(v.plate)}</div>
-      <div class="top-amount">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-      <div class="top-meta">${v.totalLitres.toFixed(2)} L · ${v.transactions.length} fill(s) · avg ${v.avgLitresPerFill} L/fill</div>
+      <div class="top-amount">${fmtTotalR(v.totalAmount)}</div>
+      <div class="top-meta">${fmtTotalL(v.totalLitres)} · ${v.transactions.length} fill(s) · avg ${v.avgLitresPerFill} L/fill</div>
       <span class="top-badge ${v.isHighSpend?'high':'ok'}">${v.isHighSpend?'⚠ High Spend':'✓ Normal'}</span>
     </div>
   `).join('');
@@ -2595,13 +2689,13 @@ function renderDashboard(){
     <div class="bar-row">
       <div class="bar-label">${escapeHtml(v.plate)}</div>
       <div class="bar-track"><div class="bar-fill ${v.isHighSpend?'red':'blue'}" style="width:${(v.totalAmount/(bySpend[0]?.totalAmount||1)*100).toFixed(1)}%"></div></div>
-      <div class="bar-val">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="bar-val">${fmtTotalR(v.totalAmount)}</div>
     </div>`);
   renderBarChart('litresChart',byLitres,byLitres[0]?.totalLitres||1,v=>`
     <div class="bar-row">
       <div class="bar-label">${escapeHtml(v.plate)}</div>
       <div class="bar-track"><div class="bar-fill blue" style="width:${(v.totalLitres/(byLitres[0]?.totalLitres||1)*100).toFixed(1)}%;background:#5BA3D0;"></div></div>
-      <div class="bar-val">${v.totalLitres.toFixed(2)} L</div>
+      <div class="bar-val">${fmtTotalL(v.totalLitres)}</div>
     </div>`);
 
   renderTrendChart('trendChart',state.reports.map(rep=>({label:rep.scheduleDate,value:rep.vehicles.reduce((s,v)=>s+v.totalAmount,0)})),'R','blue');
@@ -2695,7 +2789,7 @@ function renderVehicleBlock(v,vi){
     :`<span class="vc-stat">Last odo: <strong>${lastOdo}</strong></span><span class="vc-stat">Avg km/L: <strong>${v.avgKmPerLitre||'—'}</strong></span><span class="vc-stat">Fills: <strong>${v.transactions.length}</strong></span>`;
   const footerHtml=v.readingsOnly
     ?`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat" style="font-style:italic;color:var(--text3);">No fuel data this period</span></div></div>`
-    :`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${v.totalLitres.toFixed(2)} L</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>`;
+    :`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${fmtTotalL(v.totalLitres)}</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">${fmtTotalR(v.totalAmount)}</span></div>`;
 
   return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${escapeHtml(plate)}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary">${summaryStats}</div></button><div class="vc-body"><div class="tx-table-wrap"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table></div>${footerHtml}${odoNote}${highNote}${svcRowHtml}</div></div>`;
 }
@@ -2703,7 +2797,7 @@ function renderVehicleBlock(v,vi){
 function renderVehicleTable(vehicles){
   const rows=vehicles.map(v=>v.readingsOnly
     ?`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td colspan="5" style="font-style:italic;color:var(--text3);">No fuel data this period — ${v.transactions.length} approved reading${v.transactions.length!==1?'s':''}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''}</td></tr>`
-    :`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${v.totalLitres.toFixed(2)} L</td><td class="vtd-num r">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
+    :`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${fmtTotalL(v.totalLitres)}</td><td class="vtd-num r">${fmtTotalR(v.totalAmount)}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
   return`<table class="vehicles-table"><thead><tr><th>Plate</th><th>Fills</th><th>Total Litres</th><th>Total Spend</th><th>Avg Litres/Fill</th><th>Avg km/L</th><th>Flags</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -2721,25 +2815,45 @@ function _drawBarChart(elId){
   el.innerHTML=html;
 }
 
+// mobile-layout (2026-09-06): on a phone the fixed 600-unit drawing was scaled
+// down to ~290px, so its 8-unit date labels rendered at ~4px. At or below the
+// 600px phone breakpoint the chart is drawn at roughly the card's own width
+// (1 unit ≈ 1px) with 11-unit text, and date/value labels are thinned so
+// neighbours cannot collide — the latest date always keeps its label. The
+// desktop drawing is unchanged. Data and maths untouched; a rotation that
+// crosses the breakpoint redraws from the remembered points.
+const _trendArgs={};
+function _trendNarrow(){return window.innerWidth<=600;}
+let _trendLastNarrow=_trendNarrow();
+window.addEventListener('resize',()=>{
+  const n=_trendNarrow();if(n===_trendLastNarrow)return;_trendLastNarrow=n;
+  for(const id in _trendArgs){const a=_trendArgs[id];renderTrendChart(id,a.points,a.unit,a.color);}
+});
 function renderTrendChart(elId,points,unit,color){
   const el=document.getElementById(elId);
   if(points.length<2){el.innerHTML='<div class="no-trend">Upload more reports to see trends over time</div>';return;}
+  _trendArgs[elId]={points,unit,color};
   const maxVal=Math.max(...points.map(p=>p.value));
-  const W=600,H=110,padX=30,padY=20;
+  const narrow=_trendNarrow();
+  const W=narrow?Math.max(280,window.innerWidth-70):600,H=110,padX=30,padY=20;
+  const fsDate=narrow?11:8,fsVal=narrow?11:9;
+  // Phone: a "02.12.2024" label is ~70px, so label only every Nth point.
+  const every=narrow?Math.max(1,Math.ceil(72*(points.length-1)/(W-padX*2))):1;
+  const showLbl=i=>(points.length-1-i)%every===0;
   const xStep=(W-padX*2)/(points.length-1);
   const coords=points.map((p,i)=>({x:padX+i*xStep,y:H-padY-((p.value/maxVal)*(H-padY*2))}));
   const pathD=coords.map((c,i)=>(i===0?`M ${c.x} ${c.y}`:`L ${c.x} ${c.y}`)).join(' ');
   const areaD=`${pathD} L ${coords[coords.length-1].x} ${H-padY} L ${coords[0].x} ${H-padY} Z`;
   const colors={blue:'#1971C2',green:'#2F9E44',amber:'#E67700'};
   const col=colors[color]||colors.blue;
-  const dots=coords.map((c,i)=>`<circle cx="${c.x}" cy="${c.y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/><text x="${c.x}" y="${H-5}" text-anchor="middle" font-size="8" fill="#868E96">${escapeHtml(points[i].label)}</text><text x="${c.x}" y="${c.y-9}" text-anchor="middle" font-size="9" fill="${col}" font-weight="700">${unit==='R'?'R'+Math.round(points[i].value/1000)+'k':points[i].value.toFixed(0)+' L'}</text>`).join('');
+  const dots=coords.map((c,i)=>`<circle cx="${c.x}" cy="${c.y}" r="4" fill="${col}" stroke="white" stroke-width="1.5"/>${showLbl(i)?`<text x="${c.x}" y="${H-5}" text-anchor="middle" font-size="${fsDate}" fill="#868E96">${escapeHtml(points[i].label)}</text><text x="${c.x}" y="${c.y-9}" text-anchor="middle" font-size="${fsVal}" fill="${col}" font-weight="700">${unit==='R'?'R'+Math.round(points[i].value/1000)+'k':points[i].value.toFixed(0)+' L'}</text>`:''}`).join('');
   el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="trend-svg" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="grad_${elId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity="0.12"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs><path d="${areaD}" fill="url(#grad_${elId})"/><path d="${pathD}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>${dots}</svg>`;
 }
 
 function renderHistory(){
   document.getElementById('historyGrid').innerHTML=state.reports.map((r,i)=>{
     const total=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
-    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">✕</button><div class="history-period">${escapeHtml(r.scheduleDate||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">R${total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`;
+    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">✕</button><div class="history-period">${escapeHtml(r.scheduleDate||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">${fmtTotalR(total)}</div></div>`;
   }).join('');
 }
 
@@ -2784,7 +2898,7 @@ function renderComparison(){
   const prevPlates=new Set(prev.vehicles.map(v=>v.plate));
   const newVehicles=[...currPlates].filter(p=>!prevPlates.has(p));
   const missingVehicles=[...prevPlates].filter(p=>!currPlates.has(p));
-  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(prev.scheduleDate||'Previous')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2);">R${prevTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${prevLitres.toFixed(2)} L · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(curr.scheduleDate||'Current')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent);">R${currTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${currLitres.toFixed(2)} L · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} R${Math.abs(currTotal-prevTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">✅ New vehicles this period: <strong>${escapeHtml(newVehicles.join(', '))}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">⚠ Vehicles not seen this period: <strong>${escapeHtml(missingVehicles.join(', '))}</strong></div>`:''}`;
+  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(prev.scheduleDate||'Previous')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2);">${fmtTotalR(prevTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(prevLitres)} · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(curr.scheduleDate||'Current')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent);">${fmtTotalR(currTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(currLitres)} · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} ${fmtTotalR(Math.abs(currTotal-prevTotal))} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">✅ New vehicles this period: <strong>${escapeHtml(newVehicles.join(', '))}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">⚠ Vehicles not seen this period: <strong>${escapeHtml(missingVehicles.join(', '))}</strong></div>`:''}`;
 }
 
 function switchReport(i){ activeReportIndex=i; recomputeAllStats(); renderDashboard(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -5410,8 +5524,8 @@ function renderMaintJobCard(j,i){
       <div class="maint-job-desc">${escapeHtml(j.description)}</div>
       <div class="maint-job-meta">
         <span>Odometer: <strong>${j.odometer?Number(j.odometer).toLocaleString('en-US')+' km':'—'}</strong></span>
-        <span>Total: <strong>${fmtRand(j.total_cost)}</strong></span>
-        ${j.labour_cost?`<span>Labour: <strong>${fmtRand(j.labour_cost)}</strong></span>`:''}
+        <span>Total: <strong>${fmtTotalR(j.total_cost)}</strong></span>
+        ${j.labour_cost?`<span>Labour: <strong>${fmtTotalR(j.labour_cost)}</strong></span>`:''}
         <span>${j.workshop==='internal'?'🏠 In-house':'🔧 '+(escapeHtml(j.supplier)||'Outside workshop')}</span>
         ${j.date_out?`<span>Downtime: <strong>${downtime} day${downtime!==1?'s':''}</strong></span>`:''}
       </div>
@@ -5443,7 +5557,7 @@ function renderMaintVehiclePanel(){
 
   panel.innerHTML=`
     <div class="section-header" style="margin-top:6px;">
-      <div class="section-title" style="font-size:15px;">🚘 ${escapeHtml(plate)} — ${jobs.length} job${jobs.length!==1?'s':''}${totalSpend>0?' · '+fmtRand(totalSpend)+' total':''}</div>
+      <div class="section-title" style="font-size:15px;">🚘 ${escapeHtml(plate)} — ${jobs.length} job${jobs.length!==1?'s':''}${totalSpend>0?' · '+fmtTotalR(totalSpend)+' total':''}</div>
       <div class="section-actions">
         <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddJobForm()">＋ Add Job</button>
       </div>
