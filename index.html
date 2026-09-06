@@ -993,6 +993,11 @@ input[type=file] { display: none; }
      already overhang the page padding at 360px; a fifth report would widen
      every tab again. Let the row wrap onto a second line on phones. */
   .period-tabs { flex-wrap:wrap; }
+
+  /* Bell panel: fixed 360px wide and 20px from the right edge, so on a
+     360px phone its left 20px sat off-screen. Screen width minus 20px,
+     10px in from each side. */
+  .notif-panel { width:calc(100vw - 20px); right:10px; }
 }
 @media print {
   .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs { display: none !important; }
