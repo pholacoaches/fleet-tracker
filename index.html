@@ -2574,6 +2574,18 @@ function hasApprovedReadings(){
   return (approvedData||[]).some(n=>n.status==='approved'&&n.plate&&n.odometer);
 }
 
+// mobile-layout (2026-09-06): money and litre TOTALS render twice — the exact
+// figure in .sv-desk (desktop, unchanged text) and a rounded one in .sv-phone
+// (nearest rand / whole litre, narrow no-break space between thousands). The
+// 600px CSS rule shows one or the other; nothing is recalculated. Rates
+// (R/L, R/km, km/L, L/fill) and per-fill rows never go through these.
+function _grp(n){return Math.round(n).toLocaleString('en-US').replace(/,/g,'\u202F');}
+function fmtTotalR(x){
+  if(x==null||x==='')return '—';
+  return `<span class="sv-desk">R${Number(x).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span><span class="sv-phone">R${_grp(x)}</span>`;
+}
+function fmtTotalL(x){return `<span class="sv-desk">${Number(x).toFixed(2)} L</span><span class="sv-phone">${_grp(x)} L</span>`;}
+
 function renderDashboard(){
   recomputeAllStats();
   const readingsOnlyMode=state.reports.length===0&&hasApprovedReadings();
@@ -2630,12 +2642,12 @@ function renderDashboard(){
   document.getElementById('statsGrid').innerHTML=`
     <div class="stat-card">
       <div class="stat-label">Total Fuel Spend</div>
-      <div class="stat-value"><span class="sv-desk">R${totalSpend.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span><span class="sv-phone">R${Math.round(totalSpend).toLocaleString('en-US').replace(/,/g,'\u202F')}</span></div>
+      <div class="stat-value">${fmtTotalR(totalSpend)}</div>
       <div class="stat-sub">This period</div>${deltaSpend}
     </div>
     <div class="stat-card">
       <div class="stat-label">Total Litres</div>
-      <div class="stat-value">${totalLitres.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="stat-value"><span class="sv-desk">${totalLitres.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span><span class="sv-phone">${_grp(totalLitres)}</span></div>
       <div class="stat-sub">Litres purchased</div>
     </div>
     <div class="stat-card">
@@ -2665,8 +2677,8 @@ function renderDashboard(){
     <div class="top-vehicle-card rank-${i+1}">
       <div class="top-rank">${['🥇 1st','🥈 2nd','🥉 3rd'][i]} Highest Spend</div>
       <div class="top-plate">${escapeHtml(v.plate)}</div>
-      <div class="top-amount">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-      <div class="top-meta">${v.totalLitres.toFixed(2)} L · ${v.transactions.length} fill(s) · avg ${v.avgLitresPerFill} L/fill</div>
+      <div class="top-amount">${fmtTotalR(v.totalAmount)}</div>
+      <div class="top-meta">${fmtTotalL(v.totalLitres)} · ${v.transactions.length} fill(s) · avg ${v.avgLitresPerFill} L/fill</div>
       <span class="top-badge ${v.isHighSpend?'high':'ok'}">${v.isHighSpend?'⚠ High Spend':'✓ Normal'}</span>
     </div>
   `).join('');
@@ -2677,13 +2689,13 @@ function renderDashboard(){
     <div class="bar-row">
       <div class="bar-label">${escapeHtml(v.plate)}</div>
       <div class="bar-track"><div class="bar-fill ${v.isHighSpend?'red':'blue'}" style="width:${(v.totalAmount/(bySpend[0]?.totalAmount||1)*100).toFixed(1)}%"></div></div>
-      <div class="bar-val">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div class="bar-val">${fmtTotalR(v.totalAmount)}</div>
     </div>`);
   renderBarChart('litresChart',byLitres,byLitres[0]?.totalLitres||1,v=>`
     <div class="bar-row">
       <div class="bar-label">${escapeHtml(v.plate)}</div>
       <div class="bar-track"><div class="bar-fill blue" style="width:${(v.totalLitres/(byLitres[0]?.totalLitres||1)*100).toFixed(1)}%;background:#5BA3D0;"></div></div>
-      <div class="bar-val">${v.totalLitres.toFixed(2)} L</div>
+      <div class="bar-val">${fmtTotalL(v.totalLitres)}</div>
     </div>`);
 
   renderTrendChart('trendChart',state.reports.map(rep=>({label:rep.scheduleDate,value:rep.vehicles.reduce((s,v)=>s+v.totalAmount,0)})),'R','blue');
@@ -2777,7 +2789,7 @@ function renderVehicleBlock(v,vi){
     :`<span class="vc-stat">Last odo: <strong>${lastOdo}</strong></span><span class="vc-stat">Avg km/L: <strong>${v.avgKmPerLitre||'—'}</strong></span><span class="vc-stat">Fills: <strong>${v.transactions.length}</strong></span>`;
   const footerHtml=v.readingsOnly
     ?`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat" style="font-style:italic;color:var(--text3);">No fuel data this period</span></div></div>`
-    :`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${v.totalLitres.toFixed(2)} L</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>`;
+    :`<div class="vc-footer"><div class="footer-stats"><span class="footer-stat">Total: <strong>${fmtTotalL(v.totalLitres)}</strong></span><span class="footer-stat">Fills: <strong>${v.transactions.length}</strong></span><span class="footer-stat">Avg fill: <strong>${v.avgLitresPerFill} L</strong></span>${v.avgKmPerLitre?`<span class="footer-stat">Avg km/L: <strong>${v.avgKmPerLitre}</strong></span>`:''}</div><span class="footer-total">${fmtTotalR(v.totalAmount)}</span></div>`;
 
   return`<div class="vc ${alertClass}" id="vc-${id}" style="animation-delay:${vi*0.04}s"><button class="vc-header ${svcHeaderClass}" onclick="toggleVehicleCard(this)"><div class="vc-title-row"><div class="vc-left"><span class="vehicle-plate">${escapeHtml(plate)}</span><div class="vc-badges">${badges.join('')}</div></div>${chevron}</div><div class="vc-summary">${summaryStats}</div></button><div class="vc-body"><div class="tx-table-wrap"><table class="tx-table"><thead><tr><th>Date</th><th>Merchant</th><th class="r">Odometer</th><th class="r">Litres</th><th class="r">Amount</th><th class="r">km/L</th><th class="r">R/km</th></tr></thead><tbody>${rows}</tbody></table></div>${footerHtml}${odoNote}${highNote}${svcRowHtml}</div></div>`;
 }
@@ -2785,7 +2797,7 @@ function renderVehicleBlock(v,vi){
 function renderVehicleTable(vehicles){
   const rows=vehicles.map(v=>v.readingsOnly
     ?`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td colspan="5" style="font-style:italic;color:var(--text3);">No fuel data this period — ${v.transactions.length} approved reading${v.transactions.length!==1?'s':''}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''}</td></tr>`
-    :`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${v.totalLitres.toFixed(2)} L</td><td class="vtd-num r">R${v.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
+    :`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${fmtTotalL(v.totalLitres)}</td><td class="vtd-num r">${fmtTotalR(v.totalAmount)}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
   return`<table class="vehicles-table"><thead><tr><th>Plate</th><th>Fills</th><th>Total Litres</th><th>Total Spend</th><th>Avg Litres/Fill</th><th>Avg km/L</th><th>Flags</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -2841,7 +2853,7 @@ function renderTrendChart(elId,points,unit,color){
 function renderHistory(){
   document.getElementById('historyGrid').innerHTML=state.reports.map((r,i)=>{
     const total=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
-    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">✕</button><div class="history-period">${escapeHtml(r.scheduleDate||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">R${total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`;
+    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">✕</button><div class="history-period">${escapeHtml(r.scheduleDate||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">${fmtTotalR(total)}</div></div>`;
   }).join('');
 }
 
@@ -2886,7 +2898,7 @@ function renderComparison(){
   const prevPlates=new Set(prev.vehicles.map(v=>v.plate));
   const newVehicles=[...currPlates].filter(p=>!prevPlates.has(p));
   const missingVehicles=[...prevPlates].filter(p=>!currPlates.has(p));
-  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(prev.scheduleDate||'Previous')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2);">R${prevTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${prevLitres.toFixed(2)} L · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(curr.scheduleDate||'Current')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent);">R${currTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${currLitres.toFixed(2)} L · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} R${Math.abs(currTotal-prevTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">✅ New vehicles this period: <strong>${escapeHtml(newVehicles.join(', '))}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">⚠ Vehicles not seen this period: <strong>${escapeHtml(missingVehicles.join(', '))}</strong></div>`:''}`;
+  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(prev.scheduleDate||'Previous')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2);">${fmtTotalR(prevTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(prevLitres)} · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(curr.scheduleDate||'Current')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent);">${fmtTotalR(currTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(currLitres)} · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} ${fmtTotalR(Math.abs(currTotal-prevTotal))} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">✅ New vehicles this period: <strong>${escapeHtml(newVehicles.join(', '))}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">⚠ Vehicles not seen this period: <strong>${escapeHtml(missingVehicles.join(', '))}</strong></div>`:''}`;
 }
 
 function switchReport(i){ activeReportIndex=i; recomputeAllStats(); renderDashboard(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -5512,8 +5524,8 @@ function renderMaintJobCard(j,i){
       <div class="maint-job-desc">${escapeHtml(j.description)}</div>
       <div class="maint-job-meta">
         <span>Odometer: <strong>${j.odometer?Number(j.odometer).toLocaleString('en-US')+' km':'—'}</strong></span>
-        <span>Total: <strong>${fmtRand(j.total_cost)}</strong></span>
-        ${j.labour_cost?`<span>Labour: <strong>${fmtRand(j.labour_cost)}</strong></span>`:''}
+        <span>Total: <strong>${fmtTotalR(j.total_cost)}</strong></span>
+        ${j.labour_cost?`<span>Labour: <strong>${fmtTotalR(j.labour_cost)}</strong></span>`:''}
         <span>${j.workshop==='internal'?'🏠 In-house':'🔧 '+(escapeHtml(j.supplier)||'Outside workshop')}</span>
         ${j.date_out?`<span>Downtime: <strong>${downtime} day${downtime!==1?'s':''}</strong></span>`:''}
       </div>
@@ -5545,7 +5557,7 @@ function renderMaintVehiclePanel(){
 
   panel.innerHTML=`
     <div class="section-header" style="margin-top:6px;">
-      <div class="section-title" style="font-size:15px;">🚘 ${escapeHtml(plate)} — ${jobs.length} job${jobs.length!==1?'s':''}${totalSpend>0?' · '+fmtRand(totalSpend)+' total':''}</div>
+      <div class="section-title" style="font-size:15px;">🚘 ${escapeHtml(plate)} — ${jobs.length} job${jobs.length!==1?'s':''}${totalSpend>0?' · '+fmtTotalR(totalSpend)+' total':''}</div>
       <div class="section-actions">
         <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddJobForm()">＋ Add Job</button>
       </div>
