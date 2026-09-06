@@ -982,6 +982,12 @@ input[type=file] { display: none; }
   /* Disc card grid has a 320px minimum column, which overflows a 320px
      screen (288px of room). One column on phones, like .vehicles-grid. */
   .discs-grid { grid-template-columns:1fr; }
+
+  /* Drivers table: the browser squeezed the Name and Phone columns until
+     "Alphas Hadebe" and "082 123 4567" broke across lines. Keep each on one
+     line; the table gets a little wider and scrolls inside its wrapper,
+     which is the intended behaviour for wide tables. */
+  .drivers-table td:nth-child(1), .drivers-table td:nth-child(2) { white-space:nowrap; }
 }
 @media print {
   .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs { display: none !important; }
