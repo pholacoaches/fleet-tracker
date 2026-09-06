@@ -970,6 +970,18 @@ input[type=file] { display: none; }
   .stat-value { font-size:17px; }
   .sv-desk { display:none; }
   .sv-phone { display:inline; }
+
+  /* Disc Renewal slim rows: the text column had ~146px for "All valid ·
+     Licence Disc due in 175 days", so long labels wrapped and short ones did
+     not. On phones every row is two lines by design: tick, plate, chevron on
+     the first; the status text full-width on the second, aligned under the
+     plate (tick 18px + gap 10px). Text itself unchanged. */
+  .disc-slim { flex-wrap:wrap; row-gap:4px; }
+  .disc-slim-plate { flex:1; }
+  .disc-slim-text { flex:0 0 100%; order:2; padding-left:28px; }
+  /* Disc card grid has a 320px minimum column, which overflows a 320px
+     screen (288px of room). One column on phones, like .vehicles-grid. */
+  .discs-grid { grid-template-columns:1fr; }
 }
 @media print {
   .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs { display: none !important; }
