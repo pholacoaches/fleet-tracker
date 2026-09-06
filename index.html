@@ -988,6 +988,11 @@ input[type=file] { display: none; }
      line; the table gets a little wider and scrolls inside its wrapper,
      which is the intended behaviour for wide tables. */
   .drivers-table td:nth-child(1), .drivers-table td:nth-child(2) { white-space:nowrap; }
+
+  /* Period tabs ("02.12.2024" …) cannot break inside a label. Four of them
+     already overhang the page padding at 360px; a fifth report would widen
+     every tab again. Let the row wrap onto a second line on phones. */
+  .period-tabs { flex-wrap:wrap; }
 }
 @media print {
   .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs { display: none !important; }
