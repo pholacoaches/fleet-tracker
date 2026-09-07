@@ -221,6 +221,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   margin-bottom: 20px; font-size: 12px; color: var(--red); justify-content: center;
 }
 .alert-banner strong { font-size: 13px; color: var(--red); }
+/* icon-pass: 8px status dot replaces the red-circle emoji; banner icon sizes */
+.status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--red); vertical-align:middle; margin-right:5px; }
+.alert-banner .icon { width:13px; height:13px; margin-right:3px; vertical-align:-2px; }
+.alert-banner .alert-banner-lead { width:18px; height:18px; margin-right:0; }
 
 /* STATS */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
@@ -245,7 +249,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   font-weight: 700;
   font-family: var(--font);
 }
-.stat-value { font-family: var(--font-mono); font-size: 24px; font-weight: 700; color: var(--accent); line-height: 1; margin-bottom: 4px; }
+.stat-value { font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 700; color: var(--accent); line-height: 1; margin-bottom: 4px; }
 /* Total Fuel Spend is rendered twice: .sv-desk with cents (desktop) and
    .sv-phone rounded to the rand, "R468 140" (phone). The 600px rule swaps them. */
 .sv-phone { display: none; }
@@ -971,7 +975,7 @@ input[type=file] { display: none; }
   #tab-discs .section-actions > .disc-show-archived { grid-column:1 / -1; width:100%; }
   #tab-discs .section-actions > .btn { justify-content:center; width:100%; white-space:nowrap; }
 
-  /* Overview stat cards sit two per row (~157px each); the 24px monospace
+  /* Overview stat cards sit two per row (~157px each); the 24px
      "R468,139.52" needed 158px and was clipped by the card's overflow:hidden.
      Smaller number, and Total Fuel Spend shows the rounded "R468 140" form. */
   .stat-value { font-size:17px; }
@@ -3891,17 +3895,17 @@ function renderAlertBanner(){
   const odomAlerts=r.vehicles.filter(v=>v.hasOdometerIssue);
   const highSpend=r.vehicles.filter(v=>v.isHighSpend);
   const competitor=r.vehicles.filter(v=>v.hasCompetitor);
-  if(odomAlerts.length>0)alerts.push(`⚠ ${odomAlerts.length} vehicle(s) have odometer anomalies`);
-  if(highSpend.length>0)alerts.push(`🔴 ${highSpend.length} vehicle(s) are significantly above fleet average spend`);
-  if(competitor.length>0)alerts.push(`⛽ ${competitor.length} vehicle(s) used competitor fuel stations`);
+  if(odomAlerts.length>0)alerts.push(`${svgIcon('alert-triangle')}${odomAlerts.length} vehicle(s) have odometer anomalies`);
+  if(highSpend.length>0)alerts.push(`<span class="status-dot"></span>${highSpend.length} vehicle(s) are significantly above fleet average spend`);
+  if(competitor.length>0)alerts.push(`${svgIcon('gas-station')}${competitor.length} vehicle(s) used competitor fuel stations`);
   const cc=getComplianceAlertCounts();
-  if(cc.overdue>0)alerts.push(`🔴 ${cc.overdue} compliance item(s) OVERDUE — vehicle(s) not road-legal until renewed`);
-  if(cc.week>0)alerts.push(`🚨 ${cc.week} compliance item(s) expire this week`);
-  if(cc.book>0)alerts.push(`📋 ${cc.book} compliance item(s) due within 30 days — book now`);
-  if(cc.soon>0)alerts.push(`📋 ${cc.soon} compliance item(s) expiring within 45 days`);
+  if(cc.overdue>0)alerts.push(`<span class="status-dot"></span>${cc.overdue} compliance item(s) OVERDUE — vehicle(s) not road-legal until renewed`);
+  if(cc.week>0)alerts.push(`${svgIcon('alert-triangle')}${cc.week} compliance item(s) expire this week`);
+  if(cc.book>0)alerts.push(`${svgIcon('certificate')}${cc.book} compliance item(s) due within 30 days — book now`);
+  if(cc.soon>0)alerts.push(`${svgIcon('certificate')}${cc.soon} compliance item(s) expiring within 45 days`);
   if(alerts.length>0){
     ab.classList.remove('hidden');
-    ab.innerHTML=`<div style="font-size:16px">⚠</div><div><strong>Attention Required</strong><br>${alerts.join(' &nbsp;·&nbsp; ')}</div>`;
+    ab.innerHTML=`${svgIcon('alert-triangle','alert-banner-lead')}<div><strong>Attention Required</strong><br>${alerts.join(' &nbsp;·&nbsp; ')}</div>`;
     ab.className='alert-banner';
   }else{ab.classList.add('hidden');}
 }
