@@ -283,6 +283,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 @media (max-width: 800px) { .charts-row { grid-template-columns: 1fr; } }
 .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .chart-title { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.8px; }
+/* icon-pass: chart-title icons and the lead icon on inline notes */
+.chart-title .icon, .compare-title .icon { width:13px; height:13px; margin-right:5px; vertical-align:-2px; }
+.icon-lead { width:13px; height:13px; margin-right:5px; vertical-align:-2px; }
 .bar-chart { display: flex; flex-direction: column; gap: 9px; }
 .bar-chart-toggle { margin-top: 10px; text-align: center; }
 .bar-chart-toggle button { font-size: 11px; font-weight: 700; color: var(--accent); background: none; border: 1.5px solid var(--accent); border-radius: var(--radius-sm); padding: 4px 14px; cursor: pointer; font-family: var(--font); transition: background 0.15s, color 0.15s; }
@@ -1340,17 +1343,17 @@ input[type=file] { display: none; }
     <div class="tab-panel" id="tab-trends">
       <div class="charts-row">
         <div class="chart-card">
-          <div class="chart-title">📈 Total Spend Over Time</div>
+          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-trending-up"/></svg>Total Spend Over Time</div>
           <div class="trend-chart" id="trendChart"></div>
         </div>
         <div class="chart-card">
-          <div class="chart-title">🔄 Avg Litres Per Fill Over Time</div>
+          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Avg Litres Per Fill Over Time</div>
           <div class="trend-chart" id="trendLitres"></div>
         </div>
       </div>
       <div class="compare-section" id="compareSection">
         <div class="section-header">
-          <div class="section-title">📊 Period Comparison</div>
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-chart-bar"/></svg>Period Comparison</div>
         </div>
         <div id="compareContent"></div>
       </div>
@@ -2659,7 +2662,7 @@ function renderDashboard(){
   // grey bar — hide the wrapper (and its margin) until a fuel report exists.
   document.getElementById('dashHeader').classList.toggle('hidden',state.reports.length===0);
   document.getElementById('periodTabs').innerHTML=state.reports.map((rep,i)=>`
-    <button class="period-tab ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})">${escapeHtml(rep.scheduleDate||'Report '+(i+1))}</button>
+    <button class="period-tab ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})">${escapeHtml(fmtPeriod(rep.scheduleDate)||'Report '+(i+1))}</button>
   `).join('');
 
   const odomAlerts=r.vehicles.filter(v=>v.hasOdometerIssue);
@@ -2737,8 +2740,8 @@ function renderDashboard(){
       <div class="bar-val">${fmtTotalL(v.totalLitres)}</div>
     </div>`);
 
-  renderTrendChart('trendChart',state.reports.map(rep=>({label:rep.scheduleDate,value:rep.vehicles.reduce((s,v)=>s+v.totalAmount,0)})),'R','blue');
-  renderTrendChart('trendLitres',state.reports.map(rep=>({label:rep.scheduleDate,value:rep.vehicles.reduce((s,v)=>s+v.totalLitres,0)})),'L','green');
+  renderTrendChart('trendChart',state.reports.map(rep=>({label:fmtPeriod(rep.scheduleDate),value:rep.vehicles.reduce((s,v)=>s+v.totalAmount,0)})),'R','blue');
+  renderTrendChart('trendLitres',state.reports.map(rep=>({label:fmtPeriod(rep.scheduleDate),value:rep.vehicles.reduce((s,v)=>s+v.totalLitres,0)})),'L','green');
 
   document.getElementById('vehicleCount').textContent=`${r.vehicles.length} vehicles`;
   filterVehicles();
@@ -2876,7 +2879,7 @@ function renderTrendChart(elId,points,unit,color){
   const narrow=_trendNarrow();
   const W=narrow?Math.max(280,window.innerWidth-70):600,H=110,padX=30,padY=20;
   const fsDate=narrow?11:8,fsVal=narrow?11:9;
-  // Phone: a "02.12.2024" label is ~70px, so label only every Nth point.
+  // Phone: a "Dec 2024" label is under ~70px, so label only every Nth point.
   const every=narrow?Math.max(1,Math.ceil(72*(points.length-1)/(W-padX*2))):1;
   const showLbl=i=>(points.length-1-i)%every===0;
   const xStep=(W-padX*2)/(points.length-1);
@@ -2937,7 +2940,7 @@ function renderComparison(){
   const prevPlates=new Set(prev.vehicles.map(v=>v.plate));
   const newVehicles=[...currPlates].filter(p=>!prevPlates.has(p));
   const missingVehicles=[...prevPlates].filter(p=>!currPlates.has(p));
-  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(prev.scheduleDate||'Previous')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2);">${fmtTotalR(prevTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(prevLitres)} · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(curr.scheduleDate||'Current')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent);">${fmtTotalR(currTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(currLitres)} · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} ${fmtTotalR(Math.abs(currTotal-prevTotal))} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">✅ New vehicles this period: <strong>${escapeHtml(newVehicles.join(', '))}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">⚠ Vehicles not seen this period: <strong>${escapeHtml(missingVehicles.join(', '))}</strong></div>`:''}`;
+  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">${svgIcon('calendar')}${escapeHtml(fmtPeriod(prev.scheduleDate)||'Previous')}</div><div style="font-size:22px;font-weight:700;color:var(--text2);">${fmtTotalR(prevTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(prevLitres)} · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">${svgIcon('calendar')}${escapeHtml(fmtPeriod(curr.scheduleDate)||'Current')}</div><div style="font-size:22px;font-weight:700;color:var(--accent);">${fmtTotalR(currTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(currLitres)} · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} ${fmtTotalR(Math.abs(currTotal-prevTotal))} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">${svgIcon('circle-check','icon-lead')}New vehicles this period: <strong>${escapeHtml(newVehicles.join(', '))}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">${svgIcon('alert-triangle','icon-lead')}Vehicles not seen this period: <strong>${escapeHtml(missingVehicles.join(', '))}</strong></div>`:''}`;
 }
 
 function switchReport(i){ activeReportIndex=i; recomputeAllStats(); renderDashboard(); window.scrollTo({top:0,behavior:'smooth'}); }
