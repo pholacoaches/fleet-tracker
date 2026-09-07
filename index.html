@@ -221,6 +221,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   margin-bottom: 20px; font-size: 12px; color: var(--red); justify-content: center;
 }
 .alert-banner strong { font-size: 13px; color: var(--red); }
+/* icon-pass: 8px status dot replaces the red-circle emoji; banner icon sizes */
+.status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--red); vertical-align:middle; margin-right:5px; }
+.alert-banner .icon { width:13px; height:13px; margin-right:3px; vertical-align:-2px; }
+.alert-banner .alert-banner-lead { width:18px; height:18px; margin-right:0; }
 
 /* STATS */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
@@ -245,7 +249,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   font-weight: 700;
   font-family: var(--font);
 }
-.stat-value { font-family: var(--font-mono); font-size: 24px; font-weight: 700; color: var(--accent); line-height: 1; margin-bottom: 4px; }
+.stat-value { font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 700; color: var(--accent); line-height: 1; margin-bottom: 4px; }
 /* Total Fuel Spend is rendered twice: .sv-desk with cents (desktop) and
    .sv-phone rounded to the rand, "R468 140" (phone). The 600px rule swaps them. */
 .sv-phone { display: none; }
@@ -267,8 +271,12 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .top-vehicle-card.rank-2::before { background: #5BA3D0; }
 .top-vehicle-card.rank-3::before { background: #74B8E0; }
 .top-rank { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); font-weight: 600; margin-bottom: 6px; }
-.top-plate { font-family: var(--font-mono); font-size: 16px; font-weight: 700; margin-bottom: 8px; }
-.top-amount { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--accent); }
+/* icon-pass: numbered rank badge replaces the medal emoji */
+.rank-badge { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:var(--surface2); color:var(--text2); font-size:11px; font-weight:700; letter-spacing:0; margin-right:6px; vertical-align:middle; }
+.rank-1 .rank-badge { background:var(--accent); color:#fff; }
+.top-badge .icon { width:11px; height:11px; margin-right:3px; vertical-align:-1px; }
+.top-plate { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+.top-amount { font-size: 22px; font-weight: 700; color: var(--accent); }
 .top-meta { font-size: 11px; color: var(--text3); margin-top: 4px; }
 .top-badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 600; margin-top: 6px; }
 .top-badge.high { background: var(--red-light); color: var(--red); }
@@ -279,19 +287,22 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 @media (max-width: 800px) { .charts-row { grid-template-columns: 1fr; } }
 .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .chart-title { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.8px; }
+/* icon-pass: chart-title icons and the lead icon on inline notes */
+.chart-title .icon, .compare-title .icon { width:13px; height:13px; margin-right:5px; vertical-align:-2px; }
+.icon-lead { width:13px; height:13px; margin-right:5px; vertical-align:-2px; }
 .bar-chart { display: flex; flex-direction: column; gap: 9px; }
 .bar-chart-toggle { margin-top: 10px; text-align: center; }
 .bar-chart-toggle button { font-size: 11px; font-weight: 700; color: var(--accent); background: none; border: 1.5px solid var(--accent); border-radius: var(--radius-sm); padding: 4px 14px; cursor: pointer; font-family: var(--font); transition: background 0.15s, color 0.15s; }
 .bar-chart-toggle button:hover { background: var(--accent); color: #fff; }
 .bar-row { display: flex; align-items: center; gap: 10px; }
-.bar-label { font-family: var(--font-mono); font-size: 10px; color: var(--text2); min-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-label { font-size: 10px; color: var(--text2); min-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-track { flex: 1; background: var(--surface2); border-radius: 3px; height: 18px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
 .bar-fill.blue { background: var(--accent); }
 .bar-fill.green { background: var(--green); }
 .bar-fill.amber { background: var(--amber); }
 .bar-fill.red { background: var(--red); }
-.bar-val { font-family: var(--font-mono); font-size: 10px; color: var(--text2); min-width: 72px; text-align: right; }
+.bar-val { font-variant-numeric: tabular-nums; font-size: 10px; color: var(--text2); min-width: 72px; text-align: right; }
 .trend-chart { position: relative; height: 130px; }
 .trend-svg { width: 100%; height: 100%; }
 .no-trend { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text3); font-size: 12px; font-style: italic; }
@@ -432,10 +443,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   font-size: 12px; line-height: 1; cursor: pointer;
 }
 .history-del:hover { background: #FFF5F5; color: #C92A2A; }
+/* icon-pass: the delete button holds a sprite icon, not a text glyph */
+.history-del { display:inline-flex; align-items:center; justify-content:center; }
+.history-del .icon { width:14px; height:14px; }
 .history-card.active { border-color: var(--accent); background: var(--accent-light); }
 .history-period { font-weight: 700; font-size: 13px; margin-bottom: 3px; }
 .history-meta { font-size: 11px; color: var(--text3); }
-.history-amount { font-family: var(--font-mono); font-size: 16px; font-weight: 700; margin-top: 8px; color: var(--accent); }
+.history-amount { font-size: 16px; font-weight: 700; margin-top: 8px; color: var(--accent); }
 
 /* COMPARISON */
 .compare-section { margin-top: 36px; }
@@ -914,6 +928,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .rep-generate { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .rep-generate-btn { padding:12px 28px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:var(--font); font-size:14px; font-weight:700; cursor:pointer; transition:background 0.15s; display:inline-flex; align-items:center; gap:8px; }
 .rep-generate-btn:hover { background:var(--accent2); }
+/* icon-pass: Generate button is not a .btn, so it sizes its own icon */
+.rep-generate-btn { display:inline-flex; align-items:center; gap:8px; }
+.rep-generate-btn .icon { width:15px; height:15px; }
 .rep-hint { font-size:12px; color:var(--text3); }
 .backup-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface2); margin-bottom:8px; }
 .backup-meta { min-width:0; }
@@ -968,7 +985,7 @@ input[type=file] { display: none; }
   #tab-discs .section-actions > .disc-show-archived { grid-column:1 / -1; width:100%; }
   #tab-discs .section-actions > .btn { justify-content:center; width:100%; white-space:nowrap; }
 
-  /* Overview stat cards sit two per row (~157px each); the 24px monospace
+  /* Overview stat cards sit two per row (~157px each); the 24px
      "R468,139.52" needed 158px and was clipped by the card's overflow:hidden.
      Smaller number, and Total Fuel Spend shows the rounded "R468 140" form. */
   .stat-value { font-size:17px; }
@@ -1047,6 +1064,24 @@ input[type=file] { display: none; }
   <symbol id="icon-check" viewBox="0 0 24 24"><path d="M5 12l5 5l10 -10" /></symbol>
   <symbol id="icon-minus" viewBox="0 0 24 24"><path d="M5 12l14 0" /></symbol>
   <symbol id="icon-rotate-clockwise" viewBox="0 0 24 24"><path d="M4.05 11a8 8 0 1 1 .5 4m-.5 5v-5h5" /></symbol>
+  <symbol id="icon-gas-station" viewBox="0 0 24 24"><path d="M14 11h1a2 2 0 0 1 2 2v3a1.5 1.5 0 0 0 3 0v-7l-3 -3" /><path d="M4 20v-14a2 2 0 0 1 2 -2h6a2 2 0 0 1 2 2v14" /><path d="M3 20l12 0" /><path d="M18 7v1a1 1 0 0 0 1 1h1" /><path d="M4 11l10 0" /></symbol>
+  <symbol id="icon-flag" viewBox="0 0 24 24"><path d="M5 5a5 5 0 0 1 7 0a5 5 0 0 0 7 0v9a5 5 0 0 1 -7 0a5 5 0 0 0 -7 0v-9" /><path d="M5 21v-7" /></symbol>
+  <symbol id="icon-coin" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M14.8 9a2 2 0 0 0 -1.8 -1h-2a2 2 0 1 0 0 4h2a2 2 0 1 1 0 4h-2a2 2 0 0 1 -1.8 -1" /><path d="M12 7v10" /></symbol>
+  <symbol id="icon-paperclip" viewBox="0 0 24 24"><path d="M15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3l6.5 -6.5a3 3 0 0 0 -6 -6l-6.5 6.5a4.5 4.5 0 0 0 9 9l6.5 -6.5" /></symbol>
+  <symbol id="icon-file-invoice" viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2" /><path d="M9 7l1 0" /><path d="M9 13l6 0" /><path d="M13 17l2 0" /></symbol>
+  <symbol id="icon-printer" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 0 0 2 -2v-4a2 2 0 0 0 -2 -2h-14a2 2 0 0 0 -2 2v4a2 2 0 0 0 2 2h2" /><path d="M17 9v-4a2 2 0 0 0 -2 -2h-6a2 2 0 0 0 -2 2v4" /><path d="M7 15a2 2 0 0 1 2 -2h6a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2l0 -4" /></symbol>
+  <symbol id="icon-calendar" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M4 11h16" /><path d="M11 15h1" /><path d="M12 15v3" /></symbol>
+  <symbol id="icon-chart-bar" viewBox="0 0 24 24"><path d="M3 13a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -6" /><path d="M15 9a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -10" /><path d="M9 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -14" /><path d="M4 20h14" /></symbol>
+  <symbol id="icon-copy" viewBox="0 0 24 24"><path d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666" /><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1" /></symbol>
+  <symbol id="icon-brand-whatsapp" viewBox="0 0 24 24"><path d="M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9" /><path d="M9 10a.5 .5 0 0 0 1 0v-1a.5 .5 0 0 0 -1 0v1a5 5 0 0 0 5 5h1a.5 .5 0 0 0 0 -1h-1a.5 .5 0 0 0 0 1" /></symbol>
+  <symbol id="icon-book" viewBox="0 0 24 24"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0" /><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0" /><path d="M3 6l0 13" /><path d="M12 6l0 13" /><path d="M21 6l0 13" /></symbol>
+  <symbol id="icon-file-text" viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2" /><path d="M9 9l1 0" /><path d="M9 13l6 0" /><path d="M9 17l6 0" /></symbol>
+  <symbol id="icon-cloud" viewBox="0 0 24 24"><path d="M6.657 18c-2.572 0 -4.657 -2.007 -4.657 -4.483c0 -2.475 2.085 -4.482 4.657 -4.482c.393 -1.762 1.794 -3.2 3.675 -3.773c1.88 -.572 3.956 -.193 5.444 1c1.488 1.19 2.162 3.007 1.77 4.769h.99c1.913 0 3.464 1.56 3.464 3.486c0 1.927 -1.551 3.487 -3.465 3.487h-11.878" /></symbol>
+  <symbol id="icon-settings" viewBox="0 0 24 24"><path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065" /><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" /></symbol>
+  <symbol id="icon-building-factory" viewBox="0 0 24 24"><path d="M4 21c1.147 -4.02 1.983 -8.027 2 -12h6c.017 3.973 .853 7.98 2 12" /><path d="M12.5 13h4.5c.025 2.612 .894 5.296 2 8" /><path d="M9 5a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1" /><path d="M3 21l19 0" /></symbol>
+  <symbol id="icon-droplet" viewBox="0 0 24 24"><path d="M7.502 19.423c2.602 2.105 6.395 2.105 8.996 0c2.602 -2.105 3.262 -5.708 1.566 -8.546l-4.89 -7.26c-.42 -.625 -1.287 -.803 -1.936 -.397a1.376 1.376 0 0 0 -.41 .397l-4.893 7.26c-1.695 2.838 -1.035 6.441 1.567 8.546" /></symbol>
+  <symbol id="icon-home" viewBox="0 0 24 24"><path d="M5 12l-2 0l9 -9l9 9l-2 0" /><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" /><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" /></symbol>
+  <symbol id="icon-package" viewBox="0 0 24 24"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /><path d="M12 12l8 -4.5" /><path d="M12 12l0 9" /><path d="M12 12l-8 -4.5" /><path d="M16 5.25l-8 4.5" /></symbol>
 </svg>
 
 <!-- LOGIN SCREEN -->
@@ -1218,16 +1253,16 @@ input[type=file] { display: none; }
     <!-- TAB 2: PERFORMANCE -->
     <div class="tab-panel" id="tab-performance">
       <div class="section-header">
-        <div class="section-title">🏆 Highest Spend Vehicles</div>
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-trophy"/></svg>Highest Spend Vehicles</div>
       </div>
       <div class="top-vehicles" id="topVehicles"></div>
       <div class="charts-row">
         <div class="chart-card">
-          <div class="chart-title">💰 Spend by Vehicle</div>
+          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-coin"/></svg>Spend by Vehicle</div>
           <div class="bar-chart" id="spendChart"></div>
         </div>
         <div class="chart-card">
-          <div class="chart-title">⛽ Litres by Vehicle</div>
+          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-gas-station"/></svg>Litres by Vehicle</div>
           <div class="bar-chart" id="litresChart"></div>
         </div>
       </div>
@@ -1315,17 +1350,17 @@ input[type=file] { display: none; }
     <div class="tab-panel" id="tab-trends">
       <div class="charts-row">
         <div class="chart-card">
-          <div class="chart-title">📈 Total Spend Over Time</div>
+          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-trending-up"/></svg>Total Spend Over Time</div>
           <div class="trend-chart" id="trendChart"></div>
         </div>
         <div class="chart-card">
-          <div class="chart-title">🔄 Avg Litres Per Fill Over Time</div>
+          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Avg Litres Per Fill Over Time</div>
           <div class="trend-chart" id="trendLitres"></div>
         </div>
       </div>
       <div class="compare-section" id="compareSection">
         <div class="section-header">
-          <div class="section-title">📊 Period Comparison</div>
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-chart-bar"/></svg>Period Comparison</div>
         </div>
         <div id="compareContent"></div>
       </div>
@@ -1335,7 +1370,7 @@ input[type=file] { display: none; }
     <div class="tab-panel" id="tab-history">
       <div class="history-section">
         <div class="section-header">
-          <div class="section-title">📁 Upload History</div>
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>Upload History</div>
         </div>
         <div class="history-grid" id="historyGrid"></div>
       </div>
@@ -1366,23 +1401,23 @@ input[type=file] { display: none; }
     <!-- TAB 9: REPORTS -->
     <div class="tab-panel" id="tab-reports">
       <div class="section-header">
-        <div class="section-title">📋 Reports</div>
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-file-analytics"/></svg>Reports</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Generate a print-ready PDF for printing or emailing</div>
       </div>
 
       <div class="rep-type-row">
         <div class="rep-type-card active" id="repTypeFull" onclick="setReportType('full')">
-          <div class="rep-type-title">📄 Full Report</div>
+          <div class="rep-type-title"><svg class="icon" aria-hidden="true"><use href="#icon-file-text"/></svg>Full Report</div>
           <div class="rep-type-desc">Everything in one document — fuel, vehicles, compliance, tyres and maintenance.</div>
         </div>
         <div class="rep-type-card" id="repTypeCustom" onclick="setReportType('custom')">
-          <div class="rep-type-title">⚙️ Custom Report</div>
+          <div class="rep-type-title"><svg class="icon" aria-hidden="true"><use href="#icon-settings"/></svg>Custom Report</div>
           <div class="rep-type-desc">Choose exactly which sections to include below.</div>
         </div>
         <!-- TODO: Per-driver report — not built yet. Driver identity isn't wired into the data
              until the Drivers tab lands. Build a per-driver report once that exists. -->
         <div class="rep-type-card" style="opacity:0.55;cursor:not-allowed;" title="Coming soon — requires the Drivers tab">
-          <div class="rep-type-title">🧍 Per-Driver Report <span style="font-size:10px;font-weight:600;color:var(--text3);">· Coming soon</span></div>
+          <div class="rep-type-title"><svg class="icon" aria-hidden="true"><use href="#icon-user"/></svg>Per-Driver Report <span style="font-size:10px;font-weight:600;color:var(--text3);">· Coming soon</span></div>
           <div class="rep-type-desc">Per-driver breakdowns will be available once the Drivers tab is added.</div>
         </div>
       </div>
@@ -1414,17 +1449,17 @@ input[type=file] { display: none; }
       </div>
 
       <div class="rep-generate">
-        <button class="rep-generate-btn" onclick="generateReport()">📄 Generate PDF</button>
+        <button class="rep-generate-btn" onclick="generateReport()"><svg class="icon" aria-hidden="true"><use href="#icon-file-text"/></svg>Generate PDF</button>
         <span class="rep-hint">Opens in a new browser tab — use your browser's “Save as PDF” to download or print.</span>
       </div>
 
       <div class="section-header" style="margin-top:34px;">
-        <div class="section-title">☁️ Cloud Backups</div>
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-cloud"/></svg>Cloud Backups</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Automatic JSON snapshots saved to Supabase when you clear data — newest first</div>
       </div>
       <div class="rep-panel">
         <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
-          <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="renderBackupsList()">↻ Refresh</button>
+          <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="renderBackupsList()"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Refresh</button>
         </div>
         <div id="backupsList"><p class="backups-empty">Loading cloud backups…</p></div>
       </div>
@@ -2218,6 +2253,15 @@ function fmtDaysLeft(days){
   const n=Math.abs(days);
   return`${n} day${n===1?'':'s'} ${days<0?'overdue':'left'}`;
 }
+// Period label ("Jun 2026") from a stored scheduleDate "DD.MM.YYYY" (icon-pass).
+// Render-time only; the stored string is untouched. Anything else (the
+// readings-only placeholder 'Driver readings', a bare label) is returned as-is.
+function fmtPeriod(scheduleDate){
+  const m=/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(String(scheduleDate||'').trim());
+  if(!m)return scheduleDate||'';
+  const mon=MONTHS_SHORT[parseInt(m[2],10)-1];
+  return mon?`${mon} ${m[3]}`:scheduleDate;
+}
 // escapeHtml / escAttr live in esc.js (shared with driver.html).
 // Plate → DOM-id fragment: [A-Za-z0-9_-] only, so a plate-derived id can never
 // carry markup. Writer and readers of an id must both use this.
@@ -2625,7 +2669,7 @@ function renderDashboard(){
   // grey bar — hide the wrapper (and its margin) until a fuel report exists.
   document.getElementById('dashHeader').classList.toggle('hidden',state.reports.length===0);
   document.getElementById('periodTabs').innerHTML=state.reports.map((rep,i)=>`
-    <button class="period-tab ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})">${escapeHtml(rep.scheduleDate||'Report '+(i+1))}</button>
+    <button class="period-tab ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})">${escapeHtml(fmtPeriod(rep.scheduleDate)||'Report '+(i+1))}</button>
   `).join('');
 
   const odomAlerts=r.vehicles.filter(v=>v.hasOdometerIssue);
@@ -2680,11 +2724,11 @@ function renderDashboard(){
   const top3=[...r.vehicles].sort((a,b)=>b.totalAmount-a.totalAmount).slice(0,3);
   document.getElementById('topVehicles').innerHTML=top3.map((v,i)=>`
     <div class="top-vehicle-card rank-${i+1}">
-      <div class="top-rank">${['🥇 1st','🥈 2nd','🥉 3rd'][i]} Highest Spend</div>
+      <div class="top-rank"><span class="rank-badge">${i+1}</span>${['1st','2nd','3rd'][i]} Highest Spend</div>
       <div class="top-plate">${escapeHtml(v.plate)}</div>
       <div class="top-amount">${fmtTotalR(v.totalAmount)}</div>
       <div class="top-meta">${fmtTotalL(v.totalLitres)} · ${v.transactions.length} fill(s) · avg ${v.avgLitresPerFill} L/fill</div>
-      <span class="top-badge ${v.isHighSpend?'high':'ok'}">${v.isHighSpend?'⚠ High Spend':'✓ Normal'}</span>
+      <span class="top-badge ${v.isHighSpend?'high':'ok'}">${v.isHighSpend?svgIcon('alert-triangle')+'High Spend':svgIcon('check')+'Normal'}</span>
     </div>
   `).join('');
 
@@ -2703,8 +2747,8 @@ function renderDashboard(){
       <div class="bar-val">${fmtTotalL(v.totalLitres)}</div>
     </div>`);
 
-  renderTrendChart('trendChart',state.reports.map(rep=>({label:rep.scheduleDate,value:rep.vehicles.reduce((s,v)=>s+v.totalAmount,0)})),'R','blue');
-  renderTrendChart('trendLitres',state.reports.map(rep=>({label:rep.scheduleDate,value:rep.vehicles.reduce((s,v)=>s+v.totalLitres,0)})),'L','green');
+  renderTrendChart('trendChart',state.reports.map(rep=>({label:fmtPeriod(rep.scheduleDate),value:rep.vehicles.reduce((s,v)=>s+v.totalAmount,0)})),'R','blue');
+  renderTrendChart('trendLitres',state.reports.map(rep=>({label:fmtPeriod(rep.scheduleDate),value:rep.vehicles.reduce((s,v)=>s+v.totalLitres,0)})),'L','green');
 
   document.getElementById('vehicleCount').textContent=`${r.vehicles.length} vehicles`;
   filterVehicles();
@@ -2842,7 +2886,7 @@ function renderTrendChart(elId,points,unit,color){
   const narrow=_trendNarrow();
   const W=narrow?Math.max(280,window.innerWidth-70):600,H=110,padX=30,padY=20;
   const fsDate=narrow?11:8,fsVal=narrow?11:9;
-  // Phone: a "02.12.2024" label is ~70px, so label only every Nth point.
+  // Phone: a "Dec 2024" label is under ~70px, so label only every Nth point.
   const every=narrow?Math.max(1,Math.ceil(72*(points.length-1)/(W-padX*2))):1;
   const showLbl=i=>(points.length-1-i)%every===0;
   const xStep=(W-padX*2)/(points.length-1);
@@ -2858,7 +2902,7 @@ function renderTrendChart(elId,points,unit,color){
 function renderHistory(){
   document.getElementById('historyGrid').innerHTML=state.reports.map((r,i)=>{
     const total=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
-    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">✕</button><div class="history-period">${escapeHtml(r.scheduleDate||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">${fmtTotalR(total)}</div></div>`;
+    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">${svgIcon('x')}</button><div class="history-period">${escapeHtml(fmtPeriod(r.scheduleDate)||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles· ${fmtDayMonYear(r.uploadedAt)}</div><div class="history-amount">${fmtTotalR(total)}</div></div>`;
   }).join('');
 }
 
@@ -2903,7 +2947,7 @@ function renderComparison(){
   const prevPlates=new Set(prev.vehicles.map(v=>v.plate));
   const newVehicles=[...currPlates].filter(p=>!prevPlates.has(p));
   const missingVehicles=[...prevPlates].filter(p=>!currPlates.has(p));
-  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(prev.scheduleDate||'Previous')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2);">${fmtTotalR(prevTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(prevLitres)} · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">📅 ${escapeHtml(curr.scheduleDate||'Current')}</div><div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent);">${fmtTotalR(currTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(currLitres)} · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} ${fmtTotalR(Math.abs(currTotal-prevTotal))} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">✅ New vehicles this period: <strong>${escapeHtml(newVehicles.join(', '))}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">⚠ Vehicles not seen this period: <strong>${escapeHtml(missingVehicles.join(', '))}</strong></div>`:''}`;
+  el.innerHTML=`<div class="compare-grid"><div class="compare-card"><div class="compare-title">${svgIcon('calendar')}${escapeHtml(fmtPeriod(prev.scheduleDate)||'Previous')}</div><div style="font-size:22px;font-weight:700;color:var(--text2);">${fmtTotalR(prevTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(prevLitres)} · ${prev.vehicles.length} vehicles</div></div><div class="compare-card"><div class="compare-title">${svgIcon('calendar')}${escapeHtml(fmtPeriod(curr.scheduleDate)||'Current')}</div><div style="font-size:22px;font-weight:700;color:var(--accent);">${fmtTotalR(currTotal)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px;">${fmtTotalL(currLitres)} · ${curr.vehicles.length} vehicles</div><div style="margin-top:8px;font-size:12px;font-weight:700;color:${currTotal>prevTotal?'var(--red)':'var(--green)'};">${currTotal>prevTotal?'▲':'▼'} ${fmtTotalR(Math.abs(currTotal-prevTotal))} (${Math.abs((currTotal-prevTotal)/prevTotal*100).toFixed(1)}%) vs previous</div></div></div>${newVehicles.length>0?`<div style="margin-top:12px;font-size:12px;padding:10px 14px;background:var(--green-light);border-radius:var(--radius-sm);color:var(--green);">${svgIcon('circle-check','icon-lead')}New vehicles this period: <strong>${escapeHtml(newVehicles.join(', '))}</strong></div>`:''}${missingVehicles.length>0?`<div style="margin-top:8px;font-size:12px;padding:10px 14px;background:var(--amber-light);border-radius:var(--radius-sm);color:var(--amber);">${svgIcon('alert-triangle','icon-lead')}Vehicles not seen this period: <strong>${escapeHtml(missingVehicles.join(', '))}</strong></div>`:''}`;
 }
 
 function switchReport(i){ activeReportIndex=i; recomputeAllStats(); renderDashboard(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -3028,7 +3072,7 @@ function prettyBackupDate(name){
   const m=name.match(/(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})/);
   if(!m)return name;
   const dt=new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]);
-  return dt.toLocaleString('en-ZA',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+  return fmtDayMonYear(dt)+' '+fmtTimeHM(dt); // icon-pass: app formatters, not the browser locale
 }
 
 async function renderBackupsList(){
@@ -3044,7 +3088,7 @@ async function renderBackupsList(){
           <div class="backup-date">${escapeHtml(prettyBackupDate(o.name))}</div>
           <div class="backup-name">${escapeHtml(o.name)}</div>
         </div>
-        <button class="btn btn-outline backup-dl" style="font-size:11px;padding:6px 12px;" onclick="downloadBackupFromSupabase(${escAttr(JSON.stringify(o.path))})">⬇ Download</button>
+        <button class="btn btn-outline backup-dl" style="font-size:11px;padding:6px 12px;" onclick="downloadBackupFromSupabase(${escAttr(JSON.stringify(o.path))})">${svgIcon('download')}Download</button>
       </div>`).join('');
   }catch(err){
     el.innerHTML='<p class="backups-empty">Could not load backups ('+escapeHtml(String(err.message||err))+'). The “backups” bucket may need a Storage policy that allows the app to list it.</p>';
@@ -3861,17 +3905,17 @@ function renderAlertBanner(){
   const odomAlerts=r.vehicles.filter(v=>v.hasOdometerIssue);
   const highSpend=r.vehicles.filter(v=>v.isHighSpend);
   const competitor=r.vehicles.filter(v=>v.hasCompetitor);
-  if(odomAlerts.length>0)alerts.push(`⚠ ${odomAlerts.length} vehicle(s) have odometer anomalies`);
-  if(highSpend.length>0)alerts.push(`🔴 ${highSpend.length} vehicle(s) are significantly above fleet average spend`);
-  if(competitor.length>0)alerts.push(`⛽ ${competitor.length} vehicle(s) used competitor fuel stations`);
+  if(odomAlerts.length>0)alerts.push(`${svgIcon('alert-triangle')}${odomAlerts.length} vehicle(s) have odometer anomalies`);
+  if(highSpend.length>0)alerts.push(`<span class="status-dot"></span>${highSpend.length} vehicle(s) are significantly above fleet average spend`);
+  if(competitor.length>0)alerts.push(`${svgIcon('gas-station')}${competitor.length} vehicle(s) used competitor fuel stations`);
   const cc=getComplianceAlertCounts();
-  if(cc.overdue>0)alerts.push(`🔴 ${cc.overdue} compliance item(s) OVERDUE — vehicle(s) not road-legal until renewed`);
-  if(cc.week>0)alerts.push(`🚨 ${cc.week} compliance item(s) expire this week`);
-  if(cc.book>0)alerts.push(`📋 ${cc.book} compliance item(s) due within 30 days — book now`);
-  if(cc.soon>0)alerts.push(`📋 ${cc.soon} compliance item(s) expiring within 45 days`);
+  if(cc.overdue>0)alerts.push(`<span class="status-dot"></span>${cc.overdue} compliance item(s) OVERDUE — vehicle(s) not road-legal until renewed`);
+  if(cc.week>0)alerts.push(`${svgIcon('alert-triangle')}${cc.week} compliance item(s) expire this week`);
+  if(cc.book>0)alerts.push(`${svgIcon('certificate')}${cc.book} compliance item(s) due within 30 days — book now`);
+  if(cc.soon>0)alerts.push(`${svgIcon('certificate')}${cc.soon} compliance item(s) expiring within 45 days`);
   if(alerts.length>0){
     ab.classList.remove('hidden');
-    ab.innerHTML=`<div style="font-size:16px">⚠</div><div><strong>Attention Required</strong><br>${alerts.join(' &nbsp;·&nbsp; ')}</div>`;
+    ab.innerHTML=`${svgIcon('alert-triangle','alert-banner-lead')}<div><strong>Attention Required</strong><br>${alerts.join(' &nbsp;·&nbsp; ')}</div>`;
     ab.className='alert-banner';
   }else{ab.classList.add('hidden');}
 }
@@ -6148,7 +6192,7 @@ function renderReportsTab(){
 
   // Period dropdown — one per uploaded report
   const pSel=document.getElementById('repPeriod');
-  pSel.innerHTML='<option value="__all__">All Periods</option>'+state.reports.map((r,i)=>`<option value="${i}">${escapeHtml(r.scheduleDate||'Report '+(i+1))}</option>`).join('');
+  pSel.innerHTML='<option value="__all__">All Periods</option>'+state.reports.map((r,i)=>`<option value="${i}">${escapeHtml(fmtPeriod(r.scheduleDate)||'Report '+(i+1))}</option>`).join('');
 
   // Custom checkboxes
   document.getElementById('repChecksGrid').innerHTML=REPORT_SECTIONS.map(s=>`

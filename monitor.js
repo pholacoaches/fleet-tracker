@@ -24,7 +24,7 @@
 (function(){
   'use strict';
 
-  var FLEETDESK_RELEASE='fleetdesk-v73';
+  var FLEETDESK_RELEASE='fleetdesk-v74';
   var DSN='https://7415a2ef1c96f2c4907c7b4c958541f4@o4512041337618432.ingest.de.sentry.io/4512041379758160';
   var PAGE=/driver\.html$/i.test(location.pathname)?'driver':'dashboard';
   var ENV=(/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname)||location.protocol==='file:')?'local':'production';
