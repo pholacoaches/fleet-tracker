@@ -167,7 +167,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .view-btn {
   padding: 6px 12px; border: none; background: transparent; cursor: pointer;
   font-size: 12px; color: var(--text3); font-family: var(--font); transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 5px;
 }
+.view-btn .icon { width: 13px; height: 13px; }
 .view-btn.active { background: var(--accent); color: white; }
 
 /* MAIN */
@@ -329,8 +331,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .vehicles-table td { padding: 10px 14px; font-size: 12px; border-bottom: 1px solid var(--border); }
 .vehicles-table tr:last-child td { border-bottom: none; }
 .vehicles-table tr:hover td { background: var(--accent-light); }
-.vtd-plate { font-family: var(--font-mono); font-weight: 700; }
-.vtd-num { text-align: right; font-family: var(--font-mono); }
+/* icon-pass B: no mono on plates/numbers; tabular-nums keeps the columns straight */
+.vtd-plate { font-weight: 700; letter-spacing: 0.5px; }
+.vtd-num { text-align: right; font-variant-numeric: tabular-nums; }
+.vtd-flag .icon { width: 13px; height: 13px; vertical-align: -2px; }
+.vtd-flag .status-dot { margin-right: 0; }
 .vtd-flag { text-align: center; }
 
 /* COLLAPSIBLE VEHICLE CARD */
@@ -354,7 +359,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
 .vc-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.vehicle-plate { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: 1px; }
+.vehicle-plate { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: 0.5px; }
 .vc-badges { display: flex; gap: 5px; flex-wrap: wrap; }
 .badge {
   font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 700;
@@ -363,6 +368,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .badge-warn { background: var(--amber-light); color: var(--amber); }
 .badge-high { background: var(--red-light); color: var(--red); }
 .badge-comp { background: #E3FAFC; color: #0C8599; }
+.badge .icon { width: 11px; height: 11px; margin-right: 3px; vertical-align: -1px; }
+/* icon-pass B: in-row pills ("Comp", "Unverified") inside the transaction table */
+.tx-table .badge { font-size: 9px; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }
+.badge-unverified { background: #FFF9DB; color: #E67700; }
 .vc-chevron {
   width: 18px; height: 18px; flex-shrink: 0; color: var(--text3);
   transition: transform 0.3s ease;
@@ -389,13 +398,15 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .tx-table th.r, .tx-table td.r { text-align: right; }
 .tx-table td { padding: 8px 12px; font-size: 12px; border-bottom: 1px solid var(--border); }
 .tx-table tr:last-child td { border-bottom: none; }
-.td-date { color: var(--text2); font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+/* icon-pass B: mono off the transaction table; numeric cells align with tabular-nums */
+.td-date { color: var(--text2); font-size: 11px; white-space: nowrap; }
 .td-merchant { color: var(--text); }
-.td-odo { font-family: var(--font-mono); font-size: 11px; color: var(--text2); }
+.td-odo { font-variant-numeric: tabular-nums; font-size: 11px; color: var(--text2); white-space: nowrap; }
 .td-odo.flagged { color: var(--red); font-weight: 700; }
-.td-litres { font-family: var(--font-mono); font-size: 11px; color: var(--text2); }
-.td-amount { font-family: var(--font-mono); font-size: 12px; font-weight: 700; white-space: nowrap; }
-.td-cons { font-family: var(--font-mono); font-size: 11px; }
+.td-odo .icon { width: 12px; height: 12px; vertical-align: -2px; margin-left: 2px; }
+.td-litres { font-variant-numeric: tabular-nums; font-size: 11px; color: var(--text2); white-space: nowrap; }
+.td-amount { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.td-cons { font-variant-numeric: tabular-nums; font-size: 11px; white-space: nowrap; }
 .td-cons.val { color: var(--green); font-weight: 700; }
 .td-cons.dash { color: var(--text3); }
 .vc-footer {
@@ -413,6 +424,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 }
 .vc-note.note-warn { background: var(--amber-light); border-top-color: #FFE066; color: var(--amber); }
 .vc-note.note-high { background: var(--red-light); border-top-color: #FFA8A8; color: var(--red); }
+.vc-note .icon { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
+.vc-note .status-dot { flex-shrink: 0; margin: 4px 0 0; }
 
 /* DASHBOARD TABS */
 .dash-tabs { display:flex; gap:0; justify-content:space-between; overflow-x:auto; box-shadow:inset 0 -2px 0 var(--border); margin-bottom:24px; }
@@ -474,7 +487,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 }
 .vc-service-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .vc-service-label { font-size: 11px; font-weight: 700; color: var(--text3); white-space: nowrap; }
-.vc-service-val { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text2); }
+.vc-service-label .icon { width: 12px; height: 12px; margin-right: 3px; vertical-align: -2px; }
+.vc-service-val { font-size: 12px; font-weight: 700; color: var(--text2); }
 .vc-service-val.sv-red    { color: var(--red); }
 .vc-service-val.sv-yellow { color: var(--amber); }
 .vc-service-val.sv-green  { color: var(--green); }
@@ -484,6 +498,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   white-space: nowrap; transition: border-color 0.15s, color 0.15s; flex-shrink: 0;
 }
 .vc-svc-btn:hover { border-color: var(--accent); color: var(--accent); }
+.vc-svc-btn .icon { width: 11px; height: 11px; margin-right: 3px; vertical-align: -1px; }
 .vc-service-form {
   padding: 10px 14px 12px; border-top: 1px solid var(--border); background: var(--surface2);
   display: none; flex-direction: column; gap: 8px;
@@ -492,7 +507,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .vc-service-form label { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 2px; display: block; }
 .vc-service-form input {
   width: 100%; padding: 6px 10px; border: 1.5px solid var(--border2); border-radius: var(--radius-sm);
-  font-family: var(--font-mono); font-size: 12px; color: var(--text); background: var(--surface);
+  font-family: var(--font); font-size: 12px; color: var(--text); background: var(--surface);
   outline: none; box-sizing: border-box;
 }
 .vc-service-form input:focus { border-color: var(--accent); }
@@ -618,6 +633,19 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .notif-item-odo { font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--text); }
 .notif-item-time { font-size:10px; color:var(--text3); margin-top:3px; }
 .notif-item-notes { font-size:11px; color:var(--amber); margin-top:3px; font-style:italic; }
+.notif-item-driver { font-size:11px; font-weight:700; color:var(--text2); margin-top:3px; }
+.notif-item-driver .icon, .notif-item-time .icon, .notif-item-notes .icon { width:11px; height:11px; margin-right:3px; vertical-align:-2px; }
+/* icon-pass B: one submission badge style, shared by the bell panel and the
+   driver history modal (subBadgeHtml). Colours are the same hex the inline
+   styles used, now via the variables. */
+.sub-badge { display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:700; border-radius:20px; padding:2px 8px; white-space:nowrap; }
+.sub-badge .icon { width:11px; height:11px; }
+.sub-badge.approved { background:var(--green-light); color:var(--green); }
+.sub-badge.flagged { background:var(--red-light); color:var(--red); }
+.sub-badge.pending { background:var(--accent-light); color:var(--accent); }
+.sub-badge.mismatch { background:var(--red); color:#fff; }
+.sub-badge.unverified { background:var(--amber-light); color:var(--amber); border:1px solid var(--amber); }
+.notif-action-btn .icon, .popup-action-btn .icon { width:14px; height:14px; margin-right:5px; vertical-align:-3px; }
 .notif-empty { padding:24px; text-align:center; color:var(--text3); font-size:13px; font-style:italic; }
 
 /* ODOMETER PHOTO THUMBNAILS (signed-URL display) */
@@ -731,7 +759,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-edit-form input:focus { border-color:var(--accent); }
 .def-row { display:flex; gap:8px; flex-wrap:wrap; }
 .def-row > div { flex:1; min-width:120px; }
-.def-save { padding:7px 16px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; font-weight:700; cursor:pointer; align-self:flex-start; transition:background 0.15s; }
+.def-save { padding:7px 16px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; font-weight:700; cursor:pointer; align-self:flex-start; transition:background 0.15s; display:inline-flex; align-items:center; gap:6px; }
+.def-save .icon { width:14px; height:14px; }
 .def-save:hover { background:var(--accent2); }
 
 /* COMPLIANCE ROWS (3 items per vehicle) */
@@ -818,7 +847,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 
 /* TYRES TAB */
 .tyre-plate-strip { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
-.tyre-plate-chip { padding:8px 16px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--text2); cursor:pointer; transition:all 0.15s; display:flex; align-items:center; gap:8px; }
+/* icon-pass B: plate chips (shared with Maintenance) drop mono like every other plate */
+.tyre-plate-chip { padding:8px 16px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); font-family:var(--font); font-size:13px; font-weight:700; letter-spacing:0.5px; color:var(--text2); cursor:pointer; transition:all 0.15s; display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:172px; }
 .tyre-plate-chip:hover { border-color:var(--accent); color:var(--accent); }
 .tyre-plate-chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
 .tyre-chip-count { font-family:var(--font); font-size:10px; font-weight:700; background:var(--accent-light); color:var(--accent); border-radius:10px; padding:2px 8px; }
@@ -827,18 +857,19 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .tyre-card { background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; animation:fadeUp 0.35s ease both; }
 .tyre-card.tc-retread { border-left-color:var(--amber); }
 .tyre-card-header { display:flex; align-items:center; justify-content:space-between; padding:11px 14px; background:var(--surface2); border-bottom:1px solid var(--border); }
-.tyre-pos-badge { font-family:var(--font-mono); font-size:14px; font-weight:700; color:var(--accent); background:var(--accent-light); border:1.5px solid var(--accent); border-radius:var(--radius-sm); padding:3px 12px; }
+.tyre-pos-badge { font-size:14px; font-weight:700; letter-spacing:0.5px; color:var(--accent); background:var(--accent-light); border:1.5px solid var(--accent); border-radius:var(--radius-sm); padding:3px 12px; }
 .tyre-retread-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--amber); background:var(--amber-light); border-radius:10px; padding:3px 10px; }
 .tyre-card-body { padding:12px 14px; display:flex; flex-direction:column; gap:7px; }
 .tyre-info-row { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
 .tyre-info-label { font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--text3); font-weight:700; white-space:nowrap; }
-.tyre-info-val { font-size:12px; font-weight:600; color:var(--text); text-align:right; }
-.tyre-info-val.mono { font-family:var(--font-mono); }
-.tyre-invoice-link { font-size:11px; font-weight:700; color:var(--accent); text-decoration:none; }
+.tyre-info-val { font-size:12px; font-weight:600; color:var(--text); text-align:right; font-variant-numeric:tabular-nums; }
+.tyre-invoice-link { font-size:11px; font-weight:700; color:var(--accent); text-decoration:none; display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+.tyre-invoice-link .icon { width:13px; height:13px; }
 .tyre-invoice-link:hover { text-decoration:underline; }
 .tyre-add-form { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px; margin-top:14px; display:none; }
 .tyre-add-form.open { display:block; }
 .tyre-form-title { font-size:14px; font-weight:700; color:var(--accent); margin-bottom:14px; }
+.tyre-form-title .icon { width:15px; height:15px; margin-right:5px; vertical-align:-2px; }
 .tf-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:12px; margin-bottom:14px; }
 .tf-field label { font-size:11px; font-weight:700; color:var(--text2); display:block; margin-bottom:4px; }
 .tf-field input, .tf-field select { width:100%; padding:8px 10px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; color:var(--text); background:var(--surface); outline:none; }
@@ -893,7 +924,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .drivers-table tr:hover td { background:var(--accent-light); }
 .driver-row-inactive td { opacity:0.45; }
 .driver-row-inactive td:hover, .drivers-table tr.driver-row-inactive:hover td { background:var(--surface2); }
-.drv-code { font-family:var(--font-mono); font-weight:700; font-size:12px; color:var(--accent); white-space:nowrap; }
+.drv-code { font-weight:700; font-size:12px; letter-spacing:0.5px; color:var(--accent); white-space:nowrap; }
 .drv-badge { display:inline-block; font-size:10px; font-weight:700; letter-spacing:0.3px; padding:3px 10px; border-radius:20px; white-space:nowrap; }
 .drv-badge.on { background:var(--green-light); color:var(--green); }
 .drv-badge.off { background:var(--surface2); color:var(--text3); }
@@ -901,6 +932,12 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .drv-link code { font-family:var(--font-mono); font-size:11px; color:var(--text2); background:var(--surface2); padding:2px 7px; border-radius:4px; }
 .drv-copy-btn { border:1.5px solid var(--border2); background:var(--surface); border-radius:var(--radius-sm); padding:3px 8px; font-size:12px; cursor:pointer; font-family:var(--font); transition:all 0.15s; }
 .drv-copy-btn:hover { border-color:var(--accent); background:var(--accent-light); }
+/* icon-pass B: sprite icons inside the row buttons and the watchdog banner */
+.drv-copy-btn { display:inline-flex; align-items:center; justify-content:center; color:var(--text2); }
+.drv-copy-btn .icon { width:13px; height:13px; }
+.drv-action-btn .icon { width:12px; height:12px; margin-right:3px; vertical-align:-2px; }
+.drv-watchdog-toggle .icon { width:12px; height:12px; margin-right:3px; vertical-align:-2px; transition:transform 0.2s; }
+.drv-wa-link .icon { width:13px; height:13px; margin-right:3px; vertical-align:-2px; }
 .drv-action-btn { border:1.5px solid var(--border2); background:var(--surface); color:var(--text2); border-radius:var(--radius-sm); padding:4px 10px; font-size:11px; font-weight:700; cursor:pointer; font-family:var(--font); transition:all 0.15s; white-space:nowrap; }
 .drv-action-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-light); }
 .drv-exp-red { color:var(--red); font-weight:700; }
@@ -1271,12 +1308,12 @@ input[type=file] { display: none; }
     <!-- TAB 3: VEHICLE BLOCKS -->
     <div class="tab-panel" id="tab-vehicles">
       <div class="section-header">
-        <div class="section-title">🚘 Vehicle Blocks</div>
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicle Blocks</div>
         <div class="section-count" id="vehicleCount"></div>
         <div class="section-actions">
-          <button class="btn btn-outline" onclick="exportCSV()" style="font-size:11px;padding:6px 12px;">📥 CSV</button>
-          <button class="btn btn-outline" onclick="window.print()" style="font-size:11px;padding:6px 12px;">🖨 Print</button>
-          <input type="text" id="searchInput" placeholder="🔍  Search plate..." oninput="filterVehicles()"
+          <button class="btn btn-outline" onclick="exportCSV()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-download"/></svg>CSV</button>
+          <button class="btn btn-outline" onclick="window.print()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-printer"/></svg>Print</button>
+          <input type="text" id="searchInput" placeholder="Search plate..." oninput="filterVehicles()"
             style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-family:var(--font);font-size:12px;outline:none;width:180px;color:var(--text);background:var(--surface2);">
           <select id="sortSelect" onchange="filterVehicles()" class="sort-select">
             <option value="spend">Sort: Highest Spend</option>
@@ -1285,8 +1322,8 @@ input[type=file] { display: none; }
             <option value="cons">Sort: Best km/L</option>
           </select>
           <div class="view-toggle">
-            <button class="view-btn active" id="viewGrid" onclick="setView('grid')">⊞ Blocks</button>
-            <button class="view-btn" id="viewTable" onclick="setView('table')">≡ Table</button>
+            <button class="view-btn active" id="viewGrid" onclick="setView('grid')"><svg class="icon" aria-hidden="true"><use href="#icon-layout-grid"/></svg>Blocks</button>
+            <button class="view-btn" id="viewTable" onclick="setView('table')"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Table</button>
           </div>
         </div>
       </div>
@@ -1297,11 +1334,11 @@ input[type=file] { display: none; }
     <!-- TAB: DRIVERS (Stage 1 — admin registry; driver page integration is Stage 2) -->
     <div class="tab-panel" id="tab-drivers">
       <div class="section-header">
-        <div class="section-title">👤 Drivers</div>
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-user"/></svg>Drivers</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Driver profiles, personal codes and licence tracking</div>
         <div class="section-actions">
-          <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="copyLaunchList(this)" id="launchListBtn">📋 Copy launch list</button>
-          <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="openDriverForm('add')">＋ Add Driver</button>
+          <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="copyLaunchList(this)" id="launchListBtn"><svg class="icon" aria-hidden="true"><use href="#icon-copy"/></svg>Copy launch list</button>
+          <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="openDriverForm('add')"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Driver</button>
         </div>
       </div>
       <div id="driverWatchdog"></div>
@@ -1379,7 +1416,7 @@ input[type=file] { display: none; }
     <!-- TAB 7: TYRES -->
     <div class="tab-panel" id="tab-tyres">
       <div class="section-header">
-        <div class="section-title">🔧 Tyre Management</div>
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyre Management</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Select a vehicle to view and manage its tyres</div>
       </div>
       <div class="tyre-plate-strip" id="tyrePlateStrip"></div>
@@ -2262,6 +2299,15 @@ function fmtPeriod(scheduleDate){
   const mon=MONTHS_SHORT[parseInt(m[2],10)-1];
   return mon?`${mon} ${m[3]}`:scheduleDate;
 }
+// Transaction date label ("1 May 2026") from the stored "DD.MM.YYYY" string
+// (icon-pass B). Render-time only; the stored string and parseDateStr sorting
+// are untouched. Anything else (a stored dash placeholder) passes through
+// unchanged; an empty value shows the usual em-dash (written as a \u escape
+// so no new non-ASCII is typed into this file).
+function fmtTxDate(s){
+  if(!/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(String(s||'').trim()))return s||'\u2014';
+  return fmtDayMonYear(parseDateStr(s));
+}
 // escapeHtml / escAttr live in esc.js (shared with driver.html).
 // Plate → DOM-id fragment: [A-Za-z0-9_-] only, so a plate-derived id can never
 // carry markup. Writer and readers of an id must both use this.
@@ -2799,7 +2845,7 @@ function renderVehicleBlock(v,vi){
   let svcHeaderClass='';
   let svcRowHtml='';
   if(!svc||!svc.lastServiceOdo||!svc.interval){
-    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val" style="color:var(--text3);font-style:italic;font-family:var(--font);">Not set up</span></div><button class="vc-svc-btn" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">＋ Set up service</button></div>`;
+    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">${svgIcon('tool')}Service:</span><span class="vc-service-val" style="color:var(--text3);font-style:italic;">Not set up</span></div><button class="vc-svc-btn" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">${svgIcon('plus')}Set up service</button></div>`;
   }else{
     const kmUsed=currentOdo?currentOdo-svc.lastServiceOdo:0;
     const kmRemaining=svc.interval-kmUsed;
@@ -2808,27 +2854,27 @@ function renderVehicleBlock(v,vi){
     else if(kmRemaining<=500){svcHeaderClass='svc-urgent';valClass='sv-red';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
     else if(kmRemaining<=2000){svcHeaderClass='svc-warn';valClass='sv-yellow';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
     else{valClass='sv-green';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
-    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">🔧 Service:</span><span class="vc-service-val ${valClass}">${svcText}</span></div><button class="vc-svc-btn" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">✎ Edit</button></div>`;
+    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">${svgIcon('tool')}Service:</span><span class="vc-service-val ${valClass}">${svcText}</span></div><button class="vc-svc-btn" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">${svgIcon('pencil')}Edit</button></div>`;
   }
   svcRowHtml+=`<div class="vc-service-form" id="vsf-${id}"><div class="vsf-row"><div><label>Last service odometer (km)</label><input type="number" id="vs-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000"></div><div><label>Service interval (km)</label><input type="number" id="vs-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000"></div></div><button class="vsf-save" onclick="saveVehicleService(${escAttr(JSON.stringify(plate))})">Save</button></div>`;
 
   const badges=[];
   if(v.readingsOnly)badges.push('<span class="badge badge-comp">Readings only</span>');
   if(v.hasOdometerIssue)badges.push('<span class="badge badge-warn">Odo anomaly</span>');
-  if(v.isHighSpend)badges.push('<span class="badge badge-high">High spend</span>');
-  if(v.hasCompetitor)badges.push('<span class="badge badge-comp">Competitor fill</span>');
+  if(v.isHighSpend)badges.push(`<span class="badge badge-high">${svgIcon('alert-triangle')}High spend</span>`);
+  if(v.hasCompetitor)badges.push(`<span class="badge badge-comp">${svgIcon('gas-station')}Competitor fill</span>`);
   const alertClass=(v.hasOdometerIssue||v.isHighSpend)?'alert-red':v.hasCompetitor?'alert-blue':'';
 
   const multiSource=(currentReport?.sources||[]).length>1;
   const rows=v.transactions.map(tx=>{
     const srcTag=multiSource?(tx.source==='Engen'?'<span style="font-size:9px;color:#1971C2;font-weight:600;margin-left:4px;">[ENGEN]</span>':tx.source==='Freight'?'<span style="font-size:9px;color:#2F9E44;font-weight:600;margin-left:4px;">[FREIGHT]</span>':''):'';
     const photoThumb=tx.driverSubmission?odoThumbHtml(tx.photoPath):'';
-    const unverifiedTag=tx.driverSubmission&&tx.photoVerified===false?' <span style="font-size:9px;color:#E67700;font-weight:700;margin-left:4px;">[📷 UNVERIFIED]</span>':'';
-    return`<tr><td class="td-date">${escapeHtml(tx.date)}</td><td class="td-merchant">${escapeHtml(tx.merchant)}${srcTag}${tx.isCompetitor?' <span style="font-size:9px;color:#0C8599;font-weight:700;margin-left:4px;">[COMP]</span>':''}${unverifiedTag}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?' ⚠':''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
+    const unverifiedTag=tx.driverSubmission&&tx.photoVerified===false?`<span class="badge badge-unverified">${svgIcon('camera')}Unverified</span>`:'';
+    return`<tr><td class="td-date">${escapeHtml(fmtTxDate(tx.date))}</td><td class="td-merchant">${escapeHtml(tx.merchant)}${srcTag}${tx.isCompetitor?'<span class="badge badge-comp">Comp</span>':''}${unverifiedTag}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?svgIcon('alert-triangle'):''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
   }).join('');
 
-  const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn"><span>⚠</span><span>Odometer query: one or more readings are lower than the previous entry. Please verify with the fuel supplier or the driver — may be a data capture error.</span></div>`:'';
-  const highNote=v.isHighSpend?`<div class="vc-note note-high"><span>🔴</span><span>High spend alert: this vehicle's fuel cost is significantly above the fleet average for this period. Please review.</span></div>`:'';
+  const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn">${svgIcon('alert-triangle')}<span>Odometer query: one or more readings are lower than the previous entry. Please verify with the fuel supplier or the driver — may be a data capture error.</span></div>`:'';
+  const highNote=v.isHighSpend?`<div class="vc-note note-high"><span class="status-dot"></span><span>High spend alert: this vehicle's fuel cost is significantly above the fleet average for this period. Please review.</span></div>`:'';
   const chevron=`<svg class="vc-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 8 10 13 15 8"/></svg>`;
 
   // Readings-only blocks (plate not in this period's fuel report): show the
@@ -2845,8 +2891,8 @@ function renderVehicleBlock(v,vi){
 
 function renderVehicleTable(vehicles){
   const rows=vehicles.map(v=>v.readingsOnly
-    ?`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td colspan="5" style="font-style:italic;color:var(--text3);">No fuel data this period — ${v.transactions.length} approved reading${v.transactions.length!==1?'s':''}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''}</td></tr>`
-    :`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${fmtTotalL(v.totalLitres)}</td><td class="vtd-num r">${fmtTotalR(v.totalAmount)}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${v.hasOdometerIssue?'⚠':''} ${v.isHighSpend?'🔴':''} ${v.hasCompetitor?'⛽':''}</td></tr>`).join('');
+    ?`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td colspan="5" style="font-style:italic;color:var(--text3);">No fuel data this period — ${v.transactions.length} approved reading${v.transactions.length!==1?'s':''}</td><td class="vtd-flag">${v.hasOdometerIssue?svgIcon('alert-triangle'):''}</td></tr>`
+    :`<tr><td class="vtd-plate">${escapeHtml(v.plate)}</td><td class="vtd-num r">${v.transactions.length}</td><td class="vtd-num r">${fmtTotalL(v.totalLitres)}</td><td class="vtd-num r">${fmtTotalR(v.totalAmount)}</td><td class="vtd-num r">${v.avgLitresPerFill} L</td><td class="vtd-num r">${v.avgKmPerLitre||'—'}</td><td class="vtd-flag">${[v.hasOdometerIssue?svgIcon('alert-triangle'):'',v.isHighSpend?'<span class="status-dot"></span>':'',v.hasCompetitor?svgIcon('gas-station'):''].filter(Boolean).join(' ')}</td></tr>`).join('');
   return`<table class="vehicles-table"><thead><tr><th>Plate</th><th>Fills</th><th>Total Litres</th><th>Total Spend</th><th>Avg Litres/Fill</th><th>Avg km/L</th><th>Flags</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -3308,13 +3354,15 @@ function invoiceLinkHtml(invoiceUrl,label){
   if(!invoiceUrl)return'';
   const id='invLink-'+(++_invLinkSeq);
   setTimeout(()=>hydrateInvoiceLink(id),0);
-  return`<a class="tyre-invoice-link" id="${id}" data-inv="${escapeHtml(invoiceUrl)}" data-label="${escapeHtml(label||'View')}">📄 Loading…</a>`;
+  return`<a class="tyre-invoice-link" id="${id}" data-inv="${escapeHtml(invoiceUrl)}" data-label="${escapeHtml(label||'View')}">${svgIcon('file-invoice')}Loading…</a>`;
 }
 
+// icon-pass B: innerHTML + svgIcon (a textContent write would drop the icon);
+// the label is escaped again because dataset hands back the decoded string.
 async function hydrateInvoiceLink(id){
   const el=document.getElementById(id);
   if(!el||!el.dataset.inv)return;
-  el.textContent='📄 Loading…';
+  el.innerHTML=svgIcon('file-invoice')+'Loading…';
   el.removeAttribute('href');
   el.onclick=null;
   try{
@@ -3322,9 +3370,9 @@ async function hydrateInvoiceLink(id){
     el.href=url;
     el.target='_blank';
     el.rel='noopener';
-    el.textContent='📄 '+el.dataset.label;
+    el.innerHTML=svgIcon('file-invoice')+escapeHtml(el.dataset.label);
   }catch(err){
-    el.textContent='⚠️ Invoice unavailable — tap to retry';
+    el.innerHTML=svgIcon('alert-triangle')+'Invoice unavailable — tap to retry';
     el.onclick=e=>{e.preventDefault();hydrateInvoiceLink(id);};
   }
 }
@@ -3530,22 +3578,22 @@ function renderNotifPanel(){
   list.innerHTML=notifData.map(n=>{
     const timeStr=fmtDDMMYYYY(n.created_at)+' '+fmtTimeHM(n.created_at);
     const statusBadge=n.status==='approved'
-      ?'<span style="font-size:10px;font-weight:700;background:#EBFBEE;color:#2F9E44;border-radius:20px;padding:2px 8px;">✅ Approved</span>'
+      ?subBadgeHtml('approved','Approved')
       :n.status==='flagged'
-      ?'<span style="font-size:10px;font-weight:700;background:#FFF5F5;color:#C92A2A;border-radius:20px;padding:2px 8px;">🚩 Flagged</span>'
-      :'<span style="font-size:10px;font-weight:700;background:var(--accent-light);color:var(--accent);border-radius:20px;padding:2px 8px;">New</span>';
+      ?subBadgeHtml('flagged','Flagged')
+      :subBadgeHtml('pending','New');
     const mismatchBadge=n.ai_odometer!=null&&Math.abs(n.odometer-n.ai_odometer)>25
-      ?'<span style="font-size:10px;font-weight:700;background:#C92A2A;color:white;border-radius:20px;padding:2px 8px;">⚠ Odo Mismatch</span>'
+      ?subBadgeHtml('mismatch','Odo Mismatch')
       :'';
     // Pilot fix 1b: photo_verified=false means the AI never read this photo
     // (second-failure manual entry on the driver page)
     const unverifiedBadge=n.photo_verified===false
-      ?'<span style="font-size:10px;font-weight:700;background:#FFF9DB;color:#E67700;border:1px solid #E67700;border-radius:20px;padding:2px 8px;">📷 Photo unverified</span>'
+      ?subBadgeHtml('unverified','Photo unverified')
       :'';
     const actionBtns=(!n.status||n.status==='pending')
       ?`<div style="display:flex;gap:6px;margin-top:8px;">
-          <button onclick="approveNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:#2F9E44;color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">✅ Approve</button>
-          <button onclick="rejectNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:#C92A2A;color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">🚩 Flag</button>
+          <button class="notif-action-btn" onclick="approveNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--green);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('circle-check')}Approve</button>
+          <button class="notif-action-btn" onclick="rejectNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--red);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('flag')}Flag</button>
         </div>`:'';
     return`<div class="notif-item">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -3553,9 +3601,9 @@ function renderNotifPanel(){
         <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-US')+' km':'—'}</span>
         ${statusBadge}${mismatchBadge}${unverifiedBadge}
       </div>
-      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-top:3px;">👤 ${escapeHtml(n.driver_name||'—')}</div>
-      <div class="notif-item-time">📅 ${timeStr}</div>
-      ${n.notes?`<div class="notif-item-notes">📝 ${escapeHtml(n.notes)}</div>`:''}
+      <div class="notif-item-driver">${svgIcon('user')}${escapeHtml(n.driver_name||'—')}</div>
+      <div class="notif-item-time">${svgIcon('calendar')}${timeStr}</div>
+      ${n.notes?`<div class="notif-item-notes">${svgIcon('note')}${escapeHtml(n.notes)}</div>`:''}
       ${n.photo_url?`<div style="margin-top:8px;"><img src="${escapeHtml(n.photo_url)}" alt="Odometer" style="width:100%;border-radius:6px;border:1px solid var(--border);max-height:140px;object-fit:cover;display:block;"></div>`:''}
       ${actionBtns}
     </div>`;
@@ -3681,6 +3729,14 @@ const discExpanded=new Set(); // plates whose collapsed "all valid" row is open;
 // carries its own aria-label / title.
 function svgIcon(name,cls){
   return`<svg class="icon${cls?' '+cls:''}" aria-hidden="true" focusable="false"><use href="#icon-${name}"/></svg>`;
+}
+// icon-pass B: submission status badge, identical in the bell panel and the
+// driver history modal. `kind` picks the colour + icon; `text` is the label
+// (the two places word the not-yet-actioned state differently: New / Pending).
+const SUB_BADGE_ICON={approved:'circle-check',flagged:'flag',mismatch:'alert-triangle',unverified:'camera'};
+function subBadgeHtml(kind,text){
+  const ic=SUB_BADGE_ICON[kind];
+  return`<span class="sub-badge ${kind}">${ic?svgIcon(ic):''}${text}</span>`;
 }
 
 // Local-date ISO (YYYY-MM-DD). toISOString() would shift a local midnight to
@@ -5081,26 +5137,26 @@ function renderTyreVehiclePanel(){
         <div class="tyre-card-body">
           ${t.invoice_url?`<div class="tyre-info-row"><span class="tyre-info-label">Invoice</span>${invoiceLinkHtml(t.invoice_url,'View')}</div>`:''}
           <div class="tyre-info-row"><span class="tyre-info-label">Brand</span><span class="tyre-info-val">${escapeHtml(t.brand)||'—'}${t.model?' '+escapeHtml(t.model):''}</span></div>
-          <div class="tyre-info-row"><span class="tyre-info-label">Size</span><span class="tyre-info-val mono">${escapeHtml(t.size)||'—'}</span></div>
-          <div class="tyre-info-row"><span class="tyre-info-label">Cost</span><span class="tyre-info-val mono">${t.cost!=null?'R'+Number(t.cost).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</span></div>
-          <div class="tyre-info-row"><span class="tyre-info-label">Fitted At</span><span class="tyre-info-val mono">${t.odometer_fitted!=null?Number(t.odometer_fitted).toLocaleString('en-US')+' km':'—'}</span></div>
-          <div class="tyre-info-row"><span class="tyre-info-label">Date Fitted</span><span class="tyre-info-val mono">${t.date_fitted||'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Size</span><span class="tyre-info-val">${escapeHtml(t.size)||'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Cost</span><span class="tyre-info-val">${t.cost!=null?'R'+Number(t.cost).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Fitted At</span><span class="tyre-info-val">${t.odometer_fitted!=null?Number(t.odometer_fitted).toLocaleString('en-US')+' km':'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Date Fitted</span><span class="tyre-info-val">${escapeHtml(fmtDayMonYear(t.date_fitted))}</span></div>
           ${t.supplier?`<div class="tyre-info-row"><span class="tyre-info-label">Supplier</span><span class="tyre-info-val">${escapeHtml(t.supplier)}</span></div>`:''}
-          ${t.serial_dot?`<div class="tyre-info-row"><span class="tyre-info-label">Serial / DOT</span><span class="tyre-info-val mono">${escapeHtml(t.serial_dot)}</span></div>`:''}
+          ${t.serial_dot?`<div class="tyre-info-row"><span class="tyre-info-label">Serial / DOT</span><span class="tyre-info-val">${escapeHtml(t.serial_dot)}</span></div>`:''}
           ${t.notes?`<div class="tyre-info-row"><span class="tyre-info-label">Notes</span><span class="tyre-info-val">${escapeHtml(t.notes)}</span></div>`:''}
         </div>
       </div>`).join('')}</div>`;
 
   panel.innerHTML=`
     <div class="section-header">
-      <div class="section-title" style="font-size:15px;">🚘 ${escapeHtml(plate)} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
+      <div class="section-title" style="font-size:15px;">${svgIcon('bus')}${escapeHtml(plate)} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
       <div class="section-actions">
-        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddTyreForm()">＋ Add Tyre</button>
+        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddTyreForm()">${svgIcon('plus')}Add Tyre</button>
       </div>
     </div>
     ${cards}
     <div class="tyre-add-form" id="tyreAddForm">
-      <div class="tyre-form-title">＋ Add Tyre — ${escapeHtml(plate)}</div>
+      <div class="tyre-form-title">${svgIcon('plus')}Add Tyre — ${escapeHtml(plate)}</div>
       <div class="tyre-form-err" id="tyreFormErr"></div>
       <div class="tf-grid">
         <div class="tf-field"><label>Vehicle Plate</label><input type="text" id="tf-plate" value="${escAttr(plate)}" readonly style="background:var(--surface2);"></div>
@@ -5120,9 +5176,9 @@ function renderTyreVehiclePanel(){
         <div class="tf-field"><label>Notes</label><input type="text" id="tf-notes" placeholder="Optional"></div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <label class="tf-file-btn" for="tf-invoice">📄 <span id="tfInvoiceLabel">Attach invoice — photo or PDF (optional)</span></label>
+        <label class="tf-file-btn" for="tf-invoice">${svgIcon('paperclip')}<span id="tfInvoiceLabel">Attach invoice — photo or PDF (optional)</span></label>
         <input type="file" id="tf-invoice" accept="image/*,application/pdf,.pdf" onchange="tyreInvoiceChosen(this)">
-        <button class="def-save" id="tfSaveBtn" onclick="submitTyre()">💾 Save Tyre</button>
+        <button class="def-save" id="tfSaveBtn" onclick="submitTyre()">${svgIcon('device-floppy')}Save Tyre</button>
         <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="toggleAddTyreForm()">Cancel</button>
       </div>
     </div>`;
@@ -5235,7 +5291,7 @@ async function submitTyre(){
       errEl.textContent='Invoice upload failed — the tyre was NOT saved. Please try again (photo or PDF, max 10 MB).';
       errEl.classList.add('show');
       btn.disabled=false;
-      btn.textContent='💾 Save Tyre';
+      btn.innerHTML=svgIcon('device-floppy')+'Save Tyre';
       return;
     }
     const body={
@@ -5261,7 +5317,7 @@ async function submitTyre(){
       errEl.textContent='Could not save tyre. Please try again.';
       errEl.classList.add('show');
       btn.disabled=false;
-      btn.textContent='💾 Save Tyre';
+      btn.innerHTML=svgIcon('device-floppy')+'Save Tyre';
       return;
     }
     tyreInvoiceFile=null;
@@ -5271,7 +5327,7 @@ async function submitTyre(){
     errEl.textContent='Connection error. Please try again.';
     errEl.classList.add('show');
     btn.disabled=false;
-    btn.textContent='💾 Save Tyre';
+    btn.innerHTML=svgIcon('device-floppy')+'Save Tyre';
   }
 }
 
@@ -5851,7 +5907,7 @@ async function renderDriversTab(){
   }
   if(driversData.length===0){
     if(wd)wd.innerHTML='';
-    el.innerHTML='<p class="tyre-empty">No drivers yet. Click "＋ Add Driver" to create the first driver profile.</p>';
+    el.innerHTML='<p class="tyre-empty">No drivers yet. Click "Add Driver" to create the first driver profile.</p>';
     return;
   }
   renderDriverWatchdog();
@@ -5866,10 +5922,10 @@ async function renderDriversTab(){
         <td><span class="drv-code">${escapeHtml(d.personal_code)}</span></td>
         <td>${driverExpiryCell(d.licence_expiry)}</td>
         <td>${driverExpiryCell(d.prdp_expiry)}</td>
-        <td>${d.active?`<span class="drv-link"><code>driver.html?d=${escapeHtml(d.personal_code)}</code><button class="drv-copy-btn" title="Copy link for WhatsApp" onclick="copyDriverLink('${escapeHtml(d.personal_code)}',this)">📋</button></span>`:'<span class="drv-exp-blank">—</span>'}</td>
+        <td>${d.active?`<span class="drv-link"><code>driver.html?d=${escapeHtml(d.personal_code)}</code><button class="drv-copy-btn" title="Copy link for WhatsApp" onclick="copyDriverLink('${escapeHtml(d.personal_code)}',this)">${svgIcon('copy')}</button></span>`:'<span class="drv-exp-blank">—</span>'}</td>
         <td><span class="drv-badge ${d.active?'on':'off'}">${d.active?'Active':'Deactivated'}</span></td>
         <td style="white-space:nowrap;">
-          <button class="drv-action-btn" onclick="openDriverForm('${d.id}')">✏ Edit</button>
+          <button class="drv-action-btn" onclick="openDriverForm('${d.id}')">${svgIcon('pencil')}Edit</button>
           <button class="drv-action-btn" onclick="toggleDriverActive('${d.id}',${d.active?'false':'true'})">${d.active?'Deactivate':'Reactivate'}</button>
         </td>
       </tr>`).join('')}</tbody></table></div>`;
@@ -5908,35 +5964,39 @@ async function renderDriverWatchdog(){
     const missing=driversData.filter(d=>d.active&&!submitted.has(d.personal_code));
     if(missing.length===0){
       watchdogOpen=false;
-      wd.innerHTML='<div style="background:#EBFBEE;border:1.5px solid #2F9E44;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;font-weight:700;color:#2F9E44;">✅ All active drivers have submitted a reading this week</div>';
+      wd.innerHTML='<div style="background:#EBFBEE;border:1.5px solid #2F9E44;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;font-weight:700;color:#2F9E44;">'+svgIcon('circle-check','icon-lead')+'All active drivers have submitted a reading this week</div>';
       return;
     }
     const listRows=missing.map(d=>{
       const wa=whatsappLink(d.phone);
       const phoneHtml=d.phone
-        ?(wa?`<a href="${wa}" target="_blank" rel="noopener" style="color:#2F9E44;font-weight:700;text-decoration:none;">💬 ${escapeHtml(d.phone)}</a>`:escapeHtml(d.phone))
+        ?(wa?`<a class="drv-wa-link" href="${wa}" target="_blank" rel="noopener" style="color:#2F9E44;font-weight:700;text-decoration:none;">${svgIcon('brand-whatsapp')}${escapeHtml(d.phone)}</a>`:escapeHtml(d.phone))
         :'<span style="color:var(--text3);">no phone on file</span>';
       return`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0;border-top:1px solid #FFE066;font-size:12px;">
         <span style="font-weight:700;color:var(--text);">${escapeHtml(d.name)}</span>
-        <span style="font-family:var(--font-mono);">${phoneHtml}</span>
+        <span style="font-variant-numeric:tabular-nums;">${phoneHtml}</span>
       </div>`;
     }).join('');
     wd.innerHTML=`<div style="background:var(--amber-light);border:1.5px solid var(--amber);border-radius:10px;padding:12px 16px;margin-bottom:14px;">
       <div onclick="toggleWatchdogList()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;font-weight:700;color:var(--amber);">
-        <span>⚠ ${missing.length} driver${missing.length!==1?'s have':' has'} not submitted this week</span>
-        <span id="watchdogArrow" style="font-size:11px;">${watchdogOpen?'▲ Hide':'▼ Show'}</span>
+        <span>${svgIcon('alert-triangle','icon-lead')}${missing.length} driver${missing.length!==1?'s have':' has'} not submitted this week</span>
+        <span id="watchdogArrow" class="drv-watchdog-toggle" style="font-size:11px;">${watchdogToggleHtml()}</span>
       </div>
       <div id="watchdogList" style="display:${watchdogOpen?'block':'none'};margin-top:8px;">${listRows}</div>
     </div>`;
   }catch(err){console.error('[FleetDesk] Watchdog error:',err);wd.innerHTML='';}
 }
 
+// icon-pass B: chevron-down, flipped while the list is open (was text arrows)
+function watchdogToggleHtml(){
+  return svgIcon('chevron-down',watchdogOpen?'icon-flip':'')+(watchdogOpen?'Hide':'Show');
+}
 function toggleWatchdogList(){
   watchdogOpen=!watchdogOpen;
   const list=document.getElementById('watchdogList');
   const arrow=document.getElementById('watchdogArrow');
   if(list)list.style.display=watchdogOpen?'block':'none';
-  if(arrow)arrow.textContent=watchdogOpen?'▲ Hide':'▼ Show';
+  if(arrow)arrow.innerHTML=watchdogToggleHtml();
 }
 
 // ── PER-DRIVER SUBMISSION HISTORY (paged, DB only — never localStorage) ──────
@@ -5948,7 +6008,7 @@ async function openDriverHistory(id){
   if(!d)return;
   _dhCode=d.personal_code;
   _dhRows=[];
-  document.getElementById('dhTitle').textContent=`📖 ${d.name} — ${d.personal_code}`;
+  document.getElementById('dhTitle').innerHTML=`${svgIcon('book','icon-lead')}${escapeHtml(d.name)} — ${escapeHtml(d.personal_code)}`;
   document.getElementById('dhList').innerHTML='<div class="notif-empty">Loading history…</div>';
   document.getElementById('dhMoreBtn').style.display='none';
   document.getElementById('dhFootNote').textContent='';
@@ -5997,17 +6057,17 @@ function renderDriverHistoryList(hasMore){
   }
   list.innerHTML=_dhRows.map(r=>{
     const badge=r.status==='approved'
-      ?'<span style="font-size:10px;font-weight:700;background:#EBFBEE;color:#2F9E44;border-radius:20px;padding:2px 8px;">✅ Approved</span>'
+      ?subBadgeHtml('approved','Approved')
       :r.status==='flagged'
-      ?'<span style="font-size:10px;font-weight:700;background:#FFF5F5;color:#C92A2A;border-radius:20px;padding:2px 8px;">🚩 Flagged</span>'
-      :'<span style="font-size:10px;font-weight:700;background:var(--accent-light);color:var(--accent);border-radius:20px;padding:2px 8px;">Pending</span>';
+      ?subBadgeHtml('flagged','Flagged')
+      :subBadgeHtml('pending','Pending');
     const unverifiedBadge=r.photo_verified===false
-      ?'<span style="font-size:10px;font-weight:700;background:#FFF9DB;color:#E67700;border:1px solid #E67700;border-radius:20px;padding:2px 8px;">📷 Photo unverified</span>'
+      ?subBadgeHtml('unverified','Photo unverified')
       :'';
     return`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px;">
-      <span style="color:var(--text3);white-space:nowrap;">${fmtDDMMYYYY(r.created_at)} ${fmtTimeHM(r.created_at)}</span>
-      <span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate||'—')}</span>
-      <span style="font-family:var(--font-mono);font-weight:700;">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span>
+      <span style="color:var(--text3);white-space:nowrap;">${fmtDayMonYear(r.created_at)} ${fmtTimeHM(r.created_at)}</span>
+      <span style="font-weight:700;letter-spacing:0.5px;color:var(--accent);">${escapeHtml(r.plate||'—')}</span>
+      <span style="font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span>
       ${badge}${unverifiedBadge}
     </div>`;
   }).join('');
@@ -6024,10 +6084,12 @@ function driverExpiryCell(dateStr){
   if(!dateStr)return'<span class="drv-exp-blank">—</span>';
   // Driver documents keep their own 60-day amber rule; only the past-expiry
   // tier name follows the Stage 2 ladder ('overdue').
+  // icon-pass B: Disc display format ("26 Sep 2026", then "22 days left" or
+  // "3 days overdue"); st.chip is fmtDaysLeft(days). Threshold unchanged.
   const st=complianceStatus(dateStr);
-  const txt=fmtDDMMYYYY(dateStr);
-  if(st.status==='overdue')return`<span class="drv-exp-red">${txt} · expired</span>`;
-  if(st.days!=null&&st.days<=60)return`<span class="drv-exp-amber">${txt} · ${st.days} day${st.days===1?'':'s'}</span>`;
+  const txt=fmtDayMonYear(dateStr);
+  if(st.status==='overdue')return`<span class="drv-exp-red">${txt} · ${st.chip}</span>`;
+  if(st.days!=null&&st.days<=60)return`<span class="drv-exp-amber">${txt} · ${st.chip}</span>`;
   return`<span>${txt}</span>`;
 }
 
@@ -6052,8 +6114,9 @@ async function copyDriverLink(code,btn){
   const link=driverLink(code);
   try{
     await navigator.clipboard.writeText(link);
-    const orig=btn.textContent;btn.textContent='✓';
-    setTimeout(()=>{btn.textContent=orig;},1200);
+    // icon-pass B: innerHTML so the sprite icon comes back after the tick
+    const orig=btn.innerHTML;btn.innerHTML=svgIcon('check');
+    setTimeout(()=>{btn.innerHTML=orig;},1200);
   }catch{
     prompt('Copy this link:',link);
   }
@@ -6067,7 +6130,7 @@ function openDriverForm(mode){
   const d=editing?driversData.find(x=>x.id===mode):null;
   if(editing&&!d){driverFormMode=null;return;}
   form.innerHTML=`
-    <div class="tyre-form-title">${editing?'✏ Edit Driver — '+escapeHtml(d.personal_code):'＋ Add Driver'}</div>
+    <div class="tyre-form-title">${editing?svgIcon('pencil')+'Edit Driver — '+escapeHtml(d.personal_code):svgIcon('plus')+'Add Driver'}</div>
     <div class="tyre-form-err" id="driverFormErr"></div>
     <div class="tf-grid">
       <div class="tf-field"><label>Name *</label><input type="text" id="df-name" value="${editing?escapeHtml(d.name):''}" placeholder="e.g. Thabo Nkosi"></div>
@@ -6078,7 +6141,7 @@ function openDriverForm(mode){
     </div>
     ${editing?'':'<div style="font-size:11px;color:var(--text3);margin-bottom:14px;">A personal code (e.g. THA-4827) is generated automatically when you save. Licence and PrDP expiry dates can be added afterwards via Edit.</div>'}
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <button class="def-save" id="dfSaveBtn" onclick="submitDriver()">💾 ${editing?'Save Changes':'Save Driver'}</button>
+      <button class="def-save" id="dfSaveBtn" onclick="submitDriver()">${svgIcon('device-floppy')}${editing?'Save Changes':'Save Driver'}</button>
       <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="closeDriverForm()">Cancel</button>
     </div>`;
   form.classList.add('open');
@@ -6125,7 +6188,7 @@ async function submitDriver(){
       console.error('[FleetDesk] Driver save failed:',res&&res.status,res&&await res.text());
       errEl.textContent='Could not save the driver. Please try again.';
       errEl.classList.add('show');
-      btn.disabled=false;btn.textContent=editing?'💾 Save Changes':'💾 Save Driver';
+      btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+(editing?'Save Changes':'Save Driver');
       return;
     }
     closeDriverForm();
@@ -6134,7 +6197,7 @@ async function submitDriver(){
     console.error('[FleetDesk] Driver save error:',err);
     errEl.textContent='Connection error. Please try again.';
     errEl.classList.add('show');
-    btn.disabled=false;btn.textContent=editing?'💾 Save Changes':'💾 Save Driver';
+    btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+(editing?'Save Changes':'Save Driver');
   }
 }
 
@@ -6148,9 +6211,9 @@ async function copyLaunchList(btn){
   const text=active.map(d=>`${d.name}: ${DRIVER_LINK_BASE}${encodeURIComponent(d.personal_code)}`).join('\n');
   try{
     await navigator.clipboard.writeText(text);
-    const orig=btn.textContent;
-    btn.textContent=`✓ Copied ${active.length} driver${active.length===1?'':'s'}`;
-    setTimeout(()=>{btn.textContent=orig;},1800);
+    const orig=btn.innerHTML;
+    btn.innerHTML=`${svgIcon('check')}Copied ${active.length} driver${active.length===1?'':'s'}`;
+    setTimeout(()=>{btn.innerHTML=orig;},1800);
   }catch{
     prompt('Copy the launch list below:',text);
   }
@@ -6640,19 +6703,19 @@ initApp();
           <div style="font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--text);" id="popupOdo">—</div>
         </div>
       </div>
-      <div id="popupDriver" style="font-size:13px;font-weight:700;color:var(--text2);margin:-8px 0 16px;">👤 —</div>
+      <div id="popupDriver" style="font-size:13px;font-weight:700;color:var(--text2);margin:-8px 0 16px;"><svg class="icon icon-lead" aria-hidden="true"><use href="#icon-user"/></svg>—</div>
       <div id="popupPhotoWrap" style="display:none;margin-bottom:16px;">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Odometer Photo</div>
         <div id="popupPhotoBox"></div>
       </div>
       <div id="popupMismatch" style="display:none;background:var(--accent-light);border:2px solid var(--accent);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--accent);font-weight:700;margin-bottom:16px;line-height:1.6;"></div>
       <!-- Pilot fix 1b: AI never read this photo (driver-page second-failure manual entry) -->
-      <div id="popupUnverified" style="display:none;background:#FFF9DB;border:2px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-bottom:16px;line-height:1.6;">📷 <strong>Photo unverified</strong> — the AI could not read this odometer photo; the reading was typed manually. Please check the photo against the entered km.</div>
+      <div id="popupUnverified" style="display:none;background:#FFF9DB;border:2px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-bottom:16px;line-height:1.6;"><svg class="icon icon-lead" aria-hidden="true"><use href="#icon-camera"/></svg><strong>Photo unverified</strong> — the AI could not read this odometer photo; the reading was typed manually. Please check the photo against the entered km.</div>
       <div id="popupNotes" style="display:none;background:var(--amber-light);border:1px solid #FFE066;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:16px;"></div>
       <div id="popupTime" style="font-size:11px;color:var(--text3);margin-bottom:18px;"></div>
       <div style="display:flex;gap:10px;">
-        <button id="popupApproveBtn" onclick="approveSubmission()" style="flex:1;padding:12px;background:var(--green);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">✅ Approve</button>
-        <button id="popupFlagBtn" onclick="flagSubmission()" style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">🚩 Flag</button>
+        <button id="popupApproveBtn" class="popup-action-btn" onclick="approveSubmission()" style="flex:1;padding:12px;background:var(--green);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;"><svg class="icon" aria-hidden="true"><use href="#icon-circle-check"/></svg>Approve</button>
+        <button id="popupFlagBtn" class="popup-action-btn" onclick="flagSubmission()" style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;"><svg class="icon" aria-hidden="true"><use href="#icon-flag"/></svg>Flag</button>
       </div>
     </div>
     <!-- BATCH SUBMISSIONS VIEW — whole view is clickable and opens the bell panel -->
@@ -6668,7 +6731,7 @@ initApp();
 <div id="driverHistoryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10000;align-items:center;justify-content:center;padding:20px;" onclick="closeDriverHistory()">
   <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.45);overflow:hidden;animation:fadeUp 0.25s ease both;" onclick="event.stopPropagation()">
     <div style="background:var(--accent);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-      <div id="dhTitle" style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;">📖 Submission History</div>
+      <div id="dhTitle" style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;"><svg class="icon icon-lead" aria-hidden="true"><use href="#icon-book"/></svg>Submission History</div>
       <button onclick="closeDriverHistory()" style="background:rgba(255,255,255,0.2);border:none;border-radius:6px;color:white;font-size:18px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
     </div>
     <div id="dhList" style="overflow-y:auto;padding:10px 22px;"></div>
@@ -6718,7 +6781,7 @@ function showNotifPopup(rows){
     document.getElementById('popupBatchView').style.display='none';
     document.getElementById('popupPlate').textContent=rec.plate||'—';
     document.getElementById('popupOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-US')+' km':'—';
-    document.getElementById('popupDriver').textContent='👤 '+(rec.driver_name||'—');
+    document.getElementById('popupDriver').innerHTML=svgIcon('user','icon-lead')+escapeHtml(rec.driver_name||'—');
     document.getElementById('popupTime').textContent='Submitted: '+fmtDDMMYYYY(rec.created_at)+' at '+fmtTimeHM(rec.created_at);
     const photoWrap=document.getElementById('popupPhotoWrap');
     const photoBox=document.getElementById('popupPhotoBox');
@@ -6727,13 +6790,13 @@ function showNotifPopup(rows){
     else if(rec.photo_url)photoBox.innerHTML=`<img src="${escapeHtml(rec.photo_url)}" alt="Odometer photo" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:220px;object-fit:cover;image-orientation:from-image;">`;
     else photoBox.innerHTML='<div class="odo-thumb odo-thumb-lg odo-thumb-none">No photo</div>';
     const notesEl=document.getElementById('popupNotes');
-    if(rec.notes){notesEl.textContent='📝 '+rec.notes;notesEl.style.display='block';}
+    if(rec.notes){notesEl.innerHTML=svgIcon('note','icon-lead')+escapeHtml(rec.notes);notesEl.style.display='block';}
     else{notesEl.style.display='none';}
     const mismatchEl=document.getElementById('popupMismatch');
     const hasMismatch=rec.ai_odometer!=null&&Math.abs(rec.odometer-rec.ai_odometer)>25;
     if(hasMismatch){
       mismatchEl.style.display='block';
-      mismatchEl.innerHTML=`⚠️ <strong>Odometer Mismatch Detected</strong> — ${escapeHtml(rec.plate)}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-US')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-US')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
+      mismatchEl.innerHTML=`${svgIcon('alert-triangle','icon-lead')}<strong>Odometer Mismatch Detected</strong> — ${escapeHtml(rec.plate)}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-US')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-US')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
     }else{
       mismatchEl.style.display='none';
     }
@@ -6746,13 +6809,13 @@ function showNotifPopup(rows){
     document.getElementById('popupBatchView').style.display='block';
     document.getElementById('popupBatchCount').textContent=`${rows.length} new submission${rows.length!==1?'s':''} — click to view`;
     const mismatches=rows.filter(r=>r.ai_odometer!=null&&Math.abs(r.odometer-r.ai_odometer)>25);
-    const plateList=rows.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="font-weight:700;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">👤 ${escapeHtml(r.driver_name||'—')}</span><span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate)}</span><span style="font-family:var(--font-mono);">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span></div>`).join('');
+    const plateList=rows.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="font-weight:700;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${svgIcon('user','icon-lead')}${escapeHtml(r.driver_name||'—')}</span><span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate)}</span><span style="font-family:var(--font-mono);">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span></div>`).join('');
     const mismatchWarn=mismatches.length>0
-      ?`<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);font-weight:700;margin-top:12px;">⚠️ ${mismatches.length} submission${mismatches.length!==1?'s have':' has'} an odometer mismatch — ${escapeHtml(mismatches.map(m=>m.plate).join(', '))}</div>`
+      ?`<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);font-weight:700;margin-top:12px;">${svgIcon('alert-triangle','icon-lead')}${mismatches.length} submission${mismatches.length!==1?'s have':' has'} an odometer mismatch — ${escapeHtml(mismatches.map(m=>m.plate).join(', '))}</div>`
       :'';
     const unverified=rows.filter(r=>r.photo_verified===false);
     const unverifiedWarn=unverified.length>0
-      ?`<div style="background:#FFF9DB;border:1.5px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-top:12px;">📷 ${unverified.length} submission${unverified.length!==1?'s are':' is'} photo unverified — ${escapeHtml(unverified.map(m=>m.plate).join(', '))}</div>`
+      ?`<div style="background:#FFF9DB;border:1.5px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-top:12px;">${svgIcon('camera','icon-lead')}${unverified.length} submission${unverified.length!==1?'s are':' is'} photo unverified — ${escapeHtml(unverified.map(m=>m.plate).join(', '))}</div>`
       :'';
     document.getElementById('popupBatchList').innerHTML=plateList+mismatchWarn+unverifiedWarn;
   }
