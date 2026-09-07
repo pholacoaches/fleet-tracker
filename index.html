@@ -911,7 +911,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .drivers-table tr:hover td { background:var(--accent-light); }
 .driver-row-inactive td { opacity:0.45; }
 .driver-row-inactive td:hover, .drivers-table tr.driver-row-inactive:hover td { background:var(--surface2); }
-.drv-code { font-family:var(--font-mono); font-weight:700; font-size:12px; color:var(--accent); white-space:nowrap; }
+.drv-code { font-weight:700; font-size:12px; letter-spacing:0.5px; color:var(--accent); white-space:nowrap; }
 .drv-badge { display:inline-block; font-size:10px; font-weight:700; letter-spacing:0.3px; padding:3px 10px; border-radius:20px; white-space:nowrap; }
 .drv-badge.on { background:var(--green-light); color:var(--green); }
 .drv-badge.off { background:var(--surface2); color:var(--text3); }
@@ -919,6 +919,12 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .drv-link code { font-family:var(--font-mono); font-size:11px; color:var(--text2); background:var(--surface2); padding:2px 7px; border-radius:4px; }
 .drv-copy-btn { border:1.5px solid var(--border2); background:var(--surface); border-radius:var(--radius-sm); padding:3px 8px; font-size:12px; cursor:pointer; font-family:var(--font); transition:all 0.15s; }
 .drv-copy-btn:hover { border-color:var(--accent); background:var(--accent-light); }
+/* icon-pass B: sprite icons inside the row buttons and the watchdog banner */
+.drv-copy-btn { display:inline-flex; align-items:center; justify-content:center; color:var(--text2); }
+.drv-copy-btn .icon { width:13px; height:13px; }
+.drv-action-btn .icon { width:12px; height:12px; margin-right:3px; vertical-align:-2px; }
+.drv-watchdog-toggle .icon { width:12px; height:12px; margin-right:3px; vertical-align:-2px; transition:transform 0.2s; }
+.drv-wa-link .icon { width:13px; height:13px; margin-right:3px; vertical-align:-2px; }
 .drv-action-btn { border:1.5px solid var(--border2); background:var(--surface); color:var(--text2); border-radius:var(--radius-sm); padding:4px 10px; font-size:11px; font-weight:700; cursor:pointer; font-family:var(--font); transition:all 0.15s; white-space:nowrap; }
 .drv-action-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-light); }
 .drv-exp-red { color:var(--red); font-weight:700; }
@@ -1315,11 +1321,11 @@ input[type=file] { display: none; }
     <!-- TAB: DRIVERS (Stage 1 — admin registry; driver page integration is Stage 2) -->
     <div class="tab-panel" id="tab-drivers">
       <div class="section-header">
-        <div class="section-title">👤 Drivers</div>
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-user"/></svg>Drivers</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Driver profiles, personal codes and licence tracking</div>
         <div class="section-actions">
-          <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="copyLaunchList(this)" id="launchListBtn">📋 Copy launch list</button>
-          <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="openDriverForm('add')">＋ Add Driver</button>
+          <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="copyLaunchList(this)" id="launchListBtn"><svg class="icon" aria-hidden="true"><use href="#icon-copy"/></svg>Copy launch list</button>
+          <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="openDriverForm('add')"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Driver</button>
         </div>
       </div>
       <div id="driverWatchdog"></div>
@@ -5880,7 +5886,7 @@ async function renderDriversTab(){
   }
   if(driversData.length===0){
     if(wd)wd.innerHTML='';
-    el.innerHTML='<p class="tyre-empty">No drivers yet. Click "＋ Add Driver" to create the first driver profile.</p>';
+    el.innerHTML='<p class="tyre-empty">No drivers yet. Click "Add Driver" to create the first driver profile.</p>';
     return;
   }
   renderDriverWatchdog();
@@ -5895,10 +5901,10 @@ async function renderDriversTab(){
         <td><span class="drv-code">${escapeHtml(d.personal_code)}</span></td>
         <td>${driverExpiryCell(d.licence_expiry)}</td>
         <td>${driverExpiryCell(d.prdp_expiry)}</td>
-        <td>${d.active?`<span class="drv-link"><code>driver.html?d=${escapeHtml(d.personal_code)}</code><button class="drv-copy-btn" title="Copy link for WhatsApp" onclick="copyDriverLink('${escapeHtml(d.personal_code)}',this)">📋</button></span>`:'<span class="drv-exp-blank">—</span>'}</td>
+        <td>${d.active?`<span class="drv-link"><code>driver.html?d=${escapeHtml(d.personal_code)}</code><button class="drv-copy-btn" title="Copy link for WhatsApp" onclick="copyDriverLink('${escapeHtml(d.personal_code)}',this)">${svgIcon('copy')}</button></span>`:'<span class="drv-exp-blank">—</span>'}</td>
         <td><span class="drv-badge ${d.active?'on':'off'}">${d.active?'Active':'Deactivated'}</span></td>
         <td style="white-space:nowrap;">
-          <button class="drv-action-btn" onclick="openDriverForm('${d.id}')">✏ Edit</button>
+          <button class="drv-action-btn" onclick="openDriverForm('${d.id}')">${svgIcon('pencil')}Edit</button>
           <button class="drv-action-btn" onclick="toggleDriverActive('${d.id}',${d.active?'false':'true'})">${d.active?'Deactivate':'Reactivate'}</button>
         </td>
       </tr>`).join('')}</tbody></table></div>`;
@@ -5937,35 +5943,39 @@ async function renderDriverWatchdog(){
     const missing=driversData.filter(d=>d.active&&!submitted.has(d.personal_code));
     if(missing.length===0){
       watchdogOpen=false;
-      wd.innerHTML='<div style="background:#EBFBEE;border:1.5px solid #2F9E44;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;font-weight:700;color:#2F9E44;">✅ All active drivers have submitted a reading this week</div>';
+      wd.innerHTML='<div style="background:#EBFBEE;border:1.5px solid #2F9E44;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;font-weight:700;color:#2F9E44;">'+svgIcon('circle-check','icon-lead')+'All active drivers have submitted a reading this week</div>';
       return;
     }
     const listRows=missing.map(d=>{
       const wa=whatsappLink(d.phone);
       const phoneHtml=d.phone
-        ?(wa?`<a href="${wa}" target="_blank" rel="noopener" style="color:#2F9E44;font-weight:700;text-decoration:none;">💬 ${escapeHtml(d.phone)}</a>`:escapeHtml(d.phone))
+        ?(wa?`<a class="drv-wa-link" href="${wa}" target="_blank" rel="noopener" style="color:#2F9E44;font-weight:700;text-decoration:none;">${svgIcon('brand-whatsapp')}${escapeHtml(d.phone)}</a>`:escapeHtml(d.phone))
         :'<span style="color:var(--text3);">no phone on file</span>';
       return`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0;border-top:1px solid #FFE066;font-size:12px;">
         <span style="font-weight:700;color:var(--text);">${escapeHtml(d.name)}</span>
-        <span style="font-family:var(--font-mono);">${phoneHtml}</span>
+        <span style="font-variant-numeric:tabular-nums;">${phoneHtml}</span>
       </div>`;
     }).join('');
     wd.innerHTML=`<div style="background:var(--amber-light);border:1.5px solid var(--amber);border-radius:10px;padding:12px 16px;margin-bottom:14px;">
       <div onclick="toggleWatchdogList()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;font-weight:700;color:var(--amber);">
-        <span>⚠ ${missing.length} driver${missing.length!==1?'s have':' has'} not submitted this week</span>
-        <span id="watchdogArrow" style="font-size:11px;">${watchdogOpen?'▲ Hide':'▼ Show'}</span>
+        <span>${svgIcon('alert-triangle','icon-lead')}${missing.length} driver${missing.length!==1?'s have':' has'} not submitted this week</span>
+        <span id="watchdogArrow" class="drv-watchdog-toggle" style="font-size:11px;">${watchdogToggleHtml()}</span>
       </div>
       <div id="watchdogList" style="display:${watchdogOpen?'block':'none'};margin-top:8px;">${listRows}</div>
     </div>`;
   }catch(err){console.error('[FleetDesk] Watchdog error:',err);wd.innerHTML='';}
 }
 
+// icon-pass B: chevron-down, flipped while the list is open (was text arrows)
+function watchdogToggleHtml(){
+  return svgIcon('chevron-down',watchdogOpen?'icon-flip':'')+(watchdogOpen?'Hide':'Show');
+}
 function toggleWatchdogList(){
   watchdogOpen=!watchdogOpen;
   const list=document.getElementById('watchdogList');
   const arrow=document.getElementById('watchdogArrow');
   if(list)list.style.display=watchdogOpen?'block':'none';
-  if(arrow)arrow.textContent=watchdogOpen?'▲ Hide':'▼ Show';
+  if(arrow)arrow.innerHTML=watchdogToggleHtml();
 }
 
 // ── PER-DRIVER SUBMISSION HISTORY (paged, DB only — never localStorage) ──────
@@ -5977,7 +5987,7 @@ async function openDriverHistory(id){
   if(!d)return;
   _dhCode=d.personal_code;
   _dhRows=[];
-  document.getElementById('dhTitle').textContent=`📖 ${d.name} — ${d.personal_code}`;
+  document.getElementById('dhTitle').innerHTML=`${svgIcon('book','icon-lead')}${escapeHtml(d.name)} — ${escapeHtml(d.personal_code)}`;
   document.getElementById('dhList').innerHTML='<div class="notif-empty">Loading history…</div>';
   document.getElementById('dhMoreBtn').style.display='none';
   document.getElementById('dhFootNote').textContent='';
@@ -6034,9 +6044,9 @@ function renderDriverHistoryList(hasMore){
       ?'<span style="font-size:10px;font-weight:700;background:#FFF9DB;color:#E67700;border:1px solid #E67700;border-radius:20px;padding:2px 8px;">📷 Photo unverified</span>'
       :'';
     return`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px;">
-      <span style="color:var(--text3);white-space:nowrap;">${fmtDDMMYYYY(r.created_at)} ${fmtTimeHM(r.created_at)}</span>
-      <span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate||'—')}</span>
-      <span style="font-family:var(--font-mono);font-weight:700;">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span>
+      <span style="color:var(--text3);white-space:nowrap;">${fmtDayMonYear(r.created_at)} ${fmtTimeHM(r.created_at)}</span>
+      <span style="font-weight:700;letter-spacing:0.5px;color:var(--accent);">${escapeHtml(r.plate||'—')}</span>
+      <span style="font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span>
       ${badge}${unverifiedBadge}
     </div>`;
   }).join('');
@@ -6053,10 +6063,12 @@ function driverExpiryCell(dateStr){
   if(!dateStr)return'<span class="drv-exp-blank">—</span>';
   // Driver documents keep their own 60-day amber rule; only the past-expiry
   // tier name follows the Stage 2 ladder ('overdue').
+  // icon-pass B: Disc display format ("26 Sep 2026", then "22 days left" or
+  // "3 days overdue"); st.chip is fmtDaysLeft(days). Threshold unchanged.
   const st=complianceStatus(dateStr);
-  const txt=fmtDDMMYYYY(dateStr);
-  if(st.status==='overdue')return`<span class="drv-exp-red">${txt} · expired</span>`;
-  if(st.days!=null&&st.days<=60)return`<span class="drv-exp-amber">${txt} · ${st.days} day${st.days===1?'':'s'}</span>`;
+  const txt=fmtDayMonYear(dateStr);
+  if(st.status==='overdue')return`<span class="drv-exp-red">${txt} · ${st.chip}</span>`;
+  if(st.days!=null&&st.days<=60)return`<span class="drv-exp-amber">${txt} · ${st.chip}</span>`;
   return`<span>${txt}</span>`;
 }
 
@@ -6081,8 +6093,9 @@ async function copyDriverLink(code,btn){
   const link=driverLink(code);
   try{
     await navigator.clipboard.writeText(link);
-    const orig=btn.textContent;btn.textContent='✓';
-    setTimeout(()=>{btn.textContent=orig;},1200);
+    // icon-pass B: innerHTML so the sprite icon comes back after the tick
+    const orig=btn.innerHTML;btn.innerHTML=svgIcon('check');
+    setTimeout(()=>{btn.innerHTML=orig;},1200);
   }catch{
     prompt('Copy this link:',link);
   }
@@ -6096,7 +6109,7 @@ function openDriverForm(mode){
   const d=editing?driversData.find(x=>x.id===mode):null;
   if(editing&&!d){driverFormMode=null;return;}
   form.innerHTML=`
-    <div class="tyre-form-title">${editing?'✏ Edit Driver — '+escapeHtml(d.personal_code):'＋ Add Driver'}</div>
+    <div class="tyre-form-title">${editing?svgIcon('pencil')+'Edit Driver — '+escapeHtml(d.personal_code):svgIcon('plus')+'Add Driver'}</div>
     <div class="tyre-form-err" id="driverFormErr"></div>
     <div class="tf-grid">
       <div class="tf-field"><label>Name *</label><input type="text" id="df-name" value="${editing?escapeHtml(d.name):''}" placeholder="e.g. Thabo Nkosi"></div>
@@ -6107,7 +6120,7 @@ function openDriverForm(mode){
     </div>
     ${editing?'':'<div style="font-size:11px;color:var(--text3);margin-bottom:14px;">A personal code (e.g. THA-4827) is generated automatically when you save. Licence and PrDP expiry dates can be added afterwards via Edit.</div>'}
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <button class="def-save" id="dfSaveBtn" onclick="submitDriver()">💾 ${editing?'Save Changes':'Save Driver'}</button>
+      <button class="def-save" id="dfSaveBtn" onclick="submitDriver()">${svgIcon('device-floppy')}${editing?'Save Changes':'Save Driver'}</button>
       <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="closeDriverForm()">Cancel</button>
     </div>`;
   form.classList.add('open');
@@ -6154,7 +6167,7 @@ async function submitDriver(){
       console.error('[FleetDesk] Driver save failed:',res&&res.status,res&&await res.text());
       errEl.textContent='Could not save the driver. Please try again.';
       errEl.classList.add('show');
-      btn.disabled=false;btn.textContent=editing?'💾 Save Changes':'💾 Save Driver';
+      btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+(editing?'Save Changes':'Save Driver');
       return;
     }
     closeDriverForm();
@@ -6163,7 +6176,7 @@ async function submitDriver(){
     console.error('[FleetDesk] Driver save error:',err);
     errEl.textContent='Connection error. Please try again.';
     errEl.classList.add('show');
-    btn.disabled=false;btn.textContent=editing?'💾 Save Changes':'💾 Save Driver';
+    btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+(editing?'Save Changes':'Save Driver');
   }
 }
 
@@ -6177,9 +6190,9 @@ async function copyLaunchList(btn){
   const text=active.map(d=>`${d.name}: ${DRIVER_LINK_BASE}${encodeURIComponent(d.personal_code)}`).join('\n');
   try{
     await navigator.clipboard.writeText(text);
-    const orig=btn.textContent;
-    btn.textContent=`✓ Copied ${active.length} driver${active.length===1?'':'s'}`;
-    setTimeout(()=>{btn.textContent=orig;},1800);
+    const orig=btn.innerHTML;
+    btn.innerHTML=`${svgIcon('check')}Copied ${active.length} driver${active.length===1?'':'s'}`;
+    setTimeout(()=>{btn.innerHTML=orig;},1800);
   }catch{
     prompt('Copy the launch list below:',text);
   }
@@ -6697,7 +6710,7 @@ initApp();
 <div id="driverHistoryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10000;align-items:center;justify-content:center;padding:20px;" onclick="closeDriverHistory()">
   <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.45);overflow:hidden;animation:fadeUp 0.25s ease both;" onclick="event.stopPropagation()">
     <div style="background:var(--accent);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-      <div id="dhTitle" style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;">📖 Submission History</div>
+      <div id="dhTitle" style="font-size:15px;font-weight:700;color:white;letter-spacing:0.3px;"><svg class="icon icon-lead" aria-hidden="true"><use href="#icon-book"/></svg>Submission History</div>
       <button onclick="closeDriverHistory()" style="background:rgba(255,255,255,0.2);border:none;border-radius:6px;color:white;font-size:18px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
     </div>
     <div id="dhList" style="overflow-y:auto;padding:10px 22px;"></div>
