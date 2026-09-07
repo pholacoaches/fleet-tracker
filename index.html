@@ -746,7 +746,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .disc-edit-form input:focus { border-color:var(--accent); }
 .def-row { display:flex; gap:8px; flex-wrap:wrap; }
 .def-row > div { flex:1; min-width:120px; }
-.def-save { padding:7px 16px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; font-weight:700; cursor:pointer; align-self:flex-start; transition:background 0.15s; }
+.def-save { padding:7px 16px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; font-weight:700; cursor:pointer; align-self:flex-start; transition:background 0.15s; display:inline-flex; align-items:center; gap:6px; }
+.def-save .icon { width:14px; height:14px; }
 .def-save:hover { background:var(--accent2); }
 
 /* COMPLIANCE ROWS (3 items per vehicle) */
@@ -833,7 +834,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 
 /* TYRES TAB */
 .tyre-plate-strip { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
-.tyre-plate-chip { padding:8px 16px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--text2); cursor:pointer; transition:all 0.15s; display:flex; align-items:center; gap:8px; }
+/* icon-pass B: plate chips (shared with Maintenance) drop mono like every other plate */
+.tyre-plate-chip { padding:8px 16px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); background:var(--surface); font-family:var(--font); font-size:13px; font-weight:700; letter-spacing:0.5px; color:var(--text2); cursor:pointer; transition:all 0.15s; display:flex; align-items:center; gap:8px; }
 .tyre-plate-chip:hover { border-color:var(--accent); color:var(--accent); }
 .tyre-plate-chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
 .tyre-chip-count { font-family:var(--font); font-size:10px; font-weight:700; background:var(--accent-light); color:var(--accent); border-radius:10px; padding:2px 8px; }
@@ -842,18 +844,19 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .tyre-card { background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; animation:fadeUp 0.35s ease both; }
 .tyre-card.tc-retread { border-left-color:var(--amber); }
 .tyre-card-header { display:flex; align-items:center; justify-content:space-between; padding:11px 14px; background:var(--surface2); border-bottom:1px solid var(--border); }
-.tyre-pos-badge { font-family:var(--font-mono); font-size:14px; font-weight:700; color:var(--accent); background:var(--accent-light); border:1.5px solid var(--accent); border-radius:var(--radius-sm); padding:3px 12px; }
+.tyre-pos-badge { font-size:14px; font-weight:700; letter-spacing:0.5px; color:var(--accent); background:var(--accent-light); border:1.5px solid var(--accent); border-radius:var(--radius-sm); padding:3px 12px; }
 .tyre-retread-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--amber); background:var(--amber-light); border-radius:10px; padding:3px 10px; }
 .tyre-card-body { padding:12px 14px; display:flex; flex-direction:column; gap:7px; }
 .tyre-info-row { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
 .tyre-info-label { font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--text3); font-weight:700; white-space:nowrap; }
-.tyre-info-val { font-size:12px; font-weight:600; color:var(--text); text-align:right; }
-.tyre-info-val.mono { font-family:var(--font-mono); }
-.tyre-invoice-link { font-size:11px; font-weight:700; color:var(--accent); text-decoration:none; }
+.tyre-info-val { font-size:12px; font-weight:600; color:var(--text); text-align:right; font-variant-numeric:tabular-nums; }
+.tyre-invoice-link { font-size:11px; font-weight:700; color:var(--accent); text-decoration:none; display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+.tyre-invoice-link .icon { width:13px; height:13px; }
 .tyre-invoice-link:hover { text-decoration:underline; }
 .tyre-add-form { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px; margin-top:14px; display:none; }
 .tyre-add-form.open { display:block; }
 .tyre-form-title { font-size:14px; font-weight:700; color:var(--accent); margin-bottom:14px; }
+.tyre-form-title .icon { width:15px; height:15px; margin-right:5px; vertical-align:-2px; }
 .tf-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:12px; margin-bottom:14px; }
 .tf-field label { font-size:11px; font-weight:700; color:var(--text2); display:block; margin-bottom:4px; }
 .tf-field input, .tf-field select { width:100%; padding:8px 10px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); font-family:var(--font); font-size:12px; color:var(--text); background:var(--surface); outline:none; }
@@ -1394,7 +1397,7 @@ input[type=file] { display: none; }
     <!-- TAB 7: TYRES -->
     <div class="tab-panel" id="tab-tyres">
       <div class="section-header">
-        <div class="section-title">🔧 Tyre Management</div>
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyre Management</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Select a vehicle to view and manage its tyres</div>
       </div>
       <div class="tyre-plate-strip" id="tyrePlateStrip"></div>
@@ -3332,13 +3335,15 @@ function invoiceLinkHtml(invoiceUrl,label){
   if(!invoiceUrl)return'';
   const id='invLink-'+(++_invLinkSeq);
   setTimeout(()=>hydrateInvoiceLink(id),0);
-  return`<a class="tyre-invoice-link" id="${id}" data-inv="${escapeHtml(invoiceUrl)}" data-label="${escapeHtml(label||'View')}">📄 Loading…</a>`;
+  return`<a class="tyre-invoice-link" id="${id}" data-inv="${escapeHtml(invoiceUrl)}" data-label="${escapeHtml(label||'View')}">${svgIcon('file-invoice')}Loading…</a>`;
 }
 
+// icon-pass B: innerHTML + svgIcon (a textContent write would drop the icon);
+// the label is escaped again because dataset hands back the decoded string.
 async function hydrateInvoiceLink(id){
   const el=document.getElementById(id);
   if(!el||!el.dataset.inv)return;
-  el.textContent='📄 Loading…';
+  el.innerHTML=svgIcon('file-invoice')+'Loading…';
   el.removeAttribute('href');
   el.onclick=null;
   try{
@@ -3346,9 +3351,9 @@ async function hydrateInvoiceLink(id){
     el.href=url;
     el.target='_blank';
     el.rel='noopener';
-    el.textContent='📄 '+el.dataset.label;
+    el.innerHTML=svgIcon('file-invoice')+escapeHtml(el.dataset.label);
   }catch(err){
-    el.textContent='⚠️ Invoice unavailable — tap to retry';
+    el.innerHTML=svgIcon('alert-triangle')+'Invoice unavailable — tap to retry';
     el.onclick=e=>{e.preventDefault();hydrateInvoiceLink(id);};
   }
 }
@@ -5105,26 +5110,26 @@ function renderTyreVehiclePanel(){
         <div class="tyre-card-body">
           ${t.invoice_url?`<div class="tyre-info-row"><span class="tyre-info-label">Invoice</span>${invoiceLinkHtml(t.invoice_url,'View')}</div>`:''}
           <div class="tyre-info-row"><span class="tyre-info-label">Brand</span><span class="tyre-info-val">${escapeHtml(t.brand)||'—'}${t.model?' '+escapeHtml(t.model):''}</span></div>
-          <div class="tyre-info-row"><span class="tyre-info-label">Size</span><span class="tyre-info-val mono">${escapeHtml(t.size)||'—'}</span></div>
-          <div class="tyre-info-row"><span class="tyre-info-label">Cost</span><span class="tyre-info-val mono">${t.cost!=null?'R'+Number(t.cost).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</span></div>
-          <div class="tyre-info-row"><span class="tyre-info-label">Fitted At</span><span class="tyre-info-val mono">${t.odometer_fitted!=null?Number(t.odometer_fitted).toLocaleString('en-US')+' km':'—'}</span></div>
-          <div class="tyre-info-row"><span class="tyre-info-label">Date Fitted</span><span class="tyre-info-val mono">${t.date_fitted||'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Size</span><span class="tyre-info-val">${escapeHtml(t.size)||'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Cost</span><span class="tyre-info-val">${t.cost!=null?'R'+Number(t.cost).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Fitted At</span><span class="tyre-info-val">${t.odometer_fitted!=null?Number(t.odometer_fitted).toLocaleString('en-US')+' km':'—'}</span></div>
+          <div class="tyre-info-row"><span class="tyre-info-label">Date Fitted</span><span class="tyre-info-val">${escapeHtml(fmtDayMonYear(t.date_fitted))}</span></div>
           ${t.supplier?`<div class="tyre-info-row"><span class="tyre-info-label">Supplier</span><span class="tyre-info-val">${escapeHtml(t.supplier)}</span></div>`:''}
-          ${t.serial_dot?`<div class="tyre-info-row"><span class="tyre-info-label">Serial / DOT</span><span class="tyre-info-val mono">${escapeHtml(t.serial_dot)}</span></div>`:''}
+          ${t.serial_dot?`<div class="tyre-info-row"><span class="tyre-info-label">Serial / DOT</span><span class="tyre-info-val">${escapeHtml(t.serial_dot)}</span></div>`:''}
           ${t.notes?`<div class="tyre-info-row"><span class="tyre-info-label">Notes</span><span class="tyre-info-val">${escapeHtml(t.notes)}</span></div>`:''}
         </div>
       </div>`).join('')}</div>`;
 
   panel.innerHTML=`
     <div class="section-header">
-      <div class="section-title" style="font-size:15px;">🚘 ${escapeHtml(plate)} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
+      <div class="section-title" style="font-size:15px;">${svgIcon('bus')}${escapeHtml(plate)} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
       <div class="section-actions">
-        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddTyreForm()">＋ Add Tyre</button>
+        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddTyreForm()">${svgIcon('plus')}Add Tyre</button>
       </div>
     </div>
     ${cards}
     <div class="tyre-add-form" id="tyreAddForm">
-      <div class="tyre-form-title">＋ Add Tyre — ${escapeHtml(plate)}</div>
+      <div class="tyre-form-title">${svgIcon('plus')}Add Tyre — ${escapeHtml(plate)}</div>
       <div class="tyre-form-err" id="tyreFormErr"></div>
       <div class="tf-grid">
         <div class="tf-field"><label>Vehicle Plate</label><input type="text" id="tf-plate" value="${escAttr(plate)}" readonly style="background:var(--surface2);"></div>
@@ -5144,9 +5149,9 @@ function renderTyreVehiclePanel(){
         <div class="tf-field"><label>Notes</label><input type="text" id="tf-notes" placeholder="Optional"></div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <label class="tf-file-btn" for="tf-invoice">📄 <span id="tfInvoiceLabel">Attach invoice — photo or PDF (optional)</span></label>
+        <label class="tf-file-btn" for="tf-invoice">${svgIcon('paperclip')}<span id="tfInvoiceLabel">Attach invoice — photo or PDF (optional)</span></label>
         <input type="file" id="tf-invoice" accept="image/*,application/pdf,.pdf" onchange="tyreInvoiceChosen(this)">
-        <button class="def-save" id="tfSaveBtn" onclick="submitTyre()">💾 Save Tyre</button>
+        <button class="def-save" id="tfSaveBtn" onclick="submitTyre()">${svgIcon('device-floppy')}Save Tyre</button>
         <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="toggleAddTyreForm()">Cancel</button>
       </div>
     </div>`;
@@ -5259,7 +5264,7 @@ async function submitTyre(){
       errEl.textContent='Invoice upload failed — the tyre was NOT saved. Please try again (photo or PDF, max 10 MB).';
       errEl.classList.add('show');
       btn.disabled=false;
-      btn.textContent='💾 Save Tyre';
+      btn.innerHTML=svgIcon('device-floppy')+'Save Tyre';
       return;
     }
     const body={
@@ -5285,7 +5290,7 @@ async function submitTyre(){
       errEl.textContent='Could not save tyre. Please try again.';
       errEl.classList.add('show');
       btn.disabled=false;
-      btn.textContent='💾 Save Tyre';
+      btn.innerHTML=svgIcon('device-floppy')+'Save Tyre';
       return;
     }
     tyreInvoiceFile=null;
@@ -5295,7 +5300,7 @@ async function submitTyre(){
     errEl.textContent='Connection error. Please try again.';
     errEl.classList.add('show');
     btn.disabled=false;
-    btn.textContent='💾 Save Tyre';
+    btn.innerHTML=svgIcon('device-floppy')+'Save Tyre';
   }
 }
 
