@@ -432,10 +432,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   font-size: 12px; line-height: 1; cursor: pointer;
 }
 .history-del:hover { background: #FFF5F5; color: #C92A2A; }
+/* icon-pass: the delete button holds a sprite icon, not a text glyph */
+.history-del { display:inline-flex; align-items:center; justify-content:center; }
+.history-del .icon { width:14px; height:14px; }
 .history-card.active { border-color: var(--accent); background: var(--accent-light); }
 .history-period { font-weight: 700; font-size: 13px; margin-bottom: 3px; }
 .history-meta { font-size: 11px; color: var(--text3); }
-.history-amount { font-family: var(--font-mono); font-size: 16px; font-weight: 700; margin-top: 8px; color: var(--accent); }
+.history-amount { font-size: 16px; font-weight: 700; margin-top: 8px; color: var(--accent); }
 
 /* COMPARISON */
 .compare-section { margin-top: 36px; }
@@ -1353,7 +1356,7 @@ input[type=file] { display: none; }
     <div class="tab-panel" id="tab-history">
       <div class="history-section">
         <div class="section-header">
-          <div class="section-title">📁 Upload History</div>
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>Upload History</div>
         </div>
         <div class="history-grid" id="historyGrid"></div>
       </div>
@@ -2236,6 +2239,15 @@ function fmtDaysLeft(days){
   const n=Math.abs(days);
   return`${n} day${n===1?'':'s'} ${days<0?'overdue':'left'}`;
 }
+// Period label ("Jun 2026") from a stored scheduleDate "DD.MM.YYYY" (icon-pass).
+// Render-time only; the stored string is untouched. Anything else (the
+// readings-only placeholder 'Driver readings', a bare label) is returned as-is.
+function fmtPeriod(scheduleDate){
+  const m=/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(String(scheduleDate||'').trim());
+  if(!m)return scheduleDate||'';
+  const mon=MONTHS_SHORT[parseInt(m[2],10)-1];
+  return mon?`${mon} ${m[3]}`:scheduleDate;
+}
 // escapeHtml / escAttr live in esc.js (shared with driver.html).
 // Plate → DOM-id fragment: [A-Za-z0-9_-] only, so a plate-derived id can never
 // carry markup. Writer and readers of an id must both use this.
@@ -2876,7 +2888,7 @@ function renderTrendChart(elId,points,unit,color){
 function renderHistory(){
   document.getElementById('historyGrid').innerHTML=state.reports.map((r,i)=>{
     const total=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
-    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">✕</button><div class="history-period">${escapeHtml(r.scheduleDate||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles · ${fmtDDMMYYYY(r.uploadedAt)}</div><div class="history-amount">${fmtTotalR(total)}</div></div>`;
+    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">${svgIcon('x')}</button><div class="history-period">${escapeHtml(fmtPeriod(r.scheduleDate)||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles· ${fmtDayMonYear(r.uploadedAt)}</div><div class="history-amount">${fmtTotalR(total)}</div></div>`;
   }).join('');
 }
 
