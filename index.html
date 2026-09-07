@@ -633,6 +633,19 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .notif-item-odo { font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--text); }
 .notif-item-time { font-size:10px; color:var(--text3); margin-top:3px; }
 .notif-item-notes { font-size:11px; color:var(--amber); margin-top:3px; font-style:italic; }
+.notif-item-driver { font-size:11px; font-weight:700; color:var(--text2); margin-top:3px; }
+.notif-item-driver .icon, .notif-item-time .icon, .notif-item-notes .icon { width:11px; height:11px; margin-right:3px; vertical-align:-2px; }
+/* icon-pass B: one submission badge style, shared by the bell panel and the
+   driver history modal (subBadgeHtml). Colours are the same hex the inline
+   styles used, now via the variables. */
+.sub-badge { display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:700; border-radius:20px; padding:2px 8px; white-space:nowrap; }
+.sub-badge .icon { width:11px; height:11px; }
+.sub-badge.approved { background:var(--green-light); color:var(--green); }
+.sub-badge.flagged { background:var(--red-light); color:var(--red); }
+.sub-badge.pending { background:var(--accent-light); color:var(--accent); }
+.sub-badge.mismatch { background:var(--red); color:#fff; }
+.sub-badge.unverified { background:var(--amber-light); color:var(--amber); border:1px solid var(--amber); }
+.notif-action-btn .icon, .popup-action-btn .icon { width:14px; height:14px; margin-right:5px; vertical-align:-3px; }
 .notif-empty { padding:24px; text-align:center; color:var(--text3); font-size:13px; font-style:italic; }
 
 /* ODOMETER PHOTO THUMBNAILS (signed-URL display) */
@@ -3565,22 +3578,22 @@ function renderNotifPanel(){
   list.innerHTML=notifData.map(n=>{
     const timeStr=fmtDDMMYYYY(n.created_at)+' '+fmtTimeHM(n.created_at);
     const statusBadge=n.status==='approved'
-      ?'<span style="font-size:10px;font-weight:700;background:#EBFBEE;color:#2F9E44;border-radius:20px;padding:2px 8px;">✅ Approved</span>'
+      ?subBadgeHtml('approved','Approved')
       :n.status==='flagged'
-      ?'<span style="font-size:10px;font-weight:700;background:#FFF5F5;color:#C92A2A;border-radius:20px;padding:2px 8px;">🚩 Flagged</span>'
-      :'<span style="font-size:10px;font-weight:700;background:var(--accent-light);color:var(--accent);border-radius:20px;padding:2px 8px;">New</span>';
+      ?subBadgeHtml('flagged','Flagged')
+      :subBadgeHtml('pending','New');
     const mismatchBadge=n.ai_odometer!=null&&Math.abs(n.odometer-n.ai_odometer)>25
-      ?'<span style="font-size:10px;font-weight:700;background:#C92A2A;color:white;border-radius:20px;padding:2px 8px;">⚠ Odo Mismatch</span>'
+      ?subBadgeHtml('mismatch','Odo Mismatch')
       :'';
     // Pilot fix 1b: photo_verified=false means the AI never read this photo
     // (second-failure manual entry on the driver page)
     const unverifiedBadge=n.photo_verified===false
-      ?'<span style="font-size:10px;font-weight:700;background:#FFF9DB;color:#E67700;border:1px solid #E67700;border-radius:20px;padding:2px 8px;">📷 Photo unverified</span>'
+      ?subBadgeHtml('unverified','Photo unverified')
       :'';
     const actionBtns=(!n.status||n.status==='pending')
       ?`<div style="display:flex;gap:6px;margin-top:8px;">
-          <button onclick="approveNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:#2F9E44;color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">✅ Approve</button>
-          <button onclick="rejectNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:#C92A2A;color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">🚩 Flag</button>
+          <button class="notif-action-btn" onclick="approveNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--green);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('circle-check')}Approve</button>
+          <button class="notif-action-btn" onclick="rejectNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--red);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('flag')}Flag</button>
         </div>`:'';
     return`<div class="notif-item">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -3588,9 +3601,9 @@ function renderNotifPanel(){
         <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-US')+' km':'—'}</span>
         ${statusBadge}${mismatchBadge}${unverifiedBadge}
       </div>
-      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-top:3px;">👤 ${escapeHtml(n.driver_name||'—')}</div>
-      <div class="notif-item-time">📅 ${timeStr}</div>
-      ${n.notes?`<div class="notif-item-notes">📝 ${escapeHtml(n.notes)}</div>`:''}
+      <div class="notif-item-driver">${svgIcon('user')}${escapeHtml(n.driver_name||'—')}</div>
+      <div class="notif-item-time">${svgIcon('calendar')}${timeStr}</div>
+      ${n.notes?`<div class="notif-item-notes">${svgIcon('note')}${escapeHtml(n.notes)}</div>`:''}
       ${n.photo_url?`<div style="margin-top:8px;"><img src="${escapeHtml(n.photo_url)}" alt="Odometer" style="width:100%;border-radius:6px;border:1px solid var(--border);max-height:140px;object-fit:cover;display:block;"></div>`:''}
       ${actionBtns}
     </div>`;
@@ -3716,6 +3729,14 @@ const discExpanded=new Set(); // plates whose collapsed "all valid" row is open;
 // carries its own aria-label / title.
 function svgIcon(name,cls){
   return`<svg class="icon${cls?' '+cls:''}" aria-hidden="true" focusable="false"><use href="#icon-${name}"/></svg>`;
+}
+// icon-pass B: submission status badge, identical in the bell panel and the
+// driver history modal. `kind` picks the colour + icon; `text` is the label
+// (the two places word the not-yet-actioned state differently: New / Pending).
+const SUB_BADGE_ICON={approved:'circle-check',flagged:'flag',mismatch:'alert-triangle',unverified:'camera'};
+function subBadgeHtml(kind,text){
+  const ic=SUB_BADGE_ICON[kind];
+  return`<span class="sub-badge ${kind}">${ic?svgIcon(ic):''}${text}</span>`;
 }
 
 // Local-date ISO (YYYY-MM-DD). toISOString() would shift a local midnight to
@@ -6036,12 +6057,12 @@ function renderDriverHistoryList(hasMore){
   }
   list.innerHTML=_dhRows.map(r=>{
     const badge=r.status==='approved'
-      ?'<span style="font-size:10px;font-weight:700;background:#EBFBEE;color:#2F9E44;border-radius:20px;padding:2px 8px;">✅ Approved</span>'
+      ?subBadgeHtml('approved','Approved')
       :r.status==='flagged'
-      ?'<span style="font-size:10px;font-weight:700;background:#FFF5F5;color:#C92A2A;border-radius:20px;padding:2px 8px;">🚩 Flagged</span>'
-      :'<span style="font-size:10px;font-weight:700;background:var(--accent-light);color:var(--accent);border-radius:20px;padding:2px 8px;">Pending</span>';
+      ?subBadgeHtml('flagged','Flagged')
+      :subBadgeHtml('pending','Pending');
     const unverifiedBadge=r.photo_verified===false
-      ?'<span style="font-size:10px;font-weight:700;background:#FFF9DB;color:#E67700;border:1px solid #E67700;border-radius:20px;padding:2px 8px;">📷 Photo unverified</span>'
+      ?subBadgeHtml('unverified','Photo unverified')
       :'';
     return`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px;">
       <span style="color:var(--text3);white-space:nowrap;">${fmtDayMonYear(r.created_at)} ${fmtTimeHM(r.created_at)}</span>
@@ -6682,19 +6703,19 @@ initApp();
           <div style="font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--text);" id="popupOdo">—</div>
         </div>
       </div>
-      <div id="popupDriver" style="font-size:13px;font-weight:700;color:var(--text2);margin:-8px 0 16px;">👤 —</div>
+      <div id="popupDriver" style="font-size:13px;font-weight:700;color:var(--text2);margin:-8px 0 16px;"><svg class="icon icon-lead" aria-hidden="true"><use href="#icon-user"/></svg>—</div>
       <div id="popupPhotoWrap" style="display:none;margin-bottom:16px;">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Odometer Photo</div>
         <div id="popupPhotoBox"></div>
       </div>
       <div id="popupMismatch" style="display:none;background:var(--accent-light);border:2px solid var(--accent);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--accent);font-weight:700;margin-bottom:16px;line-height:1.6;"></div>
       <!-- Pilot fix 1b: AI never read this photo (driver-page second-failure manual entry) -->
-      <div id="popupUnverified" style="display:none;background:#FFF9DB;border:2px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-bottom:16px;line-height:1.6;">📷 <strong>Photo unverified</strong> — the AI could not read this odometer photo; the reading was typed manually. Please check the photo against the entered km.</div>
+      <div id="popupUnverified" style="display:none;background:#FFF9DB;border:2px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-bottom:16px;line-height:1.6;"><svg class="icon icon-lead" aria-hidden="true"><use href="#icon-camera"/></svg><strong>Photo unverified</strong> — the AI could not read this odometer photo; the reading was typed manually. Please check the photo against the entered km.</div>
       <div id="popupNotes" style="display:none;background:var(--amber-light);border:1px solid #FFE066;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:16px;"></div>
       <div id="popupTime" style="font-size:11px;color:var(--text3);margin-bottom:18px;"></div>
       <div style="display:flex;gap:10px;">
-        <button id="popupApproveBtn" onclick="approveSubmission()" style="flex:1;padding:12px;background:var(--green);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">✅ Approve</button>
-        <button id="popupFlagBtn" onclick="flagSubmission()" style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">🚩 Flag</button>
+        <button id="popupApproveBtn" class="popup-action-btn" onclick="approveSubmission()" style="flex:1;padding:12px;background:var(--green);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;"><svg class="icon" aria-hidden="true"><use href="#icon-circle-check"/></svg>Approve</button>
+        <button id="popupFlagBtn" class="popup-action-btn" onclick="flagSubmission()" style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;"><svg class="icon" aria-hidden="true"><use href="#icon-flag"/></svg>Flag</button>
       </div>
     </div>
     <!-- BATCH SUBMISSIONS VIEW — whole view is clickable and opens the bell panel -->
@@ -6760,7 +6781,7 @@ function showNotifPopup(rows){
     document.getElementById('popupBatchView').style.display='none';
     document.getElementById('popupPlate').textContent=rec.plate||'—';
     document.getElementById('popupOdo').textContent=rec.odometer?rec.odometer.toLocaleString('en-US')+' km':'—';
-    document.getElementById('popupDriver').textContent='👤 '+(rec.driver_name||'—');
+    document.getElementById('popupDriver').innerHTML=svgIcon('user','icon-lead')+escapeHtml(rec.driver_name||'—');
     document.getElementById('popupTime').textContent='Submitted: '+fmtDDMMYYYY(rec.created_at)+' at '+fmtTimeHM(rec.created_at);
     const photoWrap=document.getElementById('popupPhotoWrap');
     const photoBox=document.getElementById('popupPhotoBox');
@@ -6769,13 +6790,13 @@ function showNotifPopup(rows){
     else if(rec.photo_url)photoBox.innerHTML=`<img src="${escapeHtml(rec.photo_url)}" alt="Odometer photo" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:220px;object-fit:cover;image-orientation:from-image;">`;
     else photoBox.innerHTML='<div class="odo-thumb odo-thumb-lg odo-thumb-none">No photo</div>';
     const notesEl=document.getElementById('popupNotes');
-    if(rec.notes){notesEl.textContent='📝 '+rec.notes;notesEl.style.display='block';}
+    if(rec.notes){notesEl.innerHTML=svgIcon('note','icon-lead')+escapeHtml(rec.notes);notesEl.style.display='block';}
     else{notesEl.style.display='none';}
     const mismatchEl=document.getElementById('popupMismatch');
     const hasMismatch=rec.ai_odometer!=null&&Math.abs(rec.odometer-rec.ai_odometer)>25;
     if(hasMismatch){
       mismatchEl.style.display='block';
-      mismatchEl.innerHTML=`⚠️ <strong>Odometer Mismatch Detected</strong> — ${escapeHtml(rec.plate)}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-US')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-US')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
+      mismatchEl.innerHTML=`${svgIcon('alert-triangle','icon-lead')}<strong>Odometer Mismatch Detected</strong> — ${escapeHtml(rec.plate)}<br><span style="font-size:11px;font-weight:400;">AI read <strong>${rec.ai_odometer.toLocaleString('en-US')} km</strong>, driver submitted <strong>${rec.odometer.toLocaleString('en-US')} km</strong> (${Math.abs(rec.odometer-rec.ai_odometer)} km difference)</span>`;
     }else{
       mismatchEl.style.display='none';
     }
@@ -6788,13 +6809,13 @@ function showNotifPopup(rows){
     document.getElementById('popupBatchView').style.display='block';
     document.getElementById('popupBatchCount').textContent=`${rows.length} new submission${rows.length!==1?'s':''} — click to view`;
     const mismatches=rows.filter(r=>r.ai_odometer!=null&&Math.abs(r.odometer-r.ai_odometer)>25);
-    const plateList=rows.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="font-weight:700;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">👤 ${escapeHtml(r.driver_name||'—')}</span><span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate)}</span><span style="font-family:var(--font-mono);">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span></div>`).join('');
+    const plateList=rows.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="font-weight:700;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${svgIcon('user','icon-lead')}${escapeHtml(r.driver_name||'—')}</span><span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);">${escapeHtml(r.plate)}</span><span style="font-family:var(--font-mono);">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span></div>`).join('');
     const mismatchWarn=mismatches.length>0
-      ?`<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);font-weight:700;margin-top:12px;">⚠️ ${mismatches.length} submission${mismatches.length!==1?'s have':' has'} an odometer mismatch — ${escapeHtml(mismatches.map(m=>m.plate).join(', '))}</div>`
+      ?`<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);font-weight:700;margin-top:12px;">${svgIcon('alert-triangle','icon-lead')}${mismatches.length} submission${mismatches.length!==1?'s have':' has'} an odometer mismatch — ${escapeHtml(mismatches.map(m=>m.plate).join(', '))}</div>`
       :'';
     const unverified=rows.filter(r=>r.photo_verified===false);
     const unverifiedWarn=unverified.length>0
-      ?`<div style="background:#FFF9DB;border:1.5px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-top:12px;">📷 ${unverified.length} submission${unverified.length!==1?'s are':' is'} photo unverified — ${escapeHtml(unverified.map(m=>m.plate).join(', '))}</div>`
+      ?`<div style="background:#FFF9DB;border:1.5px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-top:12px;">${svgIcon('camera','icon-lead')}${unverified.length} submission${unverified.length!==1?'s are':' is'} photo unverified — ${escapeHtml(unverified.map(m=>m.plate).join(', '))}</div>`
       :'';
     document.getElementById('popupBatchList').innerHTML=plateList+mismatchWarn+unverifiedWarn;
   }
