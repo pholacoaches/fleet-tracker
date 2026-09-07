@@ -42,7 +42,15 @@
  *   DASHBOARD_IP_LIMIT, DASHBOARD_USER_LIMIT, DRIVER_IP_LIMIT, DRIVER_CODE_LIMIT
  *                       Workers Rate Limiting bindings (2026-09-03, see
  *                       "Rate limiting" below and README). All fail open.
+ *   SENTRY_DSN          var    — error monitoring (2026-09-07). A DSN is a
+ *                                write-only address, public by design. If
+ *                                missing, monitoring is simply off.
+ *   SENTRY_ENVIRONMENT  var    — "production" / "development", per env block
+ *   CF_VERSION_METADATA binding — Cloudflare's own version id → Sentry release
+ *   SENTRY_TEST_KEY     secret — enables GET /monitor/test (see "Monitoring")
  */
+
+import * as Sentry from '@sentry/cloudflare';
 
 // ── Pinned AI settings ───────────────────────────────────────────────────────
 // Kept identical to what the app sends today (index.html:2169, driver.html:476).
@@ -185,6 +193,183 @@ function jsonError(cors, status, type, message) {
   });
 }
 
+// ── Monitoring (Sentry, 2026-09-07) ──────────────────────────────────────────
+// Errors only. No tracing, no logs, no breadcrumbs, no request data. The
+// Worker handles photos, PDFs, prompts and credentials, so the rule is: Sentry
+// gets the route name, the HTTP status, the error class + message, the
+// User-Agent and (driver route only) the tenant UUID. Nothing else.
+//
+// What is reported:
+//   • anything thrown inside a handler (the router's catch) — error
+//   • an Anthropic non-2xx: "anthropic <status> <error type>" — error, or
+//     warning for a 429 (their throttle, not a fault of ours)
+//   • Supabase Auth unreachable / 5xx during token or driver-code checks —
+//     warning (today these look like "log in again" to the user)
+//   • our own 429s: "rate limited: <binding>" — info, so they never page
+//
+// Every Sentry call below is a safe no-op when SENTRY_DSN is unset.
+const ROUTE_TAGS = { '/ai/dashboard': 'pdf', '/ai/driver': 'odometer', '/ai/compliance': 'compliance' };
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TEST_ERROR_MESSAGE = 'FleetDesk Worker monitoring test — this error is deliberate';
+const MAX_EVENT_STRING = 300;
+
+function sentryOptions(env) {
+  const meta = env.CF_VERSION_METADATA;
+  const versionId = meta && typeof meta.id === 'string' ? meta.id : 'unknown';
+  return {
+    dsn: typeof env.SENTRY_DSN === 'string' ? env.SENTRY_DSN : undefined,
+    environment: typeof env.SENTRY_ENVIRONMENT === 'string' ? env.SENTRY_ENVIRONMENT : 'unknown',
+    // Cloudflare's version id (Workers → fleet-proxy → Versions). Each deploy
+    // is unique, nothing to bump by hand. The app's fleetdesk-vNN release
+    // lives in the OTHER Sentry project (fleetdesk) — see README.
+    release: `fleet-proxy@${versionId}`,
+    sendDefaultPii: false,
+    enableLogs: false,
+    sampleRate: 1,
+    maxBreadcrumbs: 0,
+    beforeBreadcrumb: () => null,
+    // Hand-picked instead of the SDK's defaults. Left out on purpose:
+    //   HttpServer   clones + attaches the request body (would be the photo/PDF JSON)
+    //   RequestData  attaches URL, query string and headers
+    //   Fetch        breadcrumbs for every outgoing call + trace headers on Anthropic/Supabase
+    //   Console      console.* breadcrumbs
+    //   Hono         framework hook, unused
+    defaultIntegrations: false,
+    integrations: [Sentry.dedupeIntegration(), Sentry.eventFiltersIntegration(), Sentry.linkedErrorsIntegration()],
+    beforeSend: scrubEvent,
+  };
+}
+
+// Belt and braces on top of the integration choices above: anything that
+// could carry a body, a key, a token or a code is cut or redacted here.
+function redactString(s) {
+  if (typeof s !== 'string') return s;
+  return s
+    .replace(/[A-Za-z0-9+/=_-]{40,}/g, '[redacted]') // base64 runs, JWTs, API keys
+    .replace(/sk-ant-[A-Za-z0-9_-]+/g, '[redacted]')
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/\b[A-Z]{3}-[0-9]{4}\b/g, '[driver-code]')
+    .slice(0, MAX_EVENT_STRING);
+}
+
+function scrubEvent(event) {
+  try {
+    // The ONLY request detail kept: the User-Agent, captured explicitly in
+    // the router (contexts.client). Re-shaped so Sentry shows browser/OS.
+    const ua = event.contexts && event.contexts.client && event.contexts.client.user_agent;
+    delete event.request;
+    if (typeof ua === 'string' && ua) event.request = { headers: { 'User-Agent': ua.slice(0, 200) } };
+    delete event.user;
+    delete event.breadcrumbs;
+    delete event.extra;
+    delete event.server_name;
+    delete event.transaction;
+    delete event.spans;
+    if (event.contexts) {
+      const keep = {};
+      ['trace', 'runtime', 'cloud_resource'].forEach((k) => { if (event.contexts[k]) keep[k] = event.contexts[k]; });
+      event.contexts = keep;
+    }
+    if (event.tags) {
+      const keep = {};
+      ['route', 'tenant', 'http_status', 'upstream', 'limiter', 'test'].forEach((k) => {
+        if (event.tags[k] !== undefined) keep[k] = String(event.tags[k]).slice(0, 64);
+      });
+      event.tags = keep;
+    }
+    if (typeof event.message === 'string') event.message = redactString(event.message);
+    if (event.logentry) {
+      event.logentry = { message: redactString(event.logentry.message) };
+    }
+    if (event.exception && Array.isArray(event.exception.values)) {
+      event.exception.values.forEach((v) => {
+        if (!v) return;
+        v.type = redactString(v.type);
+        v.value = redactString(v.value);
+        if (v.stacktrace && Array.isArray(v.stacktrace.frames)) {
+          v.stacktrace.frames.forEach((f) => { if (f) { delete f.vars; delete f.pre_context; delete f.post_context; delete f.context_line; } });
+        }
+      });
+    }
+  } catch {
+    // A scrub failure must never leak the unscrubbed event — drop it.
+    return null;
+  }
+  return event;
+}
+
+// A short, low-severity message with tags; used for upstream and throttle
+// signals that are not code errors.
+function reportMessage(message, level, tags) {
+  try {
+    Sentry.withScope((scope) => {
+      Object.keys(tags || {}).forEach((k) => { if (tags[k] !== undefined && tags[k] !== null) scope.setTag(k, String(tags[k])); });
+      Sentry.captureMessage(message, level);
+    });
+  } catch {
+    // Monitoring must never break a request.
+  }
+}
+
+// Anthropic error type from its JSON body — one short lowercase token
+// (e.g. "overloaded_error"), never the message text.
+function anthropicErrorType(text) {
+  try {
+    const t = JSON.parse(text);
+    const type = t && t.error && t.error.type;
+    return typeof type === 'string' && /^[a-z_]{1,40}$/.test(type) ? type : 'unknown';
+  } catch {
+    return 'unparseable';
+  }
+}
+
+// GET /monitor/test?key=<SENTRY_TEST_KEY> — throws a known error and reports
+// it, so delivery can be confirmed from each deployment. Costs nothing (no
+// Supabase or Anthropic call), sits behind the dashboard per-IP throttle, and
+// is a plain 404 unless the SENTRY_TEST_KEY secret is set AND matches. The
+// key travels in the query string, which Sentry never receives (see
+// scrubEvent: event.request is dropped and the RequestData integration is
+// not installed).
+function keysMatch(given, expected) {
+  if (typeof given !== 'string' || typeof expected !== 'string') return false;
+  if (given.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= given.charCodeAt(i) ^ expected.charCodeAt(i);
+  return diff === 0;
+}
+
+async function handleMonitorTest(request, env, url) {
+  const notFound = () => new Response('Not found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+  if (request.method !== 'GET') return notFound();
+  if (await rateLimited(env, 'DASHBOARD_IP_LIMIT', clientIp(request))) return rateLimitResponse({}, 'DASHBOARD_IP_LIMIT');
+  const expected = env.SENTRY_TEST_KEY;
+  if (typeof expected !== 'string' || expected.length < 16) return notFound();
+  if (!keysMatch(url.searchParams.get('key') || '', expected)) return notFound();
+
+  let eventId = null;
+  try {
+    Sentry.setTag('test', 'true');
+    throw new Error(TEST_ERROR_MESSAGE);
+  } catch (err) {
+    eventId = Sentry.captureException(err);
+  }
+  const lines = [
+    'FleetDesk Worker monitoring test',
+    '',
+    `worker:      ${typeof env.SENTRY_ENVIRONMENT === 'string' ? env.SENTRY_ENVIRONMENT : 'unknown'}`,
+    `release:     ${sentryOptions(env).release}`,
+    `monitoring:  ${typeof env.SENTRY_DSN === 'string' && env.SENTRY_DSN ? 'on' : 'OFF (SENTRY_DSN not set)'}`,
+    `event id:    ${eventId || 'none'}`,
+    '',
+    'A deliberate error was just sent. In Sentry open the fleetdesk-worker project',
+    `and look for: "${TEST_ERROR_MESSAGE}".`,
+  ];
+  return new Response(lines.join('\n'), {
+    status: 200,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+
 // ── Rate limiting ────────────────────────────────────────────────────────────
 // Workers Rate Limiting bindings, declared in wrangler.jsonc ("ratelimits",
 // both environments). Two layers per route:
@@ -215,7 +400,20 @@ async function rateLimited(env, bindingName, key) {
   }
 }
 
-function rateLimitResponse(cors) {
+// Sentry quota is shared with the app's project, so a flood must not turn
+// into one event per rejected request: at most one report per limiter per
+// minute from each Worker instance (in-memory, resets when the isolate does).
+const RATE_LIMIT_REPORT_INTERVAL_MS = 60 * 1000;
+const lastRateLimitReport = {};
+
+function rateLimitResponse(cors, bindingName) {
+  // Info-level, tagged by limiter — a signal, not a fault. The key (IP,
+  // code, user id) is deliberately NOT sent.
+  const now = Date.now();
+  if (!(now - (lastRateLimitReport[bindingName] || 0) < RATE_LIMIT_REPORT_INTERVAL_MS)) {
+    lastRateLimitReport[bindingName] = now;
+    reportMessage(`rate limited: ${bindingName}`, 'info', { limiter: bindingName, http_status: 429 });
+  }
   const res = jsonError(cors, 429, 'rate_limit_error', RATE_LIMIT_MESSAGE);
   res.headers.set('Retry-After', String(RETRY_AFTER_SECONDS));
   return res;
@@ -245,11 +443,16 @@ async function verifySupabaseUser(env, token) {
     const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
       headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // 401/403 is a stale token — normal. 5xx is Supabase Auth itself.
+      if (res.status >= 500) reportMessage(`supabase auth ${res.status}`, 'warning', { upstream: 'supabase', http_status: res.status });
+      return null;
+    }
     const user = await res.json();
     if (!user || !user.id || user.aud !== 'authenticated') return null;
     return user;
-  } catch {
+  } catch (err) {
+    reportMessage('supabase auth unreachable', 'warning', { upstream: 'supabase' });
     return null;
   }
 }
@@ -268,11 +471,15 @@ async function verifyDriverCode(env, code) {
       },
       body: JSON.stringify({ p_code: code }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (res.status >= 500) reportMessage(`supabase rpc ${res.status}`, 'warning', { upstream: 'supabase', http_status: res.status });
+      return null;
+    }
     const data = await res.json();
     if (!data || typeof data !== 'object' || !data.name) return null;
     return data;
-  } catch {
+  } catch (err) {
+    reportMessage('supabase rpc unreachable', 'warning', { upstream: 'supabase' });
     return null;
   }
 }
@@ -281,6 +488,9 @@ async function verifyDriverCode(env, code) {
 // Passes Anthropic's status + JSON straight through (the app reads
 // data.content / data.error.message), with our CORS headers instead of "*".
 async function callAnthropic(env, cors, payload) {
+  // If the fetch itself throws (network), the router's catch reports it;
+  // this tag tells Sentry which upstream was being called at the time.
+  Sentry.setTag('upstream', 'anthropic');
   const res = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -291,6 +501,14 @@ async function callAnthropic(env, cors, payload) {
     body: JSON.stringify(payload),
   });
   const text = await res.text();
+  if (!res.ok) {
+    // Status + Anthropic's error TYPE only (e.g. "anthropic 529 overloaded_error").
+    // Their 429 is a throttle, not a fault → warning; everything else → error.
+    reportMessage(`anthropic ${res.status} ${anthropicErrorType(text)}`, res.status === 429 ? 'warning' : 'error', {
+      upstream: 'anthropic',
+      http_status: res.status,
+    });
+  }
   return new Response(text, {
     status: res.status,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors },
@@ -313,7 +531,7 @@ async function handleDashboard(request, env, cors) {
 
   // Per signed-in user (20/min). PDF chunks are sent one at a time and each
   // takes 15–60 s, so genuine use stays under 4/min.
-  if (await rateLimited(env, 'DASHBOARD_USER_LIMIT', user.id)) return rateLimitResponse(cors);
+  if (await rateLimited(env, 'DASHBOARD_USER_LIMIT', user.id)) return rateLimitResponse(cors, 'DASHBOARD_USER_LIMIT');
 
   const { body, error } = await readJsonBody(request, MAX_BODY_DASHBOARD);
   if (error) return jsonError(cors, 400, 'invalid_request_error', error);
@@ -342,10 +560,12 @@ async function handleDriver(request, env, cors) {
   // Per driver code (15/min), checked before the RPC so one leaked or guessed
   // code can't hammer Supabase either. One photo = one call; a bad minute of
   // retakes and retries is well under this.
-  if (await rateLimited(env, 'DRIVER_CODE_LIMIT', code)) return rateLimitResponse(cors);
+  if (await rateLimited(env, 'DRIVER_CODE_LIMIT', code)) return rateLimitResponse(cors, 'DRIVER_CODE_LIMIT');
 
   const driver = await verifyDriverCode(env, code);
   if (!driver) return jsonError(cors, 401, 'authentication_error', 'Driver code not recognised.');
+  // Tenant UUID only — never the driver's name or code, never the company name.
+  if (typeof driver.tenant_id === 'string' && UUID_RE.test(driver.tenant_id)) Sentry.setTag('tenant', driver.tenant_id);
 
   const { body, error } = await readJsonBody(request, MAX_BODY_DRIVER);
   if (error) return jsonError(cors, 400, 'invalid_request_error', error);
@@ -377,7 +597,7 @@ async function handleCompliance(request, env, cors) {
   // Per signed-in user (20/min, shared with PDF extraction). The scanner
   // sends photos one at a time and each read takes several seconds, so a
   // genuine batch stays well under this; the client backs off on 429.
-  if (await rateLimited(env, 'DASHBOARD_USER_LIMIT', user.id)) return rateLimitResponse(cors);
+  if (await rateLimited(env, 'DASHBOARD_USER_LIMIT', user.id)) return rateLimitResponse(cors, 'DASHBOARD_USER_LIMIT');
 
   const { body, error } = await readJsonBody(request, MAX_BODY_COMPLIANCE);
   if (error) return jsonError(cors, 400, 'invalid_request_error', error);
@@ -452,11 +672,20 @@ function extractSingleImage(messages) {
 }
 
 // ── Router ───────────────────────────────────────────────────────────────────
-export default {
+// Wrapped with Sentry.withSentry (options from sentryOptions above). The
+// wrapper only adds reporting around fetch(); every response the client sees
+// is still built here, exactly as before.
+const handler = {
   async fetch(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get('Origin');
     const path = url.pathname.replace(/\/+$/, '') || '/';
+    Sentry.setTag('route', ROUTE_TAGS[path] || 'other');
+    Sentry.setContext('client', { user_agent: request.headers.get('User-Agent') || '' });
+
+    // Monitoring self-test (GET, keyed, throttled, no upstream calls).
+    if (path === '/monitor/test') return handleMonitorTest(request, env, url);
+
     const known = path === '/ai/dashboard' || path === '/ai/driver' || path === '/ai/compliance';
     // Both signed-in routes share the dashboard throttles (same identity).
     const dashboardLike = path === '/ai/dashboard' || path === '/ai/compliance';
@@ -484,7 +713,7 @@ export default {
     // address, so this stays loose); dashboard 40/min (also blunts a token
     // spray against Supabase Auth through us).
     const ipBinding = dashboardLike ? 'DASHBOARD_IP_LIMIT' : 'DRIVER_IP_LIMIT';
-    if (await rateLimited(env, ipBinding, clientIp(request))) return rateLimitResponse(cors);
+    if (await rateLimited(env, ipBinding, clientIp(request))) return rateLimitResponse(cors, ipBinding);
 
     if (!env.ANTHROPIC_API_KEY || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
       return jsonError(cors, 500, 'api_error', 'Proxy is not configured.');
@@ -495,9 +724,13 @@ export default {
       if (path === '/ai/compliance') return await handleCompliance(request, env, cors);
       return await handleDriver(request, env, cors);
     } catch (err) {
-      // Never echo internals to the client.
+      // Never echo internals to the client. Sentry gets the error class and
+      // message (scrubbed in beforeSend) plus the route/upstream tags.
       console.error('fleet-proxy error:', err && err.message);
+      Sentry.captureException(err);
       return jsonError(cors, 502, 'api_error', 'The AI service could not be reached. Please try again.');
     }
   },
 };
+
+export default Sentry.withSentry(sentryOptions, handler);

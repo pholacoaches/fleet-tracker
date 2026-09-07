@@ -13,13 +13,21 @@
  *
  * Note: wrangler does NOT inherit `vars` into named environments, so the
  * "dev" block repeats the Supabase vars on purpose. Keep the two blocks in
- * step; only ALLOWED_ORIGINS should differ.
+ * step; only ALLOWED_ORIGINS and SENTRY_ENVIRONMENT should differ.
+ *
+ * Monitoring (2026-09-07): @sentry/cloudflare, errors only. Needs the
+ * nodejs_als compatibility flag (AsyncLocalStorage, so each request gets
+ * its own tags) — inherited by the dev env. SENTRY_DSN is a write-only
+ * address, public by design (the app's DSN is in monitor.js the same way).
+ * version_metadata gives worker.js Cloudflare's deploy id for the Sentry
+ * release. SENTRY_TEST_KEY is a dashboard secret on each Worker, never here.
  */
 {
   "$schema": "https://developers.cloudflare.com/schemas/wrangler.json",
   "name": "fleet-proxy",
   "main": "worker.js",
   "compatibility_date": "2026-07-29",
+  "compatibility_flags": ["nodejs_als"],
   "workers_dev": true,
   "observability": { "enabled": true },
 
@@ -30,8 +38,11 @@
   "vars": {
     "SUPABASE_URL": "https://wlwwzbyuchsonwugqhww.supabase.co",
     "SUPABASE_ANON_KEY": "sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5",
-    "ALLOWED_ORIGINS": "https://pholacoaches.github.io"
+    "ALLOWED_ORIGINS": "https://pholacoaches.github.io",
+    "SENTRY_DSN": "https://01f10bd9c2d9251984ff6cc864c854f2@o4512041337618432.ingest.de.sentry.io/4512044174868560",
+    "SENTRY_ENVIRONMENT": "production"
   },
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
 
   // ── Rate limiting (2026-09-03) ─────────────────────────────────────────
   // Workers Rate Limiting bindings — free, no storage, deployed by wrangler.
@@ -61,8 +72,11 @@
       "vars": {
         "SUPABASE_URL": "https://wlwwzbyuchsonwugqhww.supabase.co",
         "SUPABASE_ANON_KEY": "sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5",
-        "ALLOWED_ORIGINS": "https://pholacoaches.github.io,http://localhost:8787,http://localhost:8377"
+        "ALLOWED_ORIGINS": "https://pholacoaches.github.io,http://localhost:8787,http://localhost:8377",
+        "SENTRY_DSN": "https://01f10bd9c2d9251984ff6cc864c854f2@o4512041337618432.ingest.de.sentry.io/4512044174868560",
+        "SENTRY_ENVIRONMENT": "development"
       },
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "ratelimits": [
         { "name": "DRIVER_IP_LIMIT",      "namespace_id": "2001", "simple": { "limit": 60, "period": 60 } },
         { "name": "DRIVER_CODE_LIMIT",    "namespace_id": "2002", "simple": { "limit": 15, "period": 60 } },

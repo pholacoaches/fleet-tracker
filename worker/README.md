@@ -11,6 +11,7 @@ the Cloudflare dashboard.
 | `POST /ai/dashboard` | `index.html` fuel-statement PDF extraction | `Authorization: Bearer <Supabase access token>` — verified with `GET /auth/v1/user` on every call | client's PDF chunk + prompt, model + max_tokens pinned |
 | `POST /ai/driver` | `driver.html` odometer photo read | `X-Driver-Code: AAA-0000` — validated with the `driver_page_init` RPC (null = unknown/inactive) | client's JPEG only; prompt, model and max_tokens pinned |
 | `POST /ai/compliance` | `index.html` licence-document photo read (Disc Renewal → Scan Licences, 2026-09-04) | same as `/ai/dashboard` (Supabase bearer token) | client's JPEG only; prompt, model and max_tokens pinned |
+| `GET /monitor/test?key=…` | Greg, in a browser | `SENTRY_TEST_KEY` secret (404 otherwise) | nothing — sends a deliberate test error to Sentry (see "Error monitoring") |
 | anything else (`/`, `/login`, `/auth/*`) | — | — | **404** |
 
 Pinned: `claude-sonnet-4-6`, `max_tokens` 4000 (dashboard) / 100 (driver).
@@ -147,12 +148,76 @@ flags anything that is not `YYYY-MM-DD`):
  "make_model":null,"confidence":"high"}
 ```
 
+## Error monitoring (Sentry, 2026-09-07)
+
+The Worker reports to the **fleetdesk-worker** Sentry project (EU region,
+platform Cloudflare Workers) — a separate project from the app's
+**fleetdesk** one, so a Worker problem and a browser problem never mix.
+Package: `@sentry/cloudflare` (pinned in `package.json`; `npm install` in
+this folder once after cloning, wrangler bundles it). Errors only: no
+tracing, no logs, no breadcrumbs, no release-health sessions.
+
+| Setting | Where | Value |
+|---|---|---|
+| `SENTRY_DSN` | `wrangler.jsonc` var, both env blocks | the project DSN. A DSN is a write-only address — it lets a client *send* events and nothing else — so it is a plain var like the app's in `monitor.js`. Remove it and monitoring is off; the Worker is unaffected. |
+| `SENTRY_ENVIRONMENT` | `wrangler.jsonc` var, per env block | `production` (fleet-proxy) / `development` (fleet-proxy-dev) |
+| release | automatic | `fleet-proxy@<Cloudflare version id>` from the `version_metadata` binding. Nothing to bump. The id matches Workers → fleet-proxy → **Versions** in the Cloudflare dashboard. The app's `fleetdesk-vNN` release belongs to the other Sentry project; line the two up by time, or by the release id on the Versions page. |
+| `SENTRY_TEST_KEY` | dashboard **secret** on each Worker | enables `GET /monitor/test`. Not in any file. |
+| `nodejs_als` | `compatibility_flags` | the SDK needs `AsyncLocalStorage` to keep each request's tags separate. Narrowest flag that works (only `node:async_hooks` is bundled). |
+
+**What is reported**
+
+| Signal | Level | Message | Tags |
+|---|---|---|---|
+| anything thrown inside a route handler (the router's catch; client still gets the same 502) | error | error class + message | `route`, `upstream` if it happened during the Anthropic call |
+| Anthropic answered non-2xx | error (their 429: warning) | `anthropic <status> <error type>` e.g. `anthropic 529 overloaded_error` | `route`, `upstream=anthropic`, `http_status` |
+| Supabase Auth / RPC unreachable or 5xx during a token or driver-code check | warning | `supabase auth unreachable`, `supabase rpc 503` | `route`, `upstream=supabase`, `http_status` |
+| our own 429 | info | `rate limited: <binding>` | `route`, `limiter`, `http_status=429` — at most one per limiter per minute per Worker instance, so a flood cannot drain the (org-wide) Sentry quota |
+| `/monitor/test` | error | `FleetDesk Worker monitoring test — this error is deliberate` | `route=other`, `test=true` |
+
+`route` is `pdf` (/ai/dashboard), `odometer` (/ai/driver), `compliance`
+(/ai/compliance) or `other`. `tenant` (the tenant UUID, never the name) is
+added on the driver route only — `driver_page_init` returns it. The signed-in
+routes only see the Supabase user, whose record carries no tenant id; adding
+it would cost an extra Supabase call per request, so it is left out.
+
+**What Sentry never receives.** Image or PDF bytes, base64, prompt text, AI
+answers, driver codes, plates, API keys, bearer tokens, request or response
+bodies, URLs, query strings, cookies, IP addresses, or any header except
+`User-Agent`. Enforced twice: the SDK's default integrations that attach
+request bodies / URLs / headers / fetch breadcrumbs are not installed
+(explicit list in `sentryOptions`), and `beforeSend` (`scrubEvent`) drops
+`request`, `user`, `breadcrumbs`, `extra`, `spans`, all contexts except
+`trace`/`runtime`/`cloud_resource`, every tag not on its allow-list, and
+redacts base64-looking runs (40+ chars), `sk-ant-…`, `Bearer …` and
+`AAA-0000` patterns in any message before cutting it to 300 characters. If
+the scrub itself throws, the event is dropped rather than sent. Verified
+locally on 2026-09-07 by pointing `SENTRY_DSN` at a local catcher and
+replaying the driver route with a fake image: the payload held the message,
+tags, stack and User-Agent only.
+
+**Testing delivery.** Set `SENTRY_TEST_KEY` (a random string, 16+ chars) as
+a secret on the Worker, then open in a browser:
+
+```
+https://fleet-proxy-dev.gjtucker83.workers.dev/monitor/test?key=<the key>
+https://fleet-proxy.gjtucker83.workers.dev/monitor/test?key=<the key>
+```
+
+A plain-text page confirms the environment, release and event id; the event
+appears in the fleetdesk-worker project within a minute. The route makes no
+Supabase or Anthropic call, sits behind the dashboard per-IP throttle, only
+answers GET, and is a plain 404 unless the secret is set and matches
+(constant-time compare). The key is only ever in the query string, which
+Sentry never receives.
+
 ## Secrets
 
-`ANTHROPIC_API_KEY` is the only secret. It was rotated on 2026-08-25 and the
-seven legacy secrets from the removed `/login` and `/auth/*` routes were
-deleted the same day. Set or rotate it in the Cloudflare dashboard, not via
-`wrangler secret put` from a non-TTY shell (see above).
+`ANTHROPIC_API_KEY` and `SENTRY_TEST_KEY` (see "Error monitoring") are the
+only secrets. The API key was rotated on 2026-08-25 and the seven legacy
+secrets from the removed `/login` and `/auth/*` routes were deleted the same
+day. Set or rotate in the Cloudflare dashboard, not via `wrangler secret put`
+from a non-TTY shell (see above).
 
 ## Local test
 
