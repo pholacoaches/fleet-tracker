@@ -1386,11 +1386,11 @@ input[type=file] { display: none; }
         <option value="all">All statuses</option>
         <option value="overdue">Overdue</option>
         <option value="week">This week (≤7 days)</option>
+        <option value="unknown">Not set</option>
         <option value="book">Book now (≤30 days)</option>
         <option value="soon">Expiring soon (≤45 days)</option>
-        <option value="ok">Valid</option>
-        <option value="unknown">Not set</option>
         <option value="not_required">Not required</option>
+        <option value="ok">Valid</option>
       </select>
       <!-- Archive build: hidden entirely while nothing is archived (renderDiscView) -->
       <label class="disc-show-archived hidden" id="discShowArchivedWrap" title="Archived vehicles are out of service; nothing is deleted">
@@ -3740,9 +3740,15 @@ const COMP_ITEMS=[
   {key:'cof',label:'COF',expiryField:'cof_expiry',noField:null,costField:'cof_cost',nrField:'cof_not_required'},
   {key:'operating_licence',label:'Operating Licence',expiryField:'operating_licence_expiry',noField:'operating_licence_no',costField:'operating_licence_cost',nrField:'operating_licence_not_required'}
 ];
-// Not set ranks ABOVE Valid (disc-visual-polish, 2026-09-04): a vehicle with a
-// blank date used to get a green "All valid" card because ok outranked unknown.
+// SEVERITY order (worstComplianceStatus): picks a vehicle's worst item for
+// card colour / badge / band. Not set ranks ABOVE Valid (disc-visual-polish,
+// 2026-09-04): a vehicle with a blank date used to get a green "All valid"
+// card because ok outranked unknown.
 const COMP_TIER_ORDER={overdue:0,week:1,book:2,soon:3,unknown:4,ok:5,not_required:6};
+// DISPLAY sort order for the card list (icon-pass C block 4): deliberately
+// differs from severity: Not set sits right after This week so blank dates
+// surface early, without changing which tier a card is badged/coloured as.
+const COMP_SORT_ORDER={overdue:0,week:1,unknown:2,book:3,soon:4,not_required:5,ok:6};
 const COMP_ALERT_TIERS=['overdue','week','book','soon'];
 const COMP_TIER_LABEL={overdue:'Overdue',week:'This week',book:'Book now',soon:'Expiring soon',ok:'Valid',unknown:'Not set',not_required:'Not required'};
 let complianceData={};   // by plate
@@ -4154,10 +4160,10 @@ function renderDiscViewBody(){
   document.getElementById('discSummaryStrip').innerHTML=`
     <div class="disc-summary-card ds-red"><div class="disc-summary-label">Overdue</div><div class="disc-summary-val">${c.overdue}</div></div>
     <div class="disc-summary-card ds-red"><div class="disc-summary-label">This Week</div><div class="disc-summary-val">${c.week}</div></div>
+    <div class="disc-summary-card"><div class="disc-summary-label">Not Set</div><div class="disc-summary-val" style="color:var(--text3);">${c.unknown}</div></div>
     <div class="disc-summary-card ds-orange"><div class="disc-summary-label">Book Now (≤30 Days)</div><div class="disc-summary-val">${c.book}</div></div>
     <div class="disc-summary-card ds-amber"><div class="disc-summary-label">Expiring Soon (≤45 Days)</div><div class="disc-summary-val">${c.soon}</div></div>
     <div class="disc-summary-card ds-green" id="discAllValidBox" onclick="scrollToDiscValid()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();scrollToDiscValid();}"><div class="disc-summary-label">All Valid</div><div class="disc-summary-val">${allValidN}${svgIcon('chevron-down','ds-link-arrow hidden')}</div><div class="disc-summary-sub">vehicles</div></div>
-    <div class="disc-summary-card"><div class="disc-summary-label">Not Set</div><div class="disc-summary-val" style="color:var(--text3);">${c.unknown}</div></div>
     <div class="disc-summary-card"><div class="disc-summary-label">Vehicles</div><div class="disc-summary-val">${livePlates.length}</div>${discShowArchived?`<div style="font-size:10px;color:var(--text3);">+${plates.length-livePlates.length} archived</div>`:''}</div>
   `;
 
@@ -4202,7 +4208,7 @@ function renderDiscCards(plates){
   if(filter!=='all')list=list.filter(v=>!v.archived&&COMP_ITEMS.some(it=>itemStatus(v.rec,it).status===filter));
   // Archived last; before them the collapsed all-valid rows; action cards
   // first, worst-first; plate within each band
-  list.sort((a,b)=>(a.archived-b.archived)||(a.quiet-b.quiet)||COMP_TIER_ORDER[a.worst]-COMP_TIER_ORDER[b.worst]||a.plate.localeCompare(b.plate));
+  list.sort((a,b)=>(a.archived-b.archived)||(a.quiet-b.quiet)||COMP_SORT_ORDER[a.worst]-COMP_SORT_ORDER[b.worst]||a.plate.localeCompare(b.plate));
 
   if(list.length===0){
     document.getElementById('discsGrid').innerHTML='<p class="tyre-empty">No vehicles match this search / filter.</p>';
