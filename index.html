@@ -178,6 +178,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 }
 .view-btn .icon { width: 13px; height: 13px; }
 .view-btn.active { background: var(--accent); color: white; }
+.view-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* cpk-tab Block 1: aligned figures in the CPK cards + table */
+.cpk-num { font-variant-numeric: tabular-nums; }
 
 /* MAIN */
 .main { max-width: 1320px; margin: 0 auto; padding: 24px 24px; }
@@ -375,6 +378,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .badge-warn { background: var(--amber-light); color: var(--amber); }
 .badge-high { background: var(--red-light); color: var(--red); }
 .badge-comp { background: #E3FAFC; color: #0C8599; }
+.badge-ok { background: var(--green-light); color: var(--green); }
 .badge .icon { width: 11px; height: 11px; margin-right: 3px; vertical-align: -1px; }
 /* icon-pass B: in-row pills ("Comp", "Unverified") inside the transaction table */
 .tx-table .badge { font-size: 9px; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }
@@ -1298,6 +1302,7 @@ input[type=file] { display: none; }
     <div class="dash-tabs">
       <!-- Change 5 (disc-visual-polish): line-art tab icons from the sprite -->
       <button class="dash-tab-btn active" data-tab="overview"    onclick="switchDashTab('overview')"><svg class="icon" aria-hidden="true"><use href="#icon-layout-dashboard"/></svg>Overview</button>
+      <button class="dash-tab-btn"        data-tab="cpk"         onclick="switchDashTab('cpk')"><svg class="icon" aria-hidden="true"><use href="#icon-coin"/></svg>CPK</button>
       <button class="dash-tab-btn"        data-tab="performance" onclick="switchDashTab('performance')"><svg class="icon" aria-hidden="true"><use href="#icon-trophy"/></svg>Performance</button>
       <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicle Blocks</button>
       <button class="dash-tab-btn"        data-tab="drivers"     onclick="switchDashTab('drivers')"><svg class="icon" aria-hidden="true"><use href="#icon-user"/></svg>Drivers</button>
@@ -1315,7 +1320,26 @@ input[type=file] { display: none; }
       <div class="stats-grid" id="statsGrid"></div>
     </div>
 
-    <!-- TAB 2: PERFORMANCE -->
+    <!-- TAB 2: COST PER KM (cpk-tab Block 1; the All costs toggle activates in Block 2) -->
+    <div class="tab-panel" id="tab-cpk">
+      <div class="section-header">
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-coin"/></svg>Cost per Kilometre</div>
+        <div class="section-actions">
+          <div class="view-toggle">
+            <button class="view-btn active" id="cpkCostFuel" onclick="setCpkCost('fuel')">Fuel only</button>
+            <button class="view-btn" id="cpkCostAll" onclick="setCpkCost('all')" disabled title="Maintenance and tyre costs arrive in the next update">All costs</button>
+          </div>
+          <div class="view-toggle">
+            <button class="view-btn active" id="cpkScopePeriod" onclick="setCpkScope('period')">This period</button>
+            <button class="view-btn" id="cpkScopeOverall" onclick="setCpkScope('overall')">Overall</button>
+          </div>
+        </div>
+      </div>
+      <div class="stats-grid" id="cpkCards"></div>
+      <div class="vehicles-table-wrap" id="cpkTableWrap"></div>
+    </div>
+
+    <!-- TAB: PERFORMANCE -->
     <div class="tab-panel" id="tab-performance">
       <div class="section-header">
         <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-trophy"/></svg>Highest Spend Vehicles</div>
@@ -2062,6 +2086,7 @@ function switchDashTab(tab){
   currentDashTab=tab;
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
   document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  if(tab==='cpk')renderCpkTab();
   if(tab==='drivers')renderDriversTab();
   if(tab==='discs')renderDiscsTab();
   if(tab==='tyres')renderTyresTab();
@@ -2828,6 +2853,8 @@ function renderDashboard(){
   filterVehicles();
   renderHistory();
   renderComparison();
+  // cpk-tab: lazy tab, but it must track period switches while it is open
+  if(currentDashTab==='cpk')renderCpkTab();
 }
 
 function filterVehicles(){
@@ -3025,6 +3052,105 @@ function renderComparison(){
 }
 
 function switchReport(i){ activeReportIndex=i; recomputeAllStats(); renderDashboard(); window.scrollTo({top:0,behavior:'smooth'}); }
+
+// ── COST PER KM TAB (cpk-tab Block 1: fuel-only; All costs lands in Block 2) ──
+// Km per vehicle per period: highest minus lowest usable odometer among that
+// period's fuel transactions. An odometer of 0/null means "not captured"
+// (parseOdo defaults missing cells to 0) and is skipped; fewer than two usable
+// readings, or a zero span, means the km is unknown - shown as a dash, never
+// estimated. Pure and shared; the Reports-tab inline version stays as is.
+function periodKm(v){
+  let lo=null,hi=null,n=0;
+  (v.transactions||[]).forEach(t=>{
+    if(!t.odometer)return;
+    n++;
+    if(lo===null||t.odometer<lo)lo=t.odometer;
+    if(hi===null||t.odometer>hi)hi=t.odometer;
+  });
+  return(n<2||hi<=lo)?null:hi-lo;
+}
+
+let cpkCost='fuel';    // 'fuel' | 'all' (Block 2)
+let cpkScope='period'; // 'period' | 'overall'
+function setCpkCost(m){cpkCost=m;renderCpkTab();}
+function setCpkScope(s){cpkScope=s;renderCpkTab();}
+
+// One row per plate for the current scope. spend = full fuel spend for the
+// scope; km and kmSpend only accumulate from periods whose odometer span is
+// usable, so rkm = kmSpend/km stays exact and is never diluted by spend from
+// periods where the distance is unknown.
+function cpkRows(){
+  const reps=cpkScope==='period'
+    ?(state.reports[activeReportIndex]?[state.reports[activeReportIndex]]:[])
+    :state.reports;
+  const byPlate={};
+  reps.forEach(r=>(r.vehicles||[]).forEach(v=>{
+    const a=byPlate[v.plate]||(byPlate[v.plate]={plate:v.plate,spend:0,km:0,kmSpend:0});
+    a.spend+=v.totalAmount||0;
+    const km=periodKm(v);
+    if(km!=null){a.km+=km;a.kmSpend+=v.totalAmount||0;}
+  }));
+  return Object.values(byPlate).map(a=>({...a,rkm:a.km>0?a.kmSpend/a.km:null}));
+}
+
+// vs-fleet badge: red at 15%+ above the fleet average, amber at 5-15%, green
+// below that - same colour language as the rest of the app.
+function cpkBadge(rkm,fleetAvg){
+  if(rkm==null||fleetAvg==null||fleetAvg<=0)return'\u2014';
+  const pct=(rkm-fleetAvg)/fleetAvg*100;
+  const cls=pct>=15?'badge-high':pct>=5?'badge-warn':'badge-ok';
+  return`<span class="badge ${cls}">${pct>0?'+':''}${pct.toFixed(0)}%</span>`;
+}
+
+function renderCpkTab(){
+  const cardsEl=document.getElementById('cpkCards');
+  const tableEl=document.getElementById('cpkTableWrap');
+  if(!cardsEl||!tableEl)return;
+  if(state.reports.length===0){
+    cardsEl.innerHTML='';
+    tableEl.innerHTML='<p style="color:var(--text3);font-size:12px;font-style:italic;">Upload a fuel report to see cost per kilometre.</p>';
+    return;
+  }
+  document.getElementById('cpkCostFuel').classList.toggle('active',cpkCost==='fuel');
+  document.getElementById('cpkCostAll').classList.toggle('active',cpkCost==='all');
+  document.getElementById('cpkScopePeriod').classList.toggle('active',cpkScope==='period');
+  document.getElementById('cpkScopeOverall').classList.toggle('active',cpkScope==='overall');
+
+  const rows=cpkRows();
+  const known=rows.filter(r=>r.rkm!=null);
+  const fleetKm=known.reduce((s,r)=>s+r.km,0);
+  const fleetAvg=fleetKm>0?known.reduce((s,r)=>s+r.kmSpend,0)/fleetKm:null;
+  const costliest=known.length?known.reduce((a,b)=>b.rkm>a.rkm?b:a):null;
+  const scopeSub=cpkScope==='period'?'This period':'All periods';
+
+  cardsEl.innerHTML=`
+    <div class="stat-card">
+      <div class="stat-label">Fleet Average</div>
+      <div class="stat-value cpk-num">${fleetAvg!=null?'R'+fleetAvg.toFixed(2)+'/km':'\u2014'}</div>
+      <div class="stat-sub">${scopeSub}, fuel only · ${known.length} of ${rows.length} vehicles</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Km</div>
+      <div class="stat-value cpk-num">${fleetKm>0?_grp(fleetKm):'\u2014'}</div>
+      <div class="stat-sub">${scopeSub}, vehicles with known km</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Costliest Vehicle</div>
+      <div class="stat-value">${costliest?escapeHtml(costliest.plate):'\u2014'}</div>
+      <div class="stat-sub">${costliest?'<span class="cpk-num">R'+costliest.rkm.toFixed(2)+'/km</span>':'No usable odometer data'}</div>
+    </div>
+  `;
+
+  const sorted=[...rows].sort((a,b)=>{
+    if(a.rkm!=null&&b.rkm!=null)return b.rkm-a.rkm;
+    if(a.rkm!=null)return-1;
+    if(b.rkm!=null)return 1;
+    return b.spend-a.spend;
+  });
+  tableEl.innerHTML=`<table class="vehicles-table"><thead><tr><th>Vehicle</th><th>Km</th><th>Spend</th><th>R/km</th><th>vs Fleet</th></tr></thead><tbody>${
+    sorted.map(r=>`<tr><td><strong>${escapeHtml(r.plate)}</strong></td><td class="cpk-num">${r.km>0?_grp(r.km):'\u2014'}</td><td class="cpk-num">${fmtTotalR(r.spend)}</td><td class="cpk-num">${r.rkm!=null?'R'+r.rkm.toFixed(2):'\u2014'}</td><td>${cpkBadge(r.rkm,fleetAvg)}</td></tr>`).join('')
+  }</tbody></table>`;
+}
 
 const BACKUPS_BUCKET='backups';
 
