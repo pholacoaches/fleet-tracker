@@ -38,6 +38,10 @@
   --amber-light: #FFF9DB;
   --red: #C92A2A;
   --red-light: #FFF5F5;
+  /* icon-pass C: pale border shades the Maintenance flag rows were hard-coding */
+  --red-border: #FFA8A8;
+  --amber-border: #FFE066;
+  --green-border: #B2F2BB;
   --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
   --shadow-lg: 0 4px 20px rgba(0,0,0,0.10);
   --radius: 10px;
@@ -883,9 +887,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 /* MAINTENANCE TAB */
 .maint-flags { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; }
 .maint-flag { display:flex; align-items:flex-start; gap:10px; padding:11px 14px; border-radius:var(--radius-sm); font-size:12px; line-height:1.55; border:1.5px solid; animation:fadeUp 0.3s ease both; }
-.maint-flag.mf-red { background:var(--red-light); border-color:#FFA8A8; color:var(--red); }
-.maint-flag.mf-amber { background:var(--amber-light); border-color:#FFE066; color:var(--amber); }
-.maint-flag-icon { font-size:16px; flex-shrink:0; }
+.maint-flag.mf-red { background:var(--red-light); border-color:var(--red-border); color:var(--red); }
+.maint-flag.mf-amber { background:var(--amber-light); border-color:var(--amber-border); color:var(--amber); }
+.maint-flag.mf-ok { background:var(--green-light); border-color:var(--green-border); color:var(--green); }
+.maint-flag-icon { flex-shrink:0; display:inline-flex; margin-top:1px; }
+.maint-flag-icon .icon { width:16px; height:16px; }
 .maint-flag strong { font-weight:700; }
 .maint-flags-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--red); margin-bottom:8px; }
 .maint-timeline { display:flex; flex-direction:column; gap:12px; margin-top:14px; }
@@ -893,24 +899,29 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .maint-job.mj-open { border-left-color:var(--amber); }
 .maint-job-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px; background:var(--surface2); border-bottom:1px solid var(--border); flex-wrap:wrap; }
 .maint-job-left { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.maint-cat-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; background:var(--accent-light); color:var(--accent); border-radius:20px; padding:3px 10px; }
-.maint-status-open { font-size:10px; font-weight:700; background:var(--amber-light); color:var(--amber); border-radius:20px; padding:3px 10px; }
-.maint-status-done { font-size:10px; font-weight:700; background:var(--green-light); color:var(--green); border-radius:20px; padding:3px 10px; }
-.maint-job-date { font-family:var(--font-mono); font-size:11px; color:var(--text3); font-weight:700; }
+.maint-cat-badge, .maint-status-open, .maint-status-done { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:700; border-radius:20px; padding:3px 10px; }
+.maint-cat-badge .icon, .maint-status-open .icon, .maint-status-done .icon { width:11px; height:11px; }
+.maint-cat-badge { text-transform:uppercase; letter-spacing:0.5px; background:var(--accent-light); color:var(--accent); }
+.maint-status-open { background:var(--amber-light); color:var(--amber); }
+.maint-status-done { background:var(--green-light); color:var(--green); }
+.maint-job-date { font-size:11px; color:var(--text3); font-weight:700; font-variant-numeric:tabular-nums; display:inline-flex; align-items:center; gap:4px; }
+.maint-job-date .icon { width:12px; height:12px; }
 .maint-job-body { padding:12px 14px; }
 .maint-job-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:4px; }
 .maint-job-desc { font-size:12px; color:var(--text2); line-height:1.5; margin-bottom:8px; }
 .maint-job-meta { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:var(--text3); }
-.maint-job-meta strong { font-family:var(--font-mono); color:var(--text2); }
+.maint-job-meta strong { color:var(--text2); font-variant-numeric:tabular-nums; }
+.maint-job-meta .icon { width:12px; height:12px; margin-right:4px; vertical-align:-2px; }
 .maint-parts-table { width:100%; border-collapse:collapse; margin-top:10px; }
 .maint-parts-table th { font-size:9px; text-transform:uppercase; letter-spacing:0.6px; color:var(--text3); font-weight:700; text-align:left; padding:5px 8px; background:var(--bg); border-bottom:1px solid var(--border); }
 .maint-parts-table td { font-size:11px; padding:6px 8px; border-bottom:1px solid var(--border); color:var(--text2); }
-.maint-parts-table td.r, .maint-parts-table th.r { text-align:right; font-family:var(--font-mono); }
+.maint-parts-table td.r, .maint-parts-table th.r { text-align:right; font-variant-numeric:tabular-nums; }
 .maint-job-footer { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 14px; border-top:1px solid var(--border); background:var(--surface2); flex-wrap:wrap; }
 .mf-part-row { display:grid; grid-template-columns:2fr 1fr 1fr 60px 1fr 1fr 1fr 30px; gap:6px; margin-bottom:6px; align-items:center; }
 .mf-part-row input { width:100%; padding:6px 8px; border:1.5px solid var(--border2); border-radius:var(--radius-sm); font-family:var(--font); font-size:11px; color:var(--text); background:var(--surface); outline:none; }
 .mf-part-row input:focus { border-color:var(--accent); }
-.mf-part-del { background:none; border:none; color:var(--red); font-size:15px; cursor:pointer; padding:2px; }
+.mf-part-del { background:none; border:none; color:var(--red); cursor:pointer; padding:2px; display:inline-flex; align-items:center; justify-content:center; }
+.mf-part-del .icon { width:15px; height:15px; }
 .mf-parts-head { display:grid; grid-template-columns:2fr 1fr 1fr 60px 1fr 1fr 1fr 30px; gap:6px; margin-bottom:4px; }
 .mf-parts-head span { font-size:9px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); font-weight:700; }
 @media (max-width:700px){ .mf-part-row, .mf-parts-head { grid-template-columns:1fr 1fr 1fr; } .mf-parts-head { display:none; } }
@@ -1119,6 +1130,12 @@ input[type=file] { display: none; }
   <symbol id="icon-droplet" viewBox="0 0 24 24"><path d="M7.502 19.423c2.602 2.105 6.395 2.105 8.996 0c2.602 -2.105 3.262 -5.708 1.566 -8.546l-4.89 -7.26c-.42 -.625 -1.287 -.803 -1.936 -.397a1.376 1.376 0 0 0 -.41 .397l-4.893 7.26c-1.695 2.838 -1.035 6.441 1.567 8.546" /></symbol>
   <symbol id="icon-home" viewBox="0 0 24 24"><path d="M5 12l-2 0l9 -9l9 9l-2 0" /><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" /><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" /></symbol>
   <symbol id="icon-package" viewBox="0 0 24 24"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /><path d="M12 12l8 -4.5" /><path d="M12 12l0 9" /><path d="M12 12l-8 -4.5" /><path d="M16 5.25l-8 4.5" /></symbol>
+  <!-- icon-pass C (Maintenance): in-workshop clock + the four category icons with no existing match -->
+  <symbol id="icon-clock" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 7v5l3 3" /></symbol>
+  <symbol id="icon-engine" viewBox="0 0 24 24"><path d="M3 10v6" /><path d="M12 5v3" /><path d="M10 5h4" /><path d="M5 13h-2" /><path d="M6 10h2l2 -2h3.382a1 1 0 0 1 .894 .553l1.448 2.894a1 1 0 0 0 .894 .553h1.382v-2h2a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-2v-2h-3v2a1 1 0 0 1 -1 1h-3.465a1 1 0 0 1 -.832 -.445l-1.703 -2.555h-2v-6" /></symbol>
+  <symbol id="icon-bolt" viewBox="0 0 24 24"><path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11" /></symbol>
+  <symbol id="icon-snowflake" viewBox="0 0 24 24"><path d="M10 4l2 1l2 -1" /><path d="M12 2v6.5l3 1.72" /><path d="M17.928 6.268l.134 2.232l1.866 1.232" /><path d="M20.66 7l-5.629 3.25l.01 3.458" /><path d="M19.928 14.268l-1.866 1.232l-.134 2.232" /><path d="M20.66 17l-5.629 -3.25l-2.99 1.738" /><path d="M14 20l-2 -1l-2 1" /><path d="M12 22v-6.5l-3 -1.72" /><path d="M6.072 17.732l-.134 -2.232l-1.866 -1.232" /><path d="M3.34 17l5.629 -3.25l-.01 -3.458" /><path d="M4.072 9.732l1.866 -1.232l.134 -2.232" /><path d="M3.34 7l5.629 3.25l2.99 -1.738" /></symbol>
+  <symbol id="icon-hand-stop" viewBox="0 0 24 24"><path d="M8 13v-7.5a1.5 1.5 0 0 1 3 0v6.5" /><path d="M11 5.5v-2a1.5 1.5 0 1 1 3 0v8.5" /><path d="M14 5.5a1.5 1.5 0 0 1 3 0v6.5" /><path d="M17 7.5a1.5 1.5 0 0 1 3 0v8.5a6 6 0 0 1 -6 6h-2h.208a6 6 0 0 1 -5.012 -2.7a69.74 69.74 0 0 1 -.196 -.3c-.312 -.479 -1.407 -2.388 -3.286 -5.728a1.5 1.5 0 0 1 .536 -2.022a1.867 1.867 0 0 1 2.28 .28l1.47 1.47" /></symbol>
 </svg>
 
 <!-- LOGIN SCREEN -->
@@ -1426,7 +1443,7 @@ input[type=file] { display: none; }
     <!-- TAB 8: MAINTENANCE -->
     <div class="tab-panel" id="tab-maint">
       <div class="section-header">
-        <div class="section-title">🔧 Maintenance</div>
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-tool"/></svg>Maintenance</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Job history, warranties and automatic red flags</div>
       </div>
       <div class="disc-summary-strip" id="maintSummaryStrip"></div>
@@ -2263,7 +2280,7 @@ function parseDateStr(s){
   const[d,m,y]=(s||'01.01.1970').split('.');
   return new Date(+y,+m-1,+d);
 }
-// App-wide date convention: DD.MM.YYYY
+// Data / CSV date convention: DD.MM.YYYY (on-screen display uses fmtDayMonYear)
 function fmtDDMMYYYY(d){
   d=new Date(d);
   return`${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
@@ -2276,7 +2293,7 @@ function fmtTimeHM(d){
 // "26 Sep 2026". Fixed English months, never the browser locale. Accepts a
 // date-only ISO string (parsed as LOCAL midnight — bare new Date('YYYY-MM-DD')
 // is UTC and would show the previous day west of Greenwich) or a full
-// timestamp such as archived_at. CSV / Maintenance / Reports keep fmtDDMMYYYY.
+// timestamp such as archived_at. CSV / Reports keep fmtDDMMYYYY.
 const MONTHS_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function fmtDayMonYear(d){
   if(!d)return'—';
@@ -5332,17 +5349,19 @@ async function submitTyre(){
 }
 
 // ── MAINTENANCE TAB ───────────────────────────────────────────────────────────
+// icon = sprite symbol name for svgIcon() (icon-pass C); the category <select>
+// shows the label only.
 const MAINT_CATEGORIES={
-  service:{label:'Service',icon:'🛢',components:['Oil & filter change','Gearbox oil','Diff oil','Fuel filters','Air filter','Full service']},
-  brakes:{label:'Brakes',icon:'🛑',components:['Front brake pads/linings','Rear brake pads/linings','Brake discs/drums','Air compressor','Brake valves','Brake chambers']},
-  clutch:{label:'Clutch & Drivetrain',icon:'⚙️',components:['Clutch kit','Slave cylinder','Master cylinder','Gearbox','Propshaft','Differential']},
-  engine:{label:'Engine',icon:'🔩',components:['Engine overhaul','Turbo','Injectors','Radiator','Water pump','Cooling fan','Cylinder head','Belts & tensioners']},
-  electrical:{label:'Electrical',icon:'🔋',components:['Battery','Alternator','Starter motor','Wiring','Lights']},
-  suspension:{label:'Suspension & Steering',icon:'🪛',components:['Air bags','Shock absorbers','Kingpins','Wheel bearings','Steering box','Tie rod ends']},
-  body:{label:'Body & Interior',icon:'🚘',components:['Door mechanism','Seats','Glass/windscreen','Panel repair','Paint']},
-  aircon:{label:'Aircon',icon:'❄️',components:['Aircon compressor','Aircon regas','Blower/fans','Condenser']},
-  cof:{label:'COF',icon:'📋',components:['COF inspection','COF repairs']},
-  other:{label:'Other',icon:'🔧',components:['Other']}
+  service:{label:'Service',icon:'droplet',components:['Oil & filter change','Gearbox oil','Diff oil','Fuel filters','Air filter','Full service']},
+  brakes:{label:'Brakes',icon:'hand-stop',components:['Front brake pads/linings','Rear brake pads/linings','Brake discs/drums','Air compressor','Brake valves','Brake chambers']},
+  clutch:{label:'Clutch & Drivetrain',icon:'settings',components:['Clutch kit','Slave cylinder','Master cylinder','Gearbox','Propshaft','Differential']},
+  engine:{label:'Engine',icon:'engine',components:['Engine overhaul','Turbo','Injectors','Radiator','Water pump','Cooling fan','Cylinder head','Belts & tensioners']},
+  electrical:{label:'Electrical',icon:'bolt',components:['Battery','Alternator','Starter motor','Wiring','Lights']},
+  suspension:{label:'Suspension & Steering',icon:'tool',components:['Air bags','Shock absorbers','Kingpins','Wheel bearings','Steering box','Tie rod ends']},
+  body:{label:'Body & Interior',icon:'bus',components:['Door mechanism','Seats','Glass/windscreen','Panel repair','Paint']},
+  aircon:{label:'Aircon',icon:'snowflake',components:['Aircon compressor','Aircon regas','Blower/fans','Condenser']},
+  cof:{label:'COF',icon:'certificate',components:['COF inspection','COF repairs']},
+  other:{label:'Other',icon:'tool',components:['Other']}
 };
 // Expected minimum component life — failures earlier than this are premature.
 // Judged by km when odometer data exists, otherwise by months.
@@ -5425,10 +5444,10 @@ function computeMaintFlags(){
       if(life.km&&gapKm!=null&&gapKm>=0)premature=gapKm<life.km;
       else if(life.months)premature=gapMonths<life.months;
       if(inWarranty){
-        flags.push({type:'warranty',severity:'red',plate:curr.plate,icon:'💰',
-          html:`<strong>Warranty claim — don't pay for this!</strong> ${escapeHtml(curr.component)} on <strong>${escapeHtml(curr.plate)}</strong> failed ${gapKm!=null&&gapKm>=0?gapKm.toLocaleString('en-US')+' km':Math.round(gapMonths)+' month(s)'} after the previous one (${fmtDDMMYYYY(prev.date_in)}) — still inside the ${maxWM>0?maxWM+'-month':''}${maxWM>0&&maxWKM>0?' / ':''}${maxWKM>0?maxWKM.toLocaleString('en-US')+' km':''} warranty${prev.supplier?' from '+escapeHtml(prev.supplier):''}.`});
+        flags.push({type:'warranty',severity:'red',plate:curr.plate,
+          html:`<strong>Warranty claim — don't pay for this!</strong> ${escapeHtml(curr.component)} on <strong>${escapeHtml(curr.plate)}</strong> failed ${gapKm!=null&&gapKm>=0?gapKm.toLocaleString('en-US')+' km':Math.round(gapMonths)+' month(s)'} after the previous one (${fmtDayMonYear(prev.date_in)}) — still inside the ${maxWM>0?maxWM+'-month':''}${maxWM>0&&maxWKM>0?' / ':''}${maxWKM>0?maxWKM.toLocaleString('en-US')+' km':''} warranty${prev.supplier?' from '+escapeHtml(prev.supplier):''}.`});
       }else if(premature){
-        flags.push({type:'repeat',severity:'red',plate:curr.plate,icon:'🔁',
+        flags.push({type:'repeat',severity:'red',plate:curr.plate,
           html:`<strong>Premature failure:</strong> ${escapeHtml(curr.component)} on <strong>${escapeHtml(curr.plate)}</strong> replaced ${gapKm!=null&&gapKm>=0?gapKm.toLocaleString('en-US')+' km':Math.round(gapMonths)+' month(s)'} after the previous one — expected life ${life.km?life.km.toLocaleString('en-US')+'+ km':life.months+'+ months'}. Check for a defective part, wrong diagnosis or driver behaviour.`});
       }
     }
@@ -5440,7 +5459,7 @@ function computeMaintFlags(){
   recent.forEach(j=>{(byComp[j.component]=byComp[j.component]||new Set()).add(j.plate);});
   Object.entries(byComp).forEach(([comp,plates])=>{
     if(plates.size>=3){
-      flags.push({type:'cluster',severity:'red',plate:null,icon:'📦',
+      flags.push({type:'cluster',severity:'red',plate:null,
         html:`<strong>Possible bad parts batch:</strong> ${escapeHtml(comp)} replaced on <strong>${plates.size} vehicles</strong> in the last 90 days (${escapeHtml([...plates].join(', '))}). Check the supplier / part brand.`});
     }
   });
@@ -5459,7 +5478,7 @@ function computeMaintFlags(){
     if(!currentOdo)return;
     const overdueBy=(currentOdo-lastSvcOdo)-interval;
     if(overdueBy>0){
-      flags.push({type:'service',severity:'red',plate,icon:'🛢',
+      flags.push({type:'service',severity:'red',plate,
         html:`<strong>Service overdue:</strong> <strong>${escapeHtml(plate)}</strong> is ${overdueBy.toLocaleString('en-US')} km past its ${interval.toLocaleString('en-US')} km service interval (last serviced at ${lastSvcOdo.toLocaleString('en-US')} km, now at ~${currentOdo.toLocaleString('en-US')} km).`});
     }
   });
@@ -5485,19 +5504,19 @@ function computeMaintFlags(){
     if(!COMP_ALERT_TIERS.includes(st.status))return;
     const src=estimated?' — estimated from last COF job':'';
     if(st.status==='overdue'){
-      flags.push({type:'cof',severity:'red',plate,icon:'📋',
-        html:`<strong>COF OVERDUE:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expired ${Math.abs(st.days)} day(s) ago (${fmtDDMMYYYY(expiryIso)}${src}). This vehicle may not legally be operated.`});
+      flags.push({type:'cof',severity:'red',plate,
+        html:`<strong>COF OVERDUE:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expired ${Math.abs(st.days)} day(s) ago (${fmtDayMonYear(expiryIso)}${src}). This vehicle may not legally be operated.`});
     }else{
       const action=st.status==='soon'?'Plan the inspection.':'Book the inspection now.';
-      flags.push({type:'cof',severity:st.status==='week'?'red':'amber',plate,icon:'📋',
-        html:`<strong>COF ${escapeHtml(st.label.toLowerCase())}:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expires in ${st.days} day(s) (${fmtDDMMYYYY(expiryIso)}${src}). ${action}`});
+      flags.push({type:'cof',severity:st.status==='week'?'red':'amber',plate,
+        html:`<strong>COF ${escapeHtml(st.label.toLowerCase())}:</strong> <strong>${escapeHtml(plate)}</strong>'s Certificate of Fitness expires in ${st.days} day(s) (${fmtDayMonYear(expiryIso)}${src}). ${action}`});
     }
   });
 
   // 6: vehicle stuck in workshop (open job, 7+ days)
   maintJobs.filter(j=>!j.date_out&&daysSince(j.date_in)>=7).forEach(j=>{
-    flags.push({type:'stuck',severity:'amber',plate:j.plate,icon:'🏭',
-      html:`<strong>Still in workshop:</strong> <strong>${escapeHtml(j.plate)}</strong> has been in for "${escapeHtml(j.description)}" for ${daysSince(j.date_in)} days (since ${fmtDDMMYYYY(j.date_in)}).`});
+    flags.push({type:'stuck',severity:'amber',plate:j.plate,
+      html:`<strong>Still in workshop:</strong> <strong>${escapeHtml(j.plate)}</strong> has been in for "${escapeHtml(j.description)}" for ${daysSince(j.date_in)} days (since ${fmtDayMonYear(j.date_in)}).`});
   });
 
   // 7: cost outliers — vehicle total vs fleet average, and single job vs category average
@@ -5508,7 +5527,7 @@ function computeMaintFlags(){
     const avg=costPlates.reduce((s,p)=>s+costByPlate[p],0)/costPlates.length;
     costPlates.forEach(p=>{
       if(costByPlate[p]>avg*2){
-        flags.push({type:'cost',severity:'amber',plate:p,icon:'📈',
+        flags.push({type:'cost',severity:'amber',plate:p,
           html:`<strong>High maintenance cost:</strong> <strong>${escapeHtml(p)}</strong> has cost ${fmtRand(costByPlate[p])} in maintenance — more than double the fleet average of ${fmtRand(avg)}.`});
       }
     });
@@ -5520,7 +5539,7 @@ function computeMaintFlags(){
     const avg=jobs.reduce((s,j)=>s+Number(j.total_cost),0)/jobs.length;
     jobs.forEach(j=>{
       if(Number(j.total_cost)>avg*2.5){
-        flags.push({type:'cost',severity:'amber',plate:j.plate,icon:'💸',
+        flags.push({type:'cost',severity:'amber',plate:j.plate,
           html:`<strong>Unusually expensive job:</strong> "${escapeHtml(j.description)}" on <strong>${escapeHtml(j.plate)}</strong> cost ${fmtRand(j.total_cost)} — well above the ${fmtRand(avg)} average for ${escapeHtml((MAINT_CATEGORIES[cat]||{}).label||cat)} jobs.`});
       }
     });
@@ -5540,7 +5559,7 @@ function computeMaintFlags(){
       const prevAvg=prevVals.reduce((a,b)=>a+b,0)/prevVals.length;
       if(v.avgKmPerLitre<prevAvg*0.9){
         const dropPct=((prevAvg-v.avgKmPerLitre)/prevAvg*100).toFixed(0);
-        flags.push({type:'fuel',severity:'amber',plate:v.plate,icon:'⛽',
+        flags.push({type:'fuel',severity:'amber',plate:v.plate,
           html:`<strong>Fuel efficiency dropped ${dropPct}%:</strong> <strong>${escapeHtml(v.plate)}</strong> is averaging ${v.avgKmPerLitre} km/L vs its usual ${prevAvg.toFixed(2)} km/L. Often an early sign of injector, filter or turbo problems — worth an inspection.`});
       }
     });
@@ -5571,19 +5590,19 @@ async function renderMaintTab(){
   const inWorkshop=new Set(maintJobs.filter(j=>!j.date_out).map(j=>j.plate)).size;
   const redCount=maintFlags.filter(f=>f.severity==='red').length;
   document.getElementById('maintSummaryStrip').innerHTML=`
-    <div class="disc-summary-card ${svcCount>0?'ds-red':'ds-green'}"><div class="disc-summary-label">🛢 Overdue Services</div><div class="disc-summary-val">${svcCount}</div></div>
-    <div class="disc-summary-card ${cofCount>0?'ds-amber':'ds-green'}"><div class="disc-summary-label">📋 COFs Due / Expired</div><div class="disc-summary-val">${cofCount}</div></div>
-    <div class="disc-summary-card ${inWorkshop>0?'ds-amber':'ds-green'}"><div class="disc-summary-label">🏭 In Workshop</div><div class="disc-summary-val">${inWorkshop}</div></div>
-    <div class="disc-summary-card ${redCount>0?'ds-red':'ds-green'}"><div class="disc-summary-label">🚩 Red Flags</div><div class="disc-summary-val">${redCount}</div></div>
+    <div class="disc-summary-card ${svcCount>0?'ds-red':'ds-green'}"><div class="disc-summary-label">Overdue Services</div><div class="disc-summary-val">${svcCount}</div></div>
+    <div class="disc-summary-card ${cofCount>0?'ds-amber':'ds-green'}"><div class="disc-summary-label">COFs Due / Expired</div><div class="disc-summary-val">${cofCount}</div></div>
+    <div class="disc-summary-card ${inWorkshop>0?'ds-amber':'ds-green'}"><div class="disc-summary-label">In Workshop</div><div class="disc-summary-val">${inWorkshop}</div></div>
+    <div class="disc-summary-card ${redCount>0?'ds-red':'ds-green'}"><div class="disc-summary-label">Red Flags</div><div class="disc-summary-val">${redCount}</div></div>
   `;
 
   // Fleet-wide flags
   const flagsEl=document.getElementById('maintRedFlags');
   if(maintFlags.length===0){
-    flagsEl.innerHTML=maintJobs.length>0?'<div class="maint-flag mf-amber" style="background:var(--green-light);border-color:#B2F2BB;color:var(--green);"><span class="maint-flag-icon">✅</span><div>No red flags detected — the fleet looks healthy.</div></div>':'';
+    flagsEl.innerHTML=maintJobs.length>0?'<div class="maint-flag mf-ok"><span class="maint-flag-icon">'+svgIcon('circle-check')+'</span><div>No red flags detected — the fleet looks healthy.</div></div>':'';
   }else{
-    flagsEl.innerHTML=`<div class="maint-flags-title">🚩 Needs Attention (${maintFlags.length})</div><div class="maint-flags">${
-      maintFlags.map(f=>`<div class="maint-flag mf-${f.severity}"><span class="maint-flag-icon">${f.icon}</span><div>${f.html}</div></div>`).join('')
+    flagsEl.innerHTML=`<div class="maint-flags-title">${svgIcon('flag','icon-lead')}Needs Attention (${maintFlags.length})</div><div class="maint-flags">${
+      maintFlags.map(f=>`<div class="maint-flag mf-${f.severity}"><span class="maint-flag-icon">${svgIcon('alert-triangle')}</span><div>${f.html}</div></div>`).join('')
     }</div>`;
   }
 
@@ -5601,7 +5620,7 @@ function renderMaintPlateStrip(plates){
   document.getElementById('maintPlateStrip').innerHTML=plates.map(p=>{
     const count=maintJobs.filter(j=>j.plate===p).length;
     const hasFlag=maintFlags.some(f=>f.plate===p&&f.severity==='red');
-    return`<button class="tyre-plate-chip ${p===selectedMaintPlate?'active':''}" onclick="selectMaintPlate(${escAttr(JSON.stringify(p))})">${hasFlag?'🚩 ':''}${escapeHtml(p)}<span class="tyre-chip-count">${count}</span></button>`;
+    return`<button class="tyre-plate-chip ${p===selectedMaintPlate?'active':''}" onclick="selectMaintPlate(${escAttr(JSON.stringify(p))})">${hasFlag?'<span class="status-dot"></span>':''}${escapeHtml(p)}<span class="tyre-chip-count">${count}</span></button>`;
   }).join('');
 }
 
@@ -5623,10 +5642,10 @@ function renderMaintJobCard(j,i){
   return`<div class="maint-job ${open?'mj-open':''}" style="animation-delay:${i*0.03}s">
     <div class="maint-job-header">
       <div class="maint-job-left">
-        <span class="maint-cat-badge">${cat.icon} ${cat.label}</span>
-        ${open?'<span class="maint-status-open">🏭 In workshop · '+downtime+'d</span>':'<span class="maint-status-done">✓ Done</span>'}
+        <span class="maint-cat-badge">${svgIcon(cat.icon)}${cat.label}</span>
+        ${open?'<span class="maint-status-open">'+svgIcon('clock')+'In workshop · '+downtime+'d</span>':'<span class="maint-status-done">'+svgIcon('check')+'Done</span>'}
       </div>
-      <span class="maint-job-date">${fmtDDMMYYYY(j.date_in)}${j.date_out?' → '+fmtDDMMYYYY(j.date_out):''}</span>
+      <span class="maint-job-date">${svgIcon('calendar')}${fmtDayMonYear(j.date_in)}${j.date_out?' → '+fmtDayMonYear(j.date_out):''}</span>
     </div>
     <div class="maint-job-body">
       ${j.component?`<div class="maint-job-title">${escapeHtml(j.component)}</div>`:''}
@@ -5635,15 +5654,15 @@ function renderMaintJobCard(j,i){
         <span>Odometer: <strong>${j.odometer?Number(j.odometer).toLocaleString('en-US')+' km':'—'}</strong></span>
         <span>Total: <strong>${fmtTotalR(j.total_cost)}</strong></span>
         ${j.labour_cost?`<span>Labour: <strong>${fmtTotalR(j.labour_cost)}</strong></span>`:''}
-        <span>${j.workshop==='internal'?'🏠 In-house':'🔧 '+(escapeHtml(j.supplier)||'Outside workshop')}</span>
+        <span>${j.workshop==='internal'?svgIcon('home')+'In-house':svgIcon('building-factory')+(escapeHtml(j.supplier)||'Outside workshop')}</span>
         ${j.date_out?`<span>Downtime: <strong>${downtime} day${downtime!==1?'s':''}</strong></span>`:''}
       </div>
       ${partsHtml}
-      ${j.notes?`<div style="font-size:11px;color:var(--amber);font-style:italic;margin-top:8px;">📝 ${escapeHtml(j.notes)}</div>`:''}
+      ${j.notes?`<div style="font-size:11px;color:var(--amber);font-style:italic;margin-top:8px;">${svgIcon('note','icon-lead')}${escapeHtml(j.notes)}</div>`:''}
     </div>
     <div class="maint-job-footer">
       <span>${j.invoice_url?invoiceLinkHtml(j.invoice_url,'View Invoice'):''}</span>
-      ${open?`<button class="def-save" style="background:var(--green);" onclick="markJobDone('${j.id}')">✓ Back in service</button>`:''}
+      ${open?`<button class="def-save" style="background:var(--green);" onclick="markJobDone('${j.id}')">${svgIcon('circle-check')}Back in service</button>`:''}
     </div>
   </div>`;
 }
@@ -5659,26 +5678,26 @@ function renderMaintVehiclePanel(){
   const vFlags=maintFlags.filter(f=>f.plate===plate);
   const totalSpend=jobs.reduce((s,j)=>s+(Number(j.total_cost)||0),0);
 
-  const flagsHtml=vFlags.length>0?`<div class="maint-flags" style="margin-top:10px;">${vFlags.map(f=>`<div class="maint-flag mf-${f.severity}"><span class="maint-flag-icon">${f.icon}</span><div>${f.html}</div></div>`).join('')}</div>`:'';
+  const flagsHtml=vFlags.length>0?`<div class="maint-flags" style="margin-top:10px;">${vFlags.map(f=>`<div class="maint-flag mf-${f.severity}"><span class="maint-flag-icon">${svgIcon('alert-triangle')}</span><div>${f.html}</div></div>`).join('')}</div>`:'';
   const timeline=jobs.length===0
     ?'<p class="tyre-empty">No maintenance recorded for this vehicle yet. Click "Add Job" to record the first one.</p>'
     :`<div class="maint-timeline">${jobs.map((j,i)=>renderMaintJobCard(j,i)).join('')}</div>`;
 
   panel.innerHTML=`
     <div class="section-header" style="margin-top:6px;">
-      <div class="section-title" style="font-size:15px;">🚘 ${escapeHtml(plate)} — ${jobs.length} job${jobs.length!==1?'s':''}${totalSpend>0?' · '+fmtTotalR(totalSpend)+' total':''}</div>
+      <div class="section-title" style="font-size:15px;">${svgIcon('bus')}${escapeHtml(plate)} — ${jobs.length} job${jobs.length!==1?'s':''}${totalSpend>0?' · '+fmtTotalR(totalSpend)+' total':''}</div>
       <div class="section-actions">
-        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddJobForm()">＋ Add Job</button>
+        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddJobForm()">${svgIcon('plus')}Add Job</button>
       </div>
     </div>
     ${flagsHtml}
     ${timeline}
     <div class="tyre-add-form" id="maintAddForm">
-      <div class="tyre-form-title">＋ Add Maintenance Job — ${escapeHtml(plate)}</div>
+      <div class="tyre-form-title">${svgIcon('plus')}Add Maintenance Job — ${escapeHtml(plate)}</div>
       <div class="tyre-form-err" id="maintFormErr"></div>
       <div class="tf-grid">
         <div class="tf-field"><label>Vehicle Plate</label><input type="text" id="mf-plate" value="${escapeHtml(plate)}" readonly style="background:var(--surface2);"></div>
-        <div class="tf-field"><label>Category *</label><select id="mf-category" onchange="maintCategoryChanged(this)">${Object.entries(MAINT_CATEGORIES).map(([k,c])=>`<option value="${k}">${c.icon} ${c.label}</option>`).join('')}</select></div>
+        <div class="tf-field"><label>Category *</label><select id="mf-category" onchange="maintCategoryChanged(this)">${Object.entries(MAINT_CATEGORIES).map(([k,c])=>`<option value="${k}">${c.label}</option>`).join('')}</select></div>
         <div class="tf-field"><label>Component</label><select id="mf-component">${MAINT_CATEGORIES.service.components.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
         <div class="tf-field"><label>Odometer (km) *</label><input type="number" id="mf-odo" min="0" placeholder="Loading latest..."></div>
         <div class="tf-field"><label>Date In *</label><input type="date" id="mf-datein"></div>
@@ -5694,12 +5713,12 @@ function renderMaintVehiclePanel(){
         <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px;">Parts Fitted (optional — needed for warranty tracking)</label>
         <div class="mf-parts-head"><span>Part name</span><span>Brand</span><span>Part no.</span><span>Qty</span><span>Unit cost R</span><span>Warranty mo</span><span>Warranty km</span><span></span></div>
         <div id="mfPartsRows"></div>
-        <button class="btn btn-outline" style="font-size:11px;padding:5px 12px;margin-top:4px;" onclick="addMaintPartRow()">＋ Add Part</button>
+        <button class="btn btn-outline" style="font-size:11px;padding:5px 12px;margin-top:4px;" onclick="addMaintPartRow()">${svgIcon('plus')}Add Part</button>
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <label class="tf-file-btn" for="mf-invoice">📄 <span id="mfInvoiceLabel">Attach invoice — photo or PDF (optional)</span></label>
+        <label class="tf-file-btn" for="mf-invoice">${svgIcon('paperclip')}<span id="mfInvoiceLabel">Attach invoice — photo or PDF (optional)</span></label>
         <input type="file" id="mf-invoice" accept="image/*,application/pdf,.pdf" onchange="maintInvoiceChosen(this)">
-        <button class="def-save" id="mfSaveBtn" onclick="submitMaintJob()">💾 Save Job</button>
+        <button class="def-save" id="mfSaveBtn" onclick="submitMaintJob()">${svgIcon('device-floppy')}Save Job</button>
         <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="toggleAddJobForm()">Cancel</button>
       </div>
     </div>`;
@@ -5720,7 +5739,7 @@ function addMaintPartRow(){
       <input type="number" class="mp-cost" min="0" step="0.01" placeholder="0.00">
       <input type="number" class="mp-wm" min="0" placeholder="mo">
       <input type="number" class="mp-wkm" min="0" placeholder="km">
-      <button class="mf-part-del" title="Remove part" onclick="this.closest('.mf-part-row').remove()">✕</button>
+      <button class="mf-part-del" title="Remove part" aria-label="Remove part" onclick="this.closest('.mf-part-row').remove()">${svgIcon('x')}</button>
     </div>`);
 }
 
@@ -5822,7 +5841,7 @@ async function submitMaintJob(){
       errEl.textContent='Invoice upload failed — the job was NOT saved. Please try again (photo or PDF, max 10 MB).';
       errEl.classList.add('show');
       btn.disabled=false;
-      btn.textContent='💾 Save Job';
+      btn.innerHTML=svgIcon('device-floppy')+'Save Job';
       return;
     }
     const jobBody={
@@ -5843,7 +5862,7 @@ async function submitMaintJob(){
       console.error('[FleetDesk] Job save failed:',res.status,await res.text());
       errEl.textContent='Could not save the job. Please try again.';
       errEl.classList.add('show');
-      btn.disabled=false;btn.textContent='💾 Save Job';
+      btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+'Save Job';
       return;
     }
     const saved=await res.json();
@@ -5862,7 +5881,7 @@ async function submitMaintJob(){
     console.error('[FleetDesk] Job save error:',err);
     errEl.textContent='Connection error. Please try again.';
     errEl.classList.add('show');
-    btn.disabled=false;btn.textContent='💾 Save Job';
+    btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+'Save Job';
   }
 }
 
