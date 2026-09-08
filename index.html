@@ -1327,7 +1327,7 @@ input[type=file] { display: none; }
         <div class="section-actions">
           <div class="view-toggle">
             <button class="view-btn active" id="cpkCostFuel" onclick="setCpkCost('fuel')">Fuel only</button>
-            <button class="view-btn" id="cpkCostAll" onclick="setCpkCost('all')" disabled title="Maintenance and tyre costs arrive in the next update">All costs</button>
+            <button class="view-btn" id="cpkCostAll" onclick="setCpkCost('all')">All costs</button>
           </div>
           <div class="view-toggle">
             <button class="view-btn active" id="cpkScopePeriod" onclick="setCpkScope('period')">This period</button>
@@ -1335,6 +1335,7 @@ input[type=file] { display: none; }
           </div>
         </div>
       </div>
+      <div id="cpkModeNote" class="hidden" style="font-size:12px;color:var(--text3);margin:0 0 14px;">Fuel, maintenance and tyres</div>
       <div class="stats-grid" id="cpkCards"></div>
       <div class="vehicles-table-wrap" id="cpkTableWrap"></div>
     </div>
@@ -3075,22 +3076,83 @@ let cpkScope='period'; // 'period' | 'overall'
 function setCpkCost(m){cpkCost=m;renderCpkTab();}
 function setCpkScope(s){cpkScope=s;renderCpkTab();}
 
+// cpk-tab Block 2: maintenance + tyre costs for the All costs mode. Reuses
+// the Maintenance tab's maintJobs cache (fetchMaintData); tyres get their own
+// slim, status-independent fetch - the Tyres tab only loads fitted tyres, but
+// a tyre bought and later removed still cost money in its window.
+let cpkTyres=[];
+async function fetchCpkCosts(){
+  try{
+    const headers={'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()};
+    const[,tyresRes]=await Promise.all([
+      fetchMaintData(),
+      fetch(`${SUPABASE_URL}/rest/v1/tyres?select=plate,cost,date_fitted`,{headers})
+    ]);
+    if(tyresRes.ok)cpkTyres=await tyresRes.json();
+  }catch(err){console.error('[FleetDesk] fetchCpkCosts failed:',err);}
+}
+
+// Month key 'MM.YYYY' (same shape as getPeriod) from an ISO date string.
+function isoMonthKey(iso){
+  const m=/^(\d{4})-(\d{2})/.exec(String(iso||''));
+  return m?m[2]+'.'+m[1]:null;
+}
+
+// Per-plate, per-month maintenance + tyre spend inside the given set of
+// report months (jobs by date_in, tyres by date_fitted - the approved
+// calendar-month window). Kept per month so cpkRows can split "all extras in
+// scope" (Spend column) from "extras in this vehicle's km-known months"
+// (R/km numerator).
+function cpkExtras(months){
+  const by={};
+  const add=(plate,k,cost)=>{const p=by[plate]||(by[plate]={});p[k]=(p[k]||0)+cost;};
+  maintJobs.forEach(j=>{
+    const k=isoMonthKey(j.date_in);
+    if(j.total_cost&&k&&months.has(k))add(j.plate,k,Number(j.total_cost));
+  });
+  cpkTyres.forEach(t=>{
+    const k=isoMonthKey(t.date_fitted);
+    if(t.cost&&k&&months.has(k))add(t.plate,k,Number(t.cost));
+  });
+  return by;
+}
+
 // One row per plate for the current scope. spend = full fuel spend for the
 // scope; km and kmSpend only accumulate from periods whose odometer span is
 // usable, so rkm = kmSpend/km stays exact and is never diluted by spend from
-// periods where the distance is unknown.
+// periods where the distance is unknown. In All costs mode, extras from every
+// scope month join the Spend column (money stays visible), but the R/km
+// numerator only takes extras from the vehicle's own km-known months - a cost
+// from a month whose km is unknown can never distort the rate. A plate with
+// extras but no fuel rows still gets a row (its km stays unknown, so it shows
+// dashes and sits below the ranked rows).
 function cpkRows(){
   const reps=cpkScope==='period'
     ?(state.reports[activeReportIndex]?[state.reports[activeReportIndex]]:[])
     :state.reports;
   const byPlate={};
-  reps.forEach(r=>(r.vehicles||[]).forEach(v=>{
-    const a=byPlate[v.plate]||(byPlate[v.plate]={plate:v.plate,spend:0,km:0,kmSpend:0});
-    a.spend+=v.totalAmount||0;
-    const km=periodKm(v);
-    if(km!=null){a.km+=km;a.kmSpend+=v.totalAmount||0;}
-  }));
-  return Object.values(byPlate).map(a=>({...a,rkm:a.km>0?a.kmSpend/a.km:null}));
+  const months=new Set();
+  reps.forEach(r=>{
+    const mk=getPeriod(r.scheduleDate);
+    if(mk)months.add(mk);
+    (r.vehicles||[]).forEach(v=>{
+      const a=byPlate[v.plate]||(byPlate[v.plate]={plate:v.plate,spend:0,km:0,kmSpend:0,extraKnown:0,kmMonths:new Set()});
+      a.spend+=v.totalAmount||0;
+      const km=periodKm(v);
+      if(km!=null){a.km+=km;a.kmSpend+=v.totalAmount||0;if(mk)a.kmMonths.add(mk);}
+    });
+  });
+  if(cpkCost==='all'){
+    const extras=cpkExtras(months);
+    Object.entries(extras).forEach(([plate,byMonth])=>{
+      const a=byPlate[plate]||(byPlate[plate]={plate,spend:0,km:0,kmSpend:0,extraKnown:0,kmMonths:new Set()});
+      Object.entries(byMonth).forEach(([k,cost])=>{
+        a.spend+=cost;
+        if(a.kmMonths.has(k))a.extraKnown+=cost;
+      });
+    });
+  }
+  return Object.values(byPlate).map(a=>({...a,rkm:a.km>0?(a.kmSpend+a.extraKnown)/a.km:null}));
 }
 
 // vs-fleet badge: red at 15%+ above the fleet average, amber at 5-15%, green
@@ -3102,7 +3164,7 @@ function cpkBadge(rkm,fleetAvg){
   return`<span class="badge ${cls}">${pct>0?'+':''}${pct.toFixed(0)}%</span>`;
 }
 
-function renderCpkTab(){
+async function renderCpkTab(){
   const cardsEl=document.getElementById('cpkCards');
   const tableEl=document.getElementById('cpkTableWrap');
   if(!cardsEl||!tableEl)return;
@@ -3115,11 +3177,13 @@ function renderCpkTab(){
   document.getElementById('cpkCostAll').classList.toggle('active',cpkCost==='all');
   document.getElementById('cpkScopePeriod').classList.toggle('active',cpkScope==='period');
   document.getElementById('cpkScopeOverall').classList.toggle('active',cpkScope==='overall');
+  document.getElementById('cpkModeNote').classList.toggle('hidden',cpkCost!=='all');
+  if(cpkCost==='all')await fetchCpkCosts();
 
   const rows=cpkRows();
   const known=rows.filter(r=>r.rkm!=null);
   const fleetKm=known.reduce((s,r)=>s+r.km,0);
-  const fleetAvg=fleetKm>0?known.reduce((s,r)=>s+r.kmSpend,0)/fleetKm:null;
+  const fleetAvg=fleetKm>0?known.reduce((s,r)=>s+r.kmSpend+r.extraKnown,0)/fleetKm:null;
   const costliest=known.length?known.reduce((a,b)=>b.rkm>a.rkm?b:a):null;
   const scopeSub=cpkScope==='period'?'This period':'All periods';
 
@@ -3127,7 +3191,7 @@ function renderCpkTab(){
     <div class="stat-card">
       <div class="stat-label">Fleet Average</div>
       <div class="stat-value cpk-num">${fleetAvg!=null?'R'+fleetAvg.toFixed(2)+'/km':'\u2014'}</div>
-      <div class="stat-sub">${scopeSub}, fuel only · ${known.length} of ${rows.length} vehicles</div>
+      <div class="stat-sub">${scopeSub}, ${cpkCost==='all'?'all costs':'fuel only'} · ${known.length} of ${rows.length} vehicles</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Total Km</div>
