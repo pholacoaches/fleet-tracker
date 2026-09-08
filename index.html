@@ -2780,6 +2780,14 @@ function renderDashboard(){
   const totalLitres=r.vehicles.reduce((s,v)=>s+v.totalLitres,0);
   const avgCPL=totalLitres>0?totalSpend/totalLitres:0;
 
+  // cpk-tab Block 3: fleet average R/km (current period, fuel only) via the
+  // shared periodKm helper - the same matched pairing as the CPK tab's fuel
+  // mode: only vehicles with a usable odometer span contribute, spend and km
+  // always from the same vehicles.
+  let _rkmKm=0,_rkmSpend=0;
+  r.vehicles.forEach(v=>{const km=periodKm(v);if(km!=null){_rkmKm+=km;_rkmSpend+=v.totalAmount||0;}});
+  const fleetRkm=_rkmKm>0?_rkmSpend/_rkmKm:null;
+
   let deltaSpend='';
   if(activeReportIndex>0){
     const prev=state.reports[activeReportIndex-1];
@@ -2803,6 +2811,11 @@ function renderDashboard(){
       <div class="stat-label">Avg Cost / Litre</div>
       <div class="stat-value">R${avgCPL.toFixed(2)}</div>
       <div class="stat-sub">Across all vehicles</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Fleet Avg Cost / km</div>
+      <div class="stat-value cpk-num">${fleetRkm!=null?'R'+fleetRkm.toFixed(2):'\u2014'}</div>
+      <div class="stat-sub">This period, fuel only</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Vehicles with Fuel</div>
