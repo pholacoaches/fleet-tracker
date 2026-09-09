@@ -527,9 +527,11 @@ async function readOdometerWithAI(base64){
   // counts a strike —
   //   'ok'          model returned an integer odometer
   //   'unreadable'  model answered, explicitly {"odometer": null}
-  //   'error'       fetch threw / non-2xx / AI unreachable — a CONNECTION
-  //                 problem, not the photo's fault: offer Retry on the same
-  //                 photo instead of burning a retake strike.
+  //   'error'       fetch threw or non-2xx HTTP — a CONNECTION problem:
+  //                 offer Retry on the same photo, no strike. A 200 with
+  //                 outcome:"error" (Worker answered, AI failed to judge)
+  //                 counts a strike like 'unreadable' — after two, manual
+  //                 entry (accepted: AI outage → unverified readings).
   //   'limited'     429 (per-code / per-IP throttle, or Anthropic's own
   //                 limit): calm message + Retry, no strike.
   // The photo_token comes back on EVERY 200 (the photo is stored even when
@@ -547,6 +549,7 @@ async function readOdometerWithAI(base64){
       if(data&&typeof data.photo_token==='string')photoToken=data.photo_token;
       if(data&&data.outcome==='ok'&&Number.isInteger(data.odometer)){outcome='ok';aiOdo=data.odometer;}
       else if(data&&(data.outcome==='unreadable'||data.outcome==='limited'))outcome=data.outcome;
+      else if(data&&data.outcome==='error')outcome='unreadable'; // 200 + AI couldn't judge: strike path, not Retry-forever
       // anything else stays 'error'
     }else if(response.status===429){
       outcome='limited';
