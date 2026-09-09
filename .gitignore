@@ -22,6 +22,8 @@
 !savika-hero.jpg
 
 # ── Business/document folders living alongside the repo ────────
+# business documents - never commit
+_docs/
 23 June Invoice/
 July2 Invoices FD/
 Licences Batch 1/
