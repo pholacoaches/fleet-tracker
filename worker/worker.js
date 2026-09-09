@@ -47,9 +47,10 @@
  * Everything else — including "/", "/login", "/auth/*" — is 404.
  *
  * Model and max_tokens are pinned here and the client's values ignored.
- * The driver and compliance paths also pin the prompt: the client may only
- * send the photo, so a leaked driver code is worth nothing more than "read
- * an odometer".
+ * As of P1, EVERY route pins its prompt: the client may only send the
+ * photo or PDF (plus page numbers for the dashboard), so a leaked driver
+ * code is worth nothing more than "read an odometer" and a signed-in user
+ * cannot use the proxy as a general chat endpoint.
  *
  * Secrets / vars (see wrangler.jsonc + README.md):
  *   ANTHROPIC_API_KEY   secret — Anthropic key (existing)
@@ -728,11 +729,69 @@ function jsonOk(cors, obj) {
 }
 
 // ── Route: POST /ai/dashboard ────────────────────────────────────────────────
-// Body contract (unchanged from today): { messages: [ { role:'user', content:[
-//   { type:'document', source:{ type:'base64', media_type:'application/pdf', data } },
-//   { type:'text', text } ] } ] }
-// Only `messages` is taken from the client; model/max_tokens are pinned; the
-// content blocks are whitelisted so the proxy can't be used as a general chat.
+// P1 add-on (2026-09-09): the prompt is pinned HERE now — this was the one
+// route that still accepted client text, which made it a general Claude
+// endpoint for any signed-in user. The client sends the PDF chunk plus its
+// page numbers ({ pages: { start, end, total } }); a text block it still
+// sends (the pre-P1 page does) is accepted by the whitelist and then
+// DROPPED. Text acceptance is removed entirely in the P1 cleanup.
+// The prompt text is the same one index.html sent, verbatim.
+function dashboardPrompt(pages) {
+  const where = pages
+    ? `This is pages ${pages.start}–${pages.end} of a ${pages.total}-page document.`
+    : 'This may be one chunk of a longer document.';
+  return `Extract data from this Engen Schedule of Purchases fleet fuel invoice PDF.
+${where}
+
+ONLY include vehicles that have actual FUEL transactions where litres > 0.
+EXCLUDE all EDC ADMIN rows (they have 0.00 litres and say "EDC ADMIN" as merchant).
+
+Return ONLY valid JSON with no markdown, no explanation, no backticks:
+
+{
+  "customer": "customer name from document",
+  "scheduleDate": "DD.MM.YYYY",
+  "accountNo": "account number",
+  "fleetNo": "fleet number",
+  "scheduleTotal": 0.00,
+  "vehicles": [
+    {
+      "plate": "REGISTRATION NUMBER",
+      "transactions": [
+        {
+          "date": "DD.MM.YYYY",
+          "merchant": "MERCHANT NAME",
+          "odometer": 123456,
+          "litres": 123.45,
+          "amount": 1234.56,
+          "isCompetitor": false
+        }
+      ],
+      "totalLitres": 123.45,
+      "totalAmount": 1234.56
+    }
+  ]
+}
+
+Important rules:
+- Only fuel transactions (litres > 0), exclude all admin rows
+- Sort transactions by date ascending within each vehicle
+- odometer = integer
+- amount = final charged amount (after rebate if applicable)
+- isCompetitor = true if the transaction is marked with ? in the document (competitor fuel station)
+- If no fuel transactions appear on these pages, return an empty vehicles array: []`;
+}
+
+// Optional { start, end, total } page numbers for the pinned prompt — purely
+// contextual for the model, so anything malformed is simply ignored (null).
+function validPages(p) {
+  if (!p || typeof p !== 'object') return null;
+  const { start, end, total } = p;
+  if (![start, end, total].every((n) => Number.isInteger(n) && n >= 1 && n <= 2000)) return null;
+  if (start > end || end > total) return null;
+  return { start, end, total };
+}
+
 async function handleDashboard(request, env, cors) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
@@ -751,14 +810,18 @@ async function handleDashboard(request, env, cors) {
   const messages = sanitiseMessages(body && body.messages, {
     allowDocument: true,
     allowImage: false,
-    allowText: true,
+    allowText: true, // accepted for the pre-P1 page, then DROPPED just below
   });
-  if (!messages) return jsonError(cors, 400, 'invalid_request_error', 'Request must contain one user message with a PDF document and a text instruction.');
+  if (!messages) return jsonError(cors, 400, 'invalid_request_error', 'Request must contain one user message with a PDF document.');
+
+  // P1 add-on: keep only the document block and append the pinned prompt.
+  const docs = messages[0].content.filter((b) => b.type === 'document');
+  if (docs.length !== 1) return jsonError(cors, 400, 'invalid_request_error', 'Request must contain exactly one PDF document.');
 
   return callAnthropic(env, cors, {
     model: DASHBOARD_MODEL,
     max_tokens: DASHBOARD_MAX_TOKENS,
-    messages,
+    messages: [{ role: 'user', content: [docs[0], { type: 'text', text: dashboardPrompt(validPages(body.pages)) }] }],
   });
 }
 
