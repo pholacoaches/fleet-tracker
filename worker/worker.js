@@ -5,7 +5,7 @@
  * forwarded any body on any path to Anthropic with CORS "*" and no auth,
  * and that still exposed the legacy /login and /auth/* OTP routes.
  *
- * Exactly three call paths exist:
+ * These call paths exist:
  *
  *   POST /ai/dashboard   Fuel-statement PDF extraction from index.html.
  *                        Caller must be a signed-in FleetDesk user:
@@ -24,6 +24,25 @@
  *                        Same auth + rate-limit bindings as /ai/dashboard;
  *                        same body contract as /ai/driver (one image only,
  *                        prompt pinned here).
+ *
+ *   P1 server-verified submissions (2026-09-09) — driver.html no longer
+ *   talks to Supabase at all; these three replace its direct calls:
+ *
+ *   POST /driver/init    Page boot. Validates the code (X-Driver-Code),
+ *                        rate-limited, returns a TRIMMED driver_page_init:
+ *                        first name, tenant id, two branding fields,
+ *                        vehicle list, submitted_today.
+ *   POST /driver/photo   The photo travels here ONCE: uploaded to storage
+ *                        by the Worker (secret key, server-chosen path in
+ *                        the driver's tenant folder), then the pinned AI
+ *                        read. Returns {outcome, odometer?, photo_token} —
+ *                        the HMAC token binds {code, tenant, path, AI read}.
+ *   POST /driver/submit  Exchanges the token + typed values for the reading
+ *                        row. photo_verified and ai_odometer are set HERE,
+ *                        never by the client.
+ *
+ *   /ai/driver remains temporarily for the pre-P1 driver.html still cached
+ *   on devices; it is removed in the P1 cleanup after the DB tightening.
  *
  * Everything else — including "/", "/login", "/auth/*" — is 404.
  *
@@ -48,6 +67,12 @@
  *   SENTRY_ENVIRONMENT  var    — "production" / "development", per env block
  *   CF_VERSION_METADATA binding — Cloudflare's own version id → Sentry release
  *   SENTRY_TEST_KEY     secret — enables GET /monitor/test (see "Monitoring")
+ *   SUPABASE_SECRET_KEY secret — Supabase sb_secret_… key (P1). Used for the
+ *                                photo upload, the reading INSERT and (when
+ *                                set) the driver_page_init RPC. Dashboard
+ *                                only, never `wrangler secret put`.
+ *   PHOTO_TOKEN_KEY     secret — random HMAC key for the P1 photo token.
+ *                                Dashboard only, never `wrangler secret put`.
  */
 
 import * as Sentry from '@sentry/cloudflare';
@@ -168,8 +193,30 @@ const MAX_BODY_DRIVER = 2 * 1024 * 1024;
 // Licence photos are compressed to ~400 KB client-side (small print needs
 // more pixels than an odometer); base64 adds a third.
 const MAX_BODY_COMPLIANCE = 3 * 1024 * 1024;
+// /driver/submit carries only a token + the typed values — tiny.
+const MAX_BODY_SUBMIT = 64 * 1024;
 
-const DRIVER_CODE_RE = /^[A-Z]{3}-[0-9]{4}$/;
+// P1 (2026-09-09): accepts BOTH the legacy AAA-0000 codes and the new
+// unguessable AAA-XXXXXXXX codes (8 chars from A–Z minus I/O, plus 2–9;
+// 32⁸ ≈ 1.1 trillion). Legacy acceptance is removed in the P1 cleanup once
+// the demo codes are regenerated.
+const DRIVER_CODE_RE = /^[A-Z]{3}-(?:[0-9]{4}|[A-HJ-NP-Z2-9]{8})$/;
+
+// ── P1 server-verified submissions (2026-09-09) ──────────────────────────────
+// photo_verified and ai_odometer are set by THIS Worker, never by the client:
+// verified = the AI read an integer AND it matches the typed reading within
+// AI_MATCH_TOLERANCE_KM — the same 25 km threshold the dashboard's mismatch
+// badge already uses (index.html). The photo token is an HMAC-SHA256
+// (PHOTO_TOKEN_KEY secret) over {code, tenant, photo path, AI reading,
+// issued-at}: a submit can only pair a reading with the AI verdict for the
+// exact photo it was issued against.
+const ODO_PHOTO_BUCKET = 'odometer-photos';
+const PHOTO_TOKEN_TTL_S = 30 * 60; // photo → submit window
+const AI_MATCH_TOLERANCE_KM = 25;  // |typed − AI| beyond this = unverified
+const ODO_MIN = 1000;              // same bounds driver.html enforces client-side
+const ODO_MAX = 2000000;
+const AI_ODO_MAX = 9999999;        // pilot fix 2: 7-digit cap on AI reads
+const NOTES_MAX = 500;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 // Computed once per request in fetch(): {} when the Origin is not allowed,
@@ -208,7 +255,14 @@ function jsonError(cors, status, type, message) {
 //   • our own 429s: "rate limited: <binding>" — info, so they never page
 //
 // Every Sentry call below is a safe no-op when SENTRY_DSN is unset.
-const ROUTE_TAGS = { '/ai/dashboard': 'pdf', '/ai/driver': 'odometer', '/ai/compliance': 'compliance' };
+const ROUTE_TAGS = {
+  '/ai/dashboard': 'pdf',
+  '/ai/driver': 'odometer',
+  '/ai/compliance': 'compliance',
+  '/driver/init': 'driver-init',
+  '/driver/photo': 'driver-photo',
+  '/driver/submit': 'driver-submit',
+};
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEST_ERROR_MESSAGE = 'FleetDesk Worker monitoring test — this error is deliberate';
 const MAX_EVENT_STRING = 300;
@@ -248,7 +302,7 @@ function redactString(s) {
     .replace(/[A-Za-z0-9+/=_-]{40,}/g, '[redacted]') // base64 runs, JWTs, API keys
     .replace(/sk-ant-[A-Za-z0-9_-]+/g, '[redacted]')
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/\b[A-Z]{3}-[0-9]{4}\b/g, '[driver-code]')
+    .replace(/\b[A-Z]{3}-(?:[0-9]{4}|[A-HJ-NP-Z2-9]{8})\b/g, '[driver-code]')
     .slice(0, MAX_EVENT_STRING);
 }
 
@@ -460,13 +514,23 @@ async function verifySupabaseUser(env, token) {
 // ── Auth: driver (personal code via driver_page_init) ────────────────────────
 // driver_page_init is SECURITY DEFINER and returns null for unknown or
 // inactive codes, so a non-null JSON body means "active driver".
+// P1: the RPC rides the secret key when it is set — required once anon
+// EXECUTE on the RPC is revoked (DB tightening). The anon fallback only
+// covers the interim before the dashboard secrets exist.
+function supabaseKey(env) {
+  return typeof env.SUPABASE_SECRET_KEY === 'string' && env.SUPABASE_SECRET_KEY
+    ? env.SUPABASE_SECRET_KEY
+    : env.SUPABASE_ANON_KEY;
+}
+
 async function verifyDriverCode(env, code) {
   try {
+    const key = supabaseKey(env);
     const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/driver_page_init`, {
       method: 'POST',
       headers: {
-        apikey: env.SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
+        apikey: key,
+        Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ p_code: code }),
@@ -485,9 +549,10 @@ async function verifyDriverCode(env, code) {
 }
 
 // ── Anthropic call ───────────────────────────────────────────────────────────
-// Passes Anthropic's status + JSON straight through (the app reads
-// data.content / data.error.message), with our CORS headers instead of "*".
-async function callAnthropic(env, cors, payload) {
+// fetchAnthropic is the shared core (P1: /driver/photo needs the parsed
+// answer, not a passthrough); callAnthropic keeps the passthrough behaviour
+// the /ai/* routes have always had, with our CORS headers instead of "*".
+async function fetchAnthropic(env, payload) {
   // If the fetch itself throws (network), the router's catch reports it;
   // this tag tells Sentry which upstream was being called at the time.
   Sentry.setTag('upstream', 'anthropic');
@@ -509,8 +574,155 @@ async function callAnthropic(env, cors, payload) {
       http_status: res.status,
     });
   }
+  return { status: res.status, ok: res.ok, text };
+}
+
+async function callAnthropic(env, cors, payload) {
+  const { status, text } = await fetchAnthropic(env, payload);
   return new Response(text, {
-    status: res.status,
+    status,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors },
+  });
+}
+
+// ── P1 helpers: photo token, storage, AI answer parsing ──────────────────────
+const textEncoder = new TextEncoder();
+
+function b64urlFromBytes(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlToString(s) {
+  try {
+    return atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+  } catch {
+    return null;
+  }
+}
+
+async function hmacHex(env, data) {
+  const key = await crypto.subtle.importKey(
+    'raw', textEncoder.encode(env.PHOTO_TOKEN_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, textEncoder.encode(data));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Token: base64url(payload JSON) + '.' + hex(HMAC-SHA256(payload)).
+// Payload: { c: code, t: tenant uuid, p: object path (within the bucket),
+//            a: AI odometer int|null, iat: epoch seconds }
+async function makePhotoToken(env, payload) {
+  const body = b64urlFromBytes(textEncoder.encode(JSON.stringify(payload)));
+  return body + '.' + (await hmacHex(env, body));
+}
+
+async function readPhotoToken(env, token) {
+  if (typeof token !== 'string' || token.length === 0 || token.length > 2048) return null;
+  const dot = token.indexOf('.');
+  if (dot <= 0) return null;
+  const body = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  if (!keysMatch(sig, await hmacHex(env, body))) return null;
+  const json = b64urlToString(body);
+  if (json === null) return null;
+  let payload;
+  try {
+    payload = JSON.parse(json);
+  } catch {
+    return null;
+  }
+  if (!payload || typeof payload !== 'object') return null;
+  const age = Math.floor(Date.now() / 1000) - (payload.iat | 0);
+  if (age < 0 || age > PHOTO_TOKEN_TTL_S) return null;
+  return payload;
+}
+
+function bytesFromBase64(b64) {
+  try {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function storageObjectUrl(env, path) {
+  return `${env.SUPABASE_URL}/storage/v1/object/${ODO_PHOTO_BUCKET}/${path.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+async function storageUpload(env, path, bytes) {
+  const res = await fetch(storageObjectUrl(env, path), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SECRET_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`,
+      'Content-Type': 'image/jpeg',
+      'x-upsert': 'false',
+    },
+    body: bytes,
+  });
+  if (!res.ok) reportMessage(`photo upload ${res.status}`, 'error', { upstream: 'supabase', http_status: res.status });
+  return res.ok;
+}
+
+// Best-effort: a retake replaces the previous upload. A failed delete only
+// leaves an orphan object — it must never block the driver.
+async function storageDelete(env, path) {
+  try {
+    await fetch(storageObjectUrl(env, path), {
+      method: 'DELETE',
+      headers: { apikey: env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}` },
+    });
+  } catch {
+    /* best-effort */
+  }
+}
+
+// Mirrors the parse driver.html used to do client-side (pilot fixes 1a + 2):
+// strict-JSON answer, integer 1..AI_ODO_MAX = ok, explicit null (or an
+// out-of-range integer) = unreadable photo, anything else = error.
+function parseOdometerAnswer(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { outcome: 'error' };
+  }
+  const raw = (data.content || []).map((i) => i.text || '').join('').replace(/```json|```/g, '').trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { outcome: 'error' };
+  }
+  if (parsed && Number.isInteger(parsed.odometer) && parsed.odometer > 0 && parsed.odometer <= AI_ODO_MAX) {
+    return { outcome: 'ok', odometer: parsed.odometer };
+  }
+  if (parsed && typeof parsed === 'object' && (parsed.odometer === null || Number.isInteger(parsed.odometer))) {
+    return { outcome: 'unreadable' };
+  }
+  return { outcome: 'error' };
+}
+
+// Shared start of every driver-code route: code regex → per-code throttle →
+// RPC validation → Sentry tenant tag. Returns {code, driver} or {fail}.
+async function driverPrelude(request, env, cors) {
+  const code = (request.headers.get('X-Driver-Code') || '').trim().toUpperCase();
+  if (!DRIVER_CODE_RE.test(code)) return { fail: jsonError(cors, 401, 'authentication_error', 'Driver code missing or malformed.') };
+  if (await rateLimited(env, 'DRIVER_CODE_LIMIT', code)) return { fail: rateLimitResponse(cors, 'DRIVER_CODE_LIMIT') };
+  const driver = await verifyDriverCode(env, code);
+  if (!driver) return { fail: jsonError(cors, 401, 'authentication_error', 'Driver code not recognised.') };
+  // Tenant UUID only — never the driver's name or code, never the company name.
+  if (typeof driver.tenant_id === 'string' && UUID_RE.test(driver.tenant_id)) Sentry.setTag('tenant', driver.tenant_id);
+  return { code, driver };
+}
+
+function jsonOk(cors, obj) {
+  return new Response(JSON.stringify(obj), {
+    status: 200,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors },
   });
 }
@@ -550,22 +762,14 @@ async function handleDashboard(request, env, cors) {
   });
 }
 
-// ── Route: POST /ai/driver ───────────────────────────────────────────────────
-// Body contract: same shape as today, but ONLY the image block is used — the
+// ── Route: POST /ai/driver (legacy — pre-P1 driver.html; removed in cleanup) ─
+// Body contract: same shape as before, but ONLY the image block is used — the
 // prompt is DRIVER_PROMPT above, whatever the client sends.
 async function handleDriver(request, env, cors) {
-  const code = (request.headers.get('X-Driver-Code') || '').trim().toUpperCase();
-  if (!DRIVER_CODE_RE.test(code)) return jsonError(cors, 401, 'authentication_error', 'Driver code missing or malformed.');
-
-  // Per driver code (15/min), checked before the RPC so one leaked or guessed
-  // code can't hammer Supabase either. One photo = one call; a bad minute of
-  // retakes and retries is well under this.
-  if (await rateLimited(env, 'DRIVER_CODE_LIMIT', code)) return rateLimitResponse(cors, 'DRIVER_CODE_LIMIT');
-
-  const driver = await verifyDriverCode(env, code);
-  if (!driver) return jsonError(cors, 401, 'authentication_error', 'Driver code not recognised.');
-  // Tenant UUID only — never the driver's name or code, never the company name.
-  if (typeof driver.tenant_id === 'string' && UUID_RE.test(driver.tenant_id)) Sentry.setTag('tenant', driver.tenant_id);
+  // Per-code throttle (15/min) sits inside the prelude, before the RPC, so
+  // one leaked or guessed code can't hammer Supabase either.
+  const pre = await driverPrelude(request, env, cors);
+  if (pre.fail) return pre.fail;
 
   const { body, error } = await readJsonBody(request, MAX_BODY_DRIVER);
   if (error) return jsonError(cors, 400, 'invalid_request_error', error);
@@ -578,6 +782,160 @@ async function handleDriver(request, env, cors) {
     max_tokens: DRIVER_MAX_TOKENS,
     messages: [{ role: 'user', content: [image, { type: 'text', text: DRIVER_PROMPT }] }],
   });
+}
+
+// ── Route: POST /driver/init ─────────────────────────────────────────────────
+// Replaces the page's direct driver_page_init call (P1): rate-limited here,
+// and TRIMMED — the page gets the first name only (the full name now stays
+// server-side until /driver/submit writes it), the two branding fields the
+// page actually uses, the vehicle list (whole fleet for now, per the plan),
+// and submitted_today.
+async function handleDriverInit(request, env, cors) {
+  const pre = await driverPrelude(request, env, cors);
+  if (pre.fail) return pre.fail;
+  const d = pre.driver;
+  const branding = d.branding && typeof d.branding === 'object'
+    ? { display_name: d.branding.display_name, accent_color: d.branding.accent_color }
+    : null;
+  return jsonOk(cors, {
+    first_name: String(d.name || '').split(' ')[0],
+    tenant_id: typeof d.tenant_id === 'string' && UUID_RE.test(d.tenant_id) ? d.tenant_id : null,
+    branding,
+    vehicles: Array.isArray(d.vehicles) ? d.vehicles : [],
+    submitted_today: !!d.submitted_today,
+  });
+}
+
+// ── Route: POST /driver/photo ────────────────────────────────────────────────
+// The photo travels here ONCE: the Worker uploads it (secret key, path chosen
+// HERE inside the driver's own tenant folder), runs the pinned AI read, and
+// returns {outcome, odometer?, photo_token}. Outcomes mirror the old client
+// logic exactly: ok / unreadable / error / limited. The token is issued for
+// every outcome (the photo IS stored): 'unreadable' feeds the two-strike
+// manual-entry path (photo_verified will be false), and 'error'/'limited'
+// let a Retry replace this photo via prev_token.
+// Body: { image: <base64 JPEG>, prev_token?: <token being replaced> }.
+async function handleDriverPhoto(request, env, cors) {
+  if (!env.SUPABASE_SECRET_KEY || !env.PHOTO_TOKEN_KEY) return jsonError(cors, 500, 'api_error', 'Proxy is not configured.');
+  const pre = await driverPrelude(request, env, cors);
+  if (pre.fail) return pre.fail;
+
+  const { body, error } = await readJsonBody(request, MAX_BODY_DRIVER);
+  if (error) return jsonError(cors, 400, 'invalid_request_error', error);
+  const b64 = typeof (body && body.image) === 'string' ? body.image.replace(/[\r\n\s]/g, '') : '';
+  if (!b64 || !BASE64_RE.test(b64)) return jsonError(cors, 400, 'invalid_request_error', 'Request must contain one JPEG image of the odometer.');
+  const bytes = bytesFromBase64(b64);
+  if (!bytes || bytes.length === 0) return jsonError(cors, 400, 'invalid_request_error', 'Request must contain one JPEG image of the odometer.');
+
+  // Retake: replace, don't accumulate. Only a token for the SAME code counts.
+  if (body.prev_token) {
+    const prev = await readPhotoToken(env, body.prev_token);
+    if (prev && prev.c === pre.code && typeof prev.p === 'string') await storageDelete(env, prev.p);
+  }
+
+  const path = `${pre.driver.tenant_id}/${pre.code}_${Date.now()}.jpg`;
+  if (!(await storageUpload(env, path, bytes))) return jsonError(cors, 502, 'api_error', 'Photo upload failed. Please try again.');
+
+  const { status, ok, text } = await fetchAnthropic(env, {
+    model: DRIVER_MODEL,
+    max_tokens: DRIVER_MAX_TOKENS,
+    messages: [{ role: 'user', content: [
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+      { type: 'text', text: DRIVER_PROMPT },
+    ] }],
+  });
+  let outcome;
+  let aiOdo = null;
+  if (status === 429) outcome = 'limited';
+  else if (!ok) outcome = 'error';
+  else {
+    const r = parseOdometerAnswer(text);
+    outcome = r.outcome;
+    if (r.outcome === 'ok') aiOdo = r.odometer;
+  }
+
+  const photo_token = await makePhotoToken(env, {
+    c: pre.code,
+    t: pre.driver.tenant_id,
+    p: path,
+    a: aiOdo,
+    iat: Math.floor(Date.now() / 1000),
+  });
+  const res = { outcome, photo_token };
+  if (aiOdo !== null) res.odometer = aiOdo;
+  return jsonOk(cors, res);
+}
+
+// ── Route: POST /driver/submit ───────────────────────────────────────────────
+// Writes the reading. Everything the row claims is server-derived: driver_name
+// and tenant from the RPC, photo path + ai_odometer from the verified token,
+// photo_verified computed HERE (AI integer AND within ±AI_MATCH_TOLERANCE_KM
+// of the typed value), plate checked against the tenant's own vehicle list.
+// Prefer: return=representation + a row-count check — a "success" that wrote
+// nothing is a failure (project rule: 204 lies).
+// Body: { photo_token, plate, odometer, notes? }.
+async function handleDriverSubmit(request, env, cors) {
+  if (!env.SUPABASE_SECRET_KEY || !env.PHOTO_TOKEN_KEY) return jsonError(cors, 500, 'api_error', 'Proxy is not configured.');
+  const pre = await driverPrelude(request, env, cors);
+  if (pre.fail) return pre.fail;
+
+  const { body, error } = await readJsonBody(request, MAX_BODY_SUBMIT);
+  if (error) return jsonError(cors, 400, 'invalid_request_error', error);
+
+  const token = await readPhotoToken(env, body && body.photo_token);
+  if (!token || token.c !== pre.code || token.t !== pre.driver.tenant_id || typeof token.p !== 'string') {
+    return jsonError(cors, 401, 'invalid_request_error', 'Photo check expired — please retake the photo and submit again.');
+  }
+  const odometer = body.odometer;
+  if (!Number.isInteger(odometer) || odometer < ODO_MIN || odometer > ODO_MAX) {
+    return jsonError(cors, 400, 'invalid_request_error', 'Please enter a valid odometer reading.');
+  }
+  const plate = typeof body.plate === 'string' ? body.plate : '';
+  if (!(Array.isArray(pre.driver.vehicles) && pre.driver.vehicles.some((v) => v && v.plate === plate))) {
+    return jsonError(cors, 400, 'invalid_request_error', 'Vehicle not recognised — please pick it from the list again.');
+  }
+  const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, NOTES_MAX) : null;
+
+  const aiOdo = Number.isInteger(token.a) ? token.a : null;
+  const photoVerified = aiOdo !== null && Math.abs(odometer - aiOdo) <= AI_MATCH_TOLERANCE_KM;
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/odometer_readings`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SECRET_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify({
+      plate,
+      odometer,
+      notes,
+      ai_odometer: aiOdo,
+      driver_code: pre.code,
+      driver_name: pre.driver.name,
+      // Same "bucket/path" shape the old client wrote — the dashboard's
+      // getSignedPhotoUrl strips the bucket prefix.
+      photo_path: `${ODO_PHOTO_BUCKET}/${token.p}`,
+      photo_verified: photoVerified,
+      // The set_reading_tenant trigger re-resolves this from the code on
+      // every insert (confirmed) — kept as a second validation layer.
+      tenant_id: pre.driver.tenant_id,
+    }),
+  });
+  let rows = null;
+  if (res.ok) {
+    try {
+      rows = await res.json();
+    } catch {
+      rows = null;
+    }
+  }
+  if (!res.ok || !Array.isArray(rows) || rows.length === 0) {
+    reportMessage(`reading insert failed ${res.status}`, 'error', { upstream: 'supabase', http_status: res.status });
+    return jsonError(cors, 502, 'api_error', 'Could not save the reading. Please try again.');
+  }
+  return jsonOk(cors, { ok: true });
 }
 
 // ── Route: POST /ai/compliance ───────────────────────────────────────────────
@@ -686,8 +1044,10 @@ const handler = {
     // Monitoring self-test (GET, keyed, throttled, no upstream calls).
     if (path === '/monitor/test') return handleMonitorTest(request, env, url);
 
-    const known = path === '/ai/dashboard' || path === '/ai/driver' || path === '/ai/compliance';
-    // Both signed-in routes share the dashboard throttles (same identity).
+    const driverLike = path === '/ai/driver' || path === '/driver/init' || path === '/driver/photo' || path === '/driver/submit';
+    const known = path === '/ai/dashboard' || path === '/ai/compliance' || driverLike;
+    // Both signed-in routes share the dashboard throttles (same identity);
+    // every driver-code route shares the driver throttles.
     const dashboardLike = path === '/ai/dashboard' || path === '/ai/compliance';
 
     // {} unless the Origin is on this environment's allowlist.
@@ -722,6 +1082,9 @@ const handler = {
     try {
       if (path === '/ai/dashboard') return await handleDashboard(request, env, cors);
       if (path === '/ai/compliance') return await handleCompliance(request, env, cors);
+      if (path === '/driver/init') return await handleDriverInit(request, env, cors);
+      if (path === '/driver/photo') return await handleDriverPhoto(request, env, cors);
+      if (path === '/driver/submit') return await handleDriverSubmit(request, env, cors);
       return await handleDriver(request, env, cors);
     } catch (err) {
       // Never echo internals to the client. Sentry gets the error class and
