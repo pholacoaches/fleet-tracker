@@ -6332,14 +6332,21 @@ function driverExpiryCell(dateStr){
   return`<span>${txt}</span>`;
 }
 
-// personal_code = first 3 letters of the name (A–Z only, padded with X) + 4 random digits.
-// Uniqueness is checked against the fetched list; the DB unique constraint is the backstop.
+// personal_code = first 3 letters of the name (A–Z only, padded with X) + 8 random
+// chars from the Worker's 32-char no-lookalike alphabet (A–Z minus I/O, plus 2–9 —
+// must match worker.js DRIVER_CODE_RE exactly). 32⁸ ≈ 1.1 trillion, so the code is
+// unguessable; uniqueness is checked against the fetched list with the DB unique
+// constraint as backstop. Legacy AAA-0000 codes stay valid until regenerated.
 function generateDriverCode(name){
   const letters=String(name||'').toUpperCase().replace(/[^A-Z]/g,'');
   const prefix=(letters+'XXX').slice(0,3);
+  const ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const existing=new Set(driversData.map(d=>d.personal_code));
   for(let i=0;i<100;i++){
-    const code=prefix+'-'+String(Math.floor(1000+Math.random()*9000));
+    const bytes=crypto.getRandomValues(new Uint8Array(8));
+    let suffix='';
+    for(const b of bytes)suffix+=ALPHABET[b&31]; // 256/32 = 8 exactly → no modulo bias
+    const code=prefix+'-'+suffix;
     if(!existing.has(code))return code;
   }
   return null;

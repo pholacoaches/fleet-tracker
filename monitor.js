@@ -42,7 +42,7 @@
     [/\bsb_(?:publishable|secret)_[A-Za-z0-9_-]+/g,'[key]'],
     [/\bdata:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+\/=]+/gi,'[data-uri]'],
     [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,'[email]'],
-    [/\b[A-Z]{3}-\d{4}\b/g,'[driver-code]'],                 // driver personal codes
+    [/\b[A-Z]{3}-(?:\d{4}|[A-HJ-NP-Z2-9]{8})\b/g,'[driver-code]'], // driver codes, old + new format
     [/\b[A-Z]{2,3}\s?\d{3,6}(?:[\s-]?\d{3})?\s?(?:[A-Z]{2}\b)?/g,'[plate]'], // SA plate shapes: CA 123-456, ND 123456, ABC 123 GP
     [/\d[\d\s-]{4,}\d/g,'[number]']                          // phones, odometers, dates
   ];
