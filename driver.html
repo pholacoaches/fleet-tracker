@@ -301,23 +301,22 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 
 <script src="esc.js"></script>
 <script>
-const SUPABASE_URL='https://wlwwzbyuchsonwugqhww.supabase.co';
-const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
-const SB_HEADERS={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`};
-
-// P1: pick the Worker per environment — the same local test monitor.js uses
+// P1: this page talks ONLY to the fleet-proxy Worker — no Supabase URL, key
+// or direct table/storage access here any more. The Worker validates the
+// driver code, stores the photo, runs the AI read and writes the reading.
+// Pick the Worker per environment — the same local test monitor.js uses
 // for its ENV tag. Localhost gets fleet-proxy-dev (its CORS allowlist includes
 // localhost 8377/8787); everything else gets production fleet-proxy.
 const WORKER=(/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname)||location.protocol==='file:')
   ?'https://fleet-proxy-dev.gjtucker83.workers.dev'
   :'https://fleet-proxy.gjtucker83.workers.dev';
 
-let driver=null;          // {name, personal_code}
+let driver=null;          // {first_name, personal_code, tenant_id}
 let vehicleList=[];       // [{plate, fleet_no}] active vehicles
 let currentPlate='';
 let currentFleetNo='';    // fleet/bus number of the picked vehicle ('' when not set)
-let photoBlob=null;       // compressed JPEG ready for upload
-let photoBase64='';
+let photoBase64='';       // compressed JPEG dataURL (preview + AI retry)
+let photoToken='';        // P1: Worker-issued HMAC token binding the stored photo + its AI read
 let aiDetectedOdometer=null;
 let aiFailCount=0;        // consecutive AI read failures for THIS submission (pilot fix 1b)
 
@@ -354,22 +353,21 @@ function applyDriverBranding(b){
 async function init(){
   const params=new URLSearchParams(window.location.search);
   const code=(params.get('d')||'').trim().toUpperCase();
-  // Old ?id=PLATE links (flow removed) and missing/malformed codes all land here
-  if(!code||!/^[A-Z]{3}-[0-9]{4}$/.test(code)){showScreen('invalidScreen');return;}
+  // Old ?id=PLATE links (flow removed) and missing/malformed codes all land
+  // here. P1: both the legacy AAA-0000 and the new AAA-XXXXXXXX codes pass.
+  if(!code||!/^[A-Z]{3}-(?:[0-9]{4}|[A-HJ-NP-Z2-9]{8})$/.test(code)){showScreen('invalidScreen');return;}
   try{
-    // Single anon entry point: the SECURITY DEFINER RPC returns the driver's
-    // name, whether they already submitted today (Africa/Johannesburg), and
-    // their own company's active vehicles. Anon has no direct read access to
-    // drivers/vehicles/odometer_readings; an unknown or inactive code → null.
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/driver_page_init`,{
+    // P1: the Worker validates the code (rate-limited) via driver_page_init
+    // server-side and returns a TRIMMED payload — first name only, the two
+    // branding fields, the vehicle list and submitted_today. An unknown or
+    // inactive code → 401, which lands on the invalid screen like before.
+    const res=await fetch(`${WORKER}/driver/init`,{
       method:'POST',
-      headers:{...SB_HEADERS,'Content-Type':'application/json'},
-      body:JSON.stringify({p_code:code})
+      headers:{'X-Driver-Code':code}
     });
     const data=res.ok?await res.json():null;
     if(!data){showScreen('invalidScreen');return;}
-    // tenant_id namespaces the photo upload path (build #4b bucket scoping)
-    driver={name:data.name,personal_code:code,tenant_id:data.tenant_id||null};
+    driver={first_name:data.first_name||'',personal_code:code,tenant_id:data.tenant_id||null};
     FleetDesk.setTenant(driver.tenant_id); // error monitoring: tenant UUID tag
     applyDriverBranding(data.branding);
     vehicleList=data.vehicles||[];
@@ -381,8 +379,8 @@ async function init(){
       return a.plate.localeCompare(b.plate);
     });
     renderPlateList();
-    document.getElementById('greetName').textContent='Hi '+driver.name.split(' ')[0];
-    document.getElementById('formDriverName').textContent=driver.name.split(' ')[0]+' ·';
+    document.getElementById('greetName').textContent='Hi '+driver.first_name;
+    document.getElementById('formDriverName').textContent=driver.first_name+' ·';
     if(data.submitted_today){
       document.getElementById('dupBanner').style.display='block';
       document.getElementById('startBtn').textContent='Continue anyway';
@@ -470,13 +468,14 @@ async function compressPhoto(file){
     for(const q of [0.8,0.7,0.6,0.5]){
       const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',q));
       if(blob&&(blob.size<=TARGET_BYTES||q===0.5)){
-        const preview=await new Promise((res,rej)=>{
+        // P1: only the dataURL leaves here — the blob itself is never
+        // uploaded from this page any more (the Worker stores the photo).
+        return await new Promise((res,rej)=>{
           const r=new FileReader();
           r.onload=e=>res(e.target.result);
           r.onerror=rej;
           r.readAsDataURL(blob);
         });
-        return{blob,preview};
       }
     }
     return null;
@@ -492,10 +491,9 @@ async function handlePhoto(event){
   if(!file)return;
   if(file.size>MAX_INPUT_BYTES){showDriverError('That photo is too large. Please try again.');return;}
   try{
-    const out=await compressPhoto(file);
-    if(!out){showDriverError('Could not process the photo. Please try again.');return;}
-    photoBlob=out.blob;
-    photoBase64=out.preview;
+    const preview=await compressPhoto(file);
+    if(!preview){showDriverError('Could not process the photo. Please try again.');return;}
+    photoBase64=preview;
     const photoArea=document.getElementById('photoArea');
     photoArea.innerHTML=`<img src="${photoBase64}"><div class="photo-overlay">📷 Tap to retake</div>`;
     photoArea.classList.add('has-photo');
@@ -519,44 +517,37 @@ async function readOdometerWithAI(base64){
   status.textContent='🤖 AI is reading your odometer...';
   result.classList.remove('show');
   document.getElementById('aiRetryBtn').style.display='none';
-  // Pilot fix 1a: the Worker's pinned prompt now targets the TOTAL odometer
-  // (ignoring trip meters) and answers strict JSON
-  // {"odometer": <integer or null>, "confidence": "high"|"medium"|"low"}.
-  // The typed box is NEVER pre-filled from the AI — the two values stay
-  // independent and both are submitted (odometer vs ai_odometer).
+  // P1: the photo travels to the Worker ONCE (POST /driver/photo) — it stores
+  // the photo server-side, runs the pinned AI read (total-odometer prompt,
+  // 7-digit cap) and answers {outcome, odometer?, photo_token}. The typed box
+  // is still NEVER pre-filled from the AI — the two values stay independent
+  // and the Worker records both (odometer vs ai_odometer) at submit.
   //
-  // Pilot fix 1c: three outcomes, and only 'unreadable' counts a strike —
+  // Same four outcomes as before (pilot fixes 1b/1c), only 'unreadable'
+  // counts a strike —
   //   'ok'          model returned an integer odometer
   //   'unreadable'  model answered, explicitly {"odometer": null}
-  //   'error'       fetch threw / non-2xx / unparseable body — a CONNECTION
+  //   'error'       fetch threw / non-2xx / AI unreachable — a CONNECTION
   //                 problem, not the photo's fault: offer Retry on the same
   //                 photo instead of burning a retake strike.
-  //   'limited'     Worker answered 429 (per-code / per-IP throttle, or
-  //                 Anthropic's own limit): calm message + Retry, no strike.
+  //   'limited'     429 (per-code / per-IP throttle, or Anthropic's own
+  //                 limit): calm message + Retry, no strike.
+  // The photo_token comes back on EVERY 200 (the photo is stored even when
+  // unreadable — that feeds the two-strike manual path). prev_token makes a
+  // retake or Retry REPLACE the previous upload instead of accumulating.
   let outcome='error',aiOdo=null;
   try{
-    // Audit fix #1: the Worker validates the driver code (X-Driver-Code) via
-    // driver_page_init and pins the model, max_tokens AND the prompt itself —
-    // only the photo is sent.
-    const response=await fetch(`${WORKER}/ai/driver`,{
+    const response=await fetch(`${WORKER}/driver/photo`,{
       method:'POST',
       headers:{'Content-Type':'application/json','X-Driver-Code':driver.personal_code},
-      body:JSON.stringify({
-        messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}}
-        ]}]
-      })
+      body:JSON.stringify({image:base64,...(photoToken?{prev_token:photoToken}:{})})
     });
     if(response.ok){
       const data=await response.json();
-      const raw=(data.content||[]).map(i=>i.text||'').join('').replace(/```json|```/g,'').trim();
-      const parsed=JSON.parse(raw);
-      // Pilot fix 2: cap at 7 digits — a photographed screen once yielded
-      // 1201214692 (odometer + trip meter joined). Out-of-range integers are
-      // treated as an unreadable photo (a strike), never as a valid read.
-      if(Number.isInteger(parsed.odometer)&&parsed.odometer>0&&parsed.odometer<=9999999){outcome='ok';aiOdo=parsed.odometer;}
-      else if(parsed&&typeof parsed==='object'&&(parsed.odometer===null||Number.isInteger(parsed.odometer)))outcome='unreadable';
-      // any other shape stays 'error'
+      if(data&&typeof data.photo_token==='string')photoToken=data.photo_token;
+      if(data&&data.outcome==='ok'&&Number.isInteger(data.odometer)){outcome='ok';aiOdo=data.odometer;}
+      else if(data&&(data.outcome==='unreadable'||data.outcome==='limited'))outcome=data.outcome;
+      // anything else stays 'error'
     }else if(response.status===429){
       outcome='limited';
     }
@@ -623,27 +614,8 @@ function checkAiMismatch(){
   }
 }
 
-async function uploadPhoto(){
-  if(!photoBlob)return null;
-  const plateClean=currentPlate.replace(/[^A-Za-z0-9]/g,'');
-  const filename=`${plateClean}_${driver.personal_code}_${Date.now()}.jpg`;
-  // Build #4b: photos live under the tenant's prefix so the office app (whose
-  // storage read policy is scoped to its own tenant folder) can sign them.
-  const objectPath=driver.tenant_id?`${driver.tenant_id}/${filename}`:filename;
-  const response=await fetch(`${SUPABASE_URL}/storage/v1/object/odometer-photos/${objectPath}`,{
-    method:'POST',
-    headers:{...SB_HEADERS,'Content-Type':'image/jpeg'},
-    body:photoBlob
-  });
-  if(!response.ok){
-    console.error('[FleetDesk] photo upload failed:',response.status,await response.text());
-    return null;
-  }
-  return`odometer-photos/${objectPath}`;
-}
-
 async function submitReading(){
-  if(!photoBlob){showDriverError('Please take a photo of your odometer first.');return;}
+  if(!photoToken){showDriverError('Please take a photo of your odometer first.');return;}
   const odo=parseInt(document.getElementById('odoInput').value);
   const notes=document.getElementById('notesInput').value.trim();
   // Pilot fix 1c: an AI/typed mismatch no longer blocks submission — the
@@ -655,30 +627,33 @@ async function submitReading(){
   btn.disabled=true;
   btn.innerHTML='<span class="loading-spinner"></span> Submitting...';
   try{
-    const photoPath=await uploadPhoto();
-    if(!photoPath)throw new Error('photo upload failed');
-    // Pilot fix 1b: photo_verified:false ONLY on the second-failure manual-entry
-    // path (AI never read this photo). Every other path omits the field and the
-    // DB default (true) applies.
-    const photoUnverified=aiDetectedOdometer===null&&aiFailCount>=2;
-    const response=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings`,{
+    // P1: the Worker verifies the photo token, re-checks the odometer bounds
+    // and the plate against the tenant's own list, and writes the reading
+    // itself — driver_name, photo_path, ai_odometer and photo_verified are
+    // all decided server-side, never sent from here.
+    const response=await fetch(`${WORKER}/driver/submit`,{
       method:'POST',
-      headers:{...SB_HEADERS,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({
-        plate:currentPlate,
-        odometer:odo,
-        notes:notes||null,
-        ai_odometer:aiDetectedOdometer,
-        driver_code:driver.personal_code,
-        driver_name:driver.name,
-        photo_path:photoPath,
-        ...(photoUnverified?{photo_verified:false}:{})
-      })
+      headers:{'Content-Type':'application/json','X-Driver-Code':driver.personal_code},
+      body:JSON.stringify({photo_token:photoToken,plate:currentPlate,odometer:odo,notes:notes||null})
     });
-    if(!response.ok&&response.status!==201)throw new Error('Submission failed: '+response.status);
-    // Pilot fix 3: drop the photo references as soon as the upload is recorded
-    photoBlob=null;photoBase64='';
-    document.getElementById('thanksTitle').textContent=`Thank you ${driver.name.split(' ')[0]}, reading received`;
+    let out=null;
+    try{out=await response.json();}catch{/* non-JSON body → generic error below */}
+    if(!response.ok||!out||out.ok!==true){
+      // The Worker's refusals are already driver-friendly (e.g. the 30-min
+      // photo-token expiry says to retake the photo) — show them when present.
+      const msg=(out&&out.error&&typeof out.error.message==='string'&&out.error.message)
+        ||'Something went wrong. Please try again or contact the office.';
+      showDriverError(msg);
+      btn.disabled=false;
+      btn.innerHTML='✅ Submit Odometer Reading';
+      return;
+    }
+    // Pilot fix 3: drop the photo references as soon as the reading is
+    // recorded. Clearing photoToken also matters for correctness: the next
+    // photo must NOT send this token as prev_token, or the Worker would
+    // delete the photo belonging to the reading just submitted.
+    photoBase64='';photoToken='';
+    document.getElementById('thanksTitle').textContent=`Thank you ${driver.first_name}, reading received`;
     document.getElementById('successOdo').textContent=odo.toLocaleString('en-ZA')+' km';
     showScreen('thanksScreen');
   }catch(err){
@@ -721,7 +696,7 @@ function resetFormFields(){
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   btn.innerHTML='✅ Submit Odometer Reading';
-  photoBlob=null;photoBase64='';aiDetectedOdometer=null;aiFailCount=0;
+  photoBase64='';photoToken='';aiDetectedOdometer=null;aiFailCount=0;
 }
 
 function startAnother(){
