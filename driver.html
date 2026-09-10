@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- P2-2 CSP. All scripts are local; data goes only to the fleet-proxy
+     Workers (dev = localhost testing) and Sentry. frame-ancestors can't be
+     set via meta — accepted GitHub Pages limitation. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://fleet-proxy.gjtucker83.workers.dev https://fleet-proxy-dev.gjtucker83.workers.dev https://o4512041337618432.ingest.de.sentry.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Odometer Submission</title>
 <script src="sentry.bundle.min.js"></script>

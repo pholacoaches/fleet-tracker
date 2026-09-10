@@ -2,6 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- P2-2 CSP. 'unsafe-inline' is required (single-file app: inline script +
+     onclick handlers); the win is blocking external script injection and
+     non-allowlisted network targets. Google Fonts entries serve the report
+     window (about:blank inherits this CSP). frame-ancestors can't be set via
+     meta — accepted GitHub Pages limitation. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://wlwwzbyuchsonwugqhww.supabase.co; connect-src 'self' https://wlwwzbyuchsonwugqhww.supabase.co https://fleet-proxy.gjtucker83.workers.dev https://o4512041337618432.ingest.de.sentry.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FleetDesk</title>
 <link rel="icon" type="image/svg+xml" href="fleetdesk-icon-final.svg">
@@ -1083,8 +1089,10 @@ input[type=file] { display: none; }
   .vehicle-card { break-inside: avoid; }
 }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<!-- Self-hosted SheetJS 0.20.3 (CVE-2023-30533 + CVE-2024-22363 patched) from cdn.sheetjs.com — npm/jsdelivr stop at vulnerable 0.18.5 -->
+<script src="xlsx.full.min.js"></script>
+<!-- Self-hosted pdf-lib 1.17.1 (byte-identical to unpkg/jsdelivr npm build) -->
+<script src="pdf-lib.min.js"></script>
 </head>
 <body>
 <!-- Icon sprite — Tabler Icons outline paths (MIT, tabler.io/icons). Every
