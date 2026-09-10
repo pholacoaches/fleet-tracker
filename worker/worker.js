@@ -13,17 +13,10 @@
  *                        The token is verified against Supabase Auth
  *                        (GET /auth/v1/user) on every call.
  *
- *   POST /ai/driver      Odometer photo reading from driver.html.
- *                        Caller must present an active driver code:
- *                        X-Driver-Code: AAA-0000.
- *                        The code is validated with the driver_page_init
- *                        RPC (returns null for unknown / inactive codes).
- *
  *   POST /ai/compliance  Licence-document photo reading from index.html
  *                        (Disc Renewal → Scan Licences, 2026-09-04).
  *                        Same auth + rate-limit bindings as /ai/dashboard;
- *                        same body contract as /ai/driver (one image only,
- *                        prompt pinned here).
+ *                        body is one image only, prompt pinned here.
  *
  *   P1 server-verified submissions (2026-09-09) — driver.html no longer
  *   talks to Supabase at all; these three replace its direct calls:
@@ -41,10 +34,8 @@
  *                        row. photo_verified and ai_odometer are set HERE,
  *                        never by the client.
  *
- *   /ai/driver remains temporarily for the pre-P1 driver.html still cached
- *   on devices; it is removed in the P1 cleanup after the DB tightening.
- *
- * Everything else — including "/", "/login", "/auth/*" — is 404.
+ * Everything else — including "/", "/login", "/auth/*" and the legacy
+ * "/ai/driver" (removed in the P1 cleanup, 2026-09-10) — is 404.
  *
  * Model and max_tokens are pinned here and the client's values ignored.
  * As of P1, EVERY route pins its prompt: the client may only send the
@@ -197,11 +188,11 @@ const MAX_BODY_COMPLIANCE = 3 * 1024 * 1024;
 // /driver/submit carries only a token + the typed values — tiny.
 const MAX_BODY_SUBMIT = 64 * 1024;
 
-// P1 (2026-09-09): accepts BOTH the legacy AAA-0000 codes and the new
-// unguessable AAA-XXXXXXXX codes (8 chars from A–Z minus I/O, plus 2–9;
-// 32⁸ ≈ 1.1 trillion). Legacy acceptance is removed in the P1 cleanup once
-// the demo codes are regenerated.
-const DRIVER_CODE_RE = /^[A-Z]{3}-(?:[0-9]{4}|[A-HJ-NP-Z2-9]{8})$/;
+// P1 cleanup (2026-09-10): new-format codes ONLY — AAA-XXXXXXXX, 8 chars from
+// A–Z minus I/O, plus 2–9; 32⁸ ≈ 1.1 trillion. Legacy AAA-0000 acceptance
+// removed after all codes were regenerated (the redaction masks in
+// redactString and monitor.js deliberately still match the old format).
+const DRIVER_CODE_RE = /^[A-Z]{3}-[A-HJ-NP-Z2-9]{8}$/;
 
 // ── P1 server-verified submissions (2026-09-09) ──────────────────────────────
 // photo_verified and ai_odometer are set by THIS Worker, never by the client:
@@ -258,7 +249,6 @@ function jsonError(cors, status, type, message) {
 // Every Sentry call below is a safe no-op when SENTRY_DSN is unset.
 const ROUTE_TAGS = {
   '/ai/dashboard': 'pdf',
-  '/ai/driver': 'odometer',
   '/ai/compliance': 'compliance',
   '/driver/init': 'driver-init',
   '/driver/photo': 'driver-photo',
@@ -825,28 +815,6 @@ async function handleDashboard(request, env, cors) {
   });
 }
 
-// ── Route: POST /ai/driver (legacy — pre-P1 driver.html; removed in cleanup) ─
-// Body contract: same shape as before, but ONLY the image block is used — the
-// prompt is DRIVER_PROMPT above, whatever the client sends.
-async function handleDriver(request, env, cors) {
-  // Per-code throttle (15/min) sits inside the prelude, before the RPC, so
-  // one leaked or guessed code can't hammer Supabase either.
-  const pre = await driverPrelude(request, env, cors);
-  if (pre.fail) return pre.fail;
-
-  const { body, error } = await readJsonBody(request, MAX_BODY_DRIVER);
-  if (error) return jsonError(cors, 400, 'invalid_request_error', error);
-
-  const image = extractSingleImage(body && body.messages);
-  if (!image) return jsonError(cors, 400, 'invalid_request_error', 'Request must contain one JPEG image of the odometer.');
-
-  return callAnthropic(env, cors, {
-    model: DRIVER_MODEL,
-    max_tokens: DRIVER_MAX_TOKENS,
-    messages: [{ role: 'user', content: [image, { type: 'text', text: DRIVER_PROMPT }] }],
-  });
-}
-
 // ── Route: POST /driver/init ─────────────────────────────────────────────────
 // Replaces the page's direct driver_page_init call (P1): rate-limited here,
 // and TRIMMED — the page gets the first name only (the full name now stays
@@ -1107,7 +1075,7 @@ const handler = {
     // Monitoring self-test (GET, keyed, throttled, no upstream calls).
     if (path === '/monitor/test') return handleMonitorTest(request, env, url);
 
-    const driverLike = path === '/ai/driver' || path === '/driver/init' || path === '/driver/photo' || path === '/driver/submit';
+    const driverLike = path === '/driver/init' || path === '/driver/photo' || path === '/driver/submit';
     const known = path === '/ai/dashboard' || path === '/ai/compliance' || driverLike;
     // Both signed-in routes share the dashboard throttles (same identity);
     // every driver-code route shares the driver throttles.
@@ -1147,8 +1115,7 @@ const handler = {
       if (path === '/ai/compliance') return await handleCompliance(request, env, cors);
       if (path === '/driver/init') return await handleDriverInit(request, env, cors);
       if (path === '/driver/photo') return await handleDriverPhoto(request, env, cors);
-      if (path === '/driver/submit') return await handleDriverSubmit(request, env, cors);
-      return await handleDriver(request, env, cors);
+      return await handleDriverSubmit(request, env, cors);
     } catch (err) {
       // Never echo internals to the client. Sentry gets the error class and
       // message (scrubbed in beforeSend) plus the route/upstream tags.
