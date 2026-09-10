@@ -6123,13 +6123,20 @@ async function submitMaintJob(){
 
 async function markJobDone(id){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}&select=id`,{
       method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({date_out:new Date().toISOString().slice(0,10),status:'done'})
     });
     if(!res.ok){
       alert('Could not update the job. Please try again.');
+      return;
+    }
+    // return=representation: 0 rows back = the job row wasn't updated
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] markJobDone matched no row for id',id);
+      alert('Update didn\'t save — please try again.');
       return;
     }
     await renderMaintTab();
