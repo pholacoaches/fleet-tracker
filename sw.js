@@ -1,4 +1,4 @@
-const CACHE = 'fleetdesk-v78';
+const CACHE = 'fleetdesk-v79';
 const PRECACHE = [
   '/fleet-tracker/',
   '/fleet-tracker/index.html',
