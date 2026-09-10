@@ -6441,7 +6441,8 @@ async function submitDriver(){
       const body={name,phone:phone||null,
         licence_expiry:document.getElementById('df-licence').value||null,
         prdp_expiry:document.getElementById('df-prdp').value||null};
-      res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverFormMode}`,{method:'PATCH',headers,body:JSON.stringify(body)});
+      // PATCH uses return=representation so 0 rows back = nothing saved (the POST add path keeps return=minimal — a real insert can't silently match 0 rows)
+      res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverFormMode}&select=id`,{method:'PATCH',headers:{...headers,'Prefer':'return=representation'},body:JSON.stringify(body)});
     }else{
       // Refresh the list first so the uniqueness check sees codes added from other devices
       await fetchDrivers();
@@ -6459,6 +6460,16 @@ async function submitDriver(){
       errEl.classList.add('show');
       btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+(editing?'Save Changes':'Save Driver');
       return;
+    }
+    if(editing){
+      const rows=await res.json();
+      if(!Array.isArray(rows)||rows.length===0){
+        console.error('[FleetDesk] Driver edit matched no row for id',driverFormMode);
+        errEl.textContent='Update didn\'t save — please try again.';
+        errEl.classList.add('show');
+        btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+'Save Changes';
+        return;
+      }
     }
     closeDriverForm();
     await renderDriversTab();
