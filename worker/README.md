@@ -9,8 +9,11 @@ the Cloudflare dashboard.
 | Route | Who | Auth | What Anthropic sees |
 |---|---|---|---|
 | `POST /ai/dashboard` | `index.html` fuel-statement PDF extraction | `Authorization: Bearer <Supabase access token>` — verified with `GET /auth/v1/user` on every call | client's PDF chunk + prompt, model + max_tokens pinned |
-| `POST /ai/driver` | `driver.html` odometer photo read | `X-Driver-Code: AAA-0000` — validated with the `driver_page_init` RPC (null = unknown/inactive) | client's JPEG only; prompt, model and max_tokens pinned |
 | `POST /ai/compliance` | `index.html` licence-document photo read (Disc Renewal → Scan Licences, 2026-09-04) | same as `/ai/dashboard` (Supabase bearer token) | client's JPEG only; prompt, model and max_tokens pinned |
+| `POST /driver/init` | `driver.html` page boot (P1, 2026-09-09) | `X-Driver-Code: AAA-XXXXXXXX` — validated with the `driver_page_init` RPC (null = unknown/inactive) | nothing |
+| `POST /driver/photo` | `driver.html` odometer photo (P1) — Worker stores it, then runs the AI read | same driver code | client's JPEG only; prompt, model and max_tokens pinned |
+| `POST /driver/submit` | `driver.html` reading submit (P1) — Worker writes the row, sets `photo_verified` + `ai_odometer` | same driver code + HMAC photo token | nothing |
+| `POST /ai/driver` (removed 2026-09-10, block 6) | pre-P1 `driver.html` | — | **404** |
 | `GET /monitor/test?key=…` | Greg, in a browser | `SENTRY_TEST_KEY` secret (404 otherwise) | nothing — sends a deliberate test error to Sentry (see "Error monitoring") |
 | anything else (`/`, `/login`, `/auth/*`) | — | — | **404** |
 
@@ -71,8 +74,8 @@ the hard backstop.
 
 | Binding | Route | Key | Limit | Where checked |
 |---|---|---|---|---|
-| `DRIVER_IP_LIMIT` | `/ai/driver` | client IP | 60 / min | router, before any Supabase call |
-| `DRIVER_CODE_LIMIT` | `/ai/driver` | driver code | 15 / min | handler, after the regex, before the RPC |
+| `DRIVER_IP_LIMIT` | `/driver/init`, `/driver/photo`, `/driver/submit` | client IP | 60 / min | router, before any Supabase call |
+| `DRIVER_CODE_LIMIT` | `/driver/init`, `/driver/photo`, `/driver/submit` | driver code | 15 / min | shared prelude, after the regex, before the RPC |
 | `DASHBOARD_IP_LIMIT` | `/ai/dashboard`, `/ai/compliance` | client IP | 40 / min | router, before the token check |
 | `DASHBOARD_USER_LIMIT` | `/ai/dashboard`, `/ai/compliance` | Supabase user id | 20 / min | handler, after token verification |
 
@@ -115,16 +118,18 @@ const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/ai/dashbo
 });
 ```
 
-`driver.html` `readOdometerWithAI`:
+`driver.html` photo step (P1, 2026-09-09 — the page picks prod or dev Worker
+by hostname; `prev_token` makes a retake replace the previous upload):
 
 ```js
-const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/ai/driver',{
+const response=await fetch(`${WORKER}/driver/photo`,{
   method:'POST',
   headers:{'Content-Type':'application/json','X-Driver-Code':driver.personal_code},
-  body:JSON.stringify({messages:[{role:'user',content:[
-    {type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}}
-  ]}]})
+  body:JSON.stringify({image:base64,...(photoToken?{prev_token:photoToken}:{})})
 });
+// → {outcome:"ok"|"unreadable"|"error"|"limited", odometer?, photo_token}
+// /driver/submit then sends {photo_token, plate, odometer, notes} with the
+// same X-Driver-Code header; /driver/init sends an empty POST body.
 ```
 
 `index.html` `readLicenceWithAI` (2026-09-04) — dashboard auth, driver body:
@@ -175,9 +180,10 @@ tracing, no logs, no breadcrumbs, no release-health sessions.
 | our own 429 | info | `rate limited: <binding>` | `route`, `limiter`, `http_status=429` — at most one per limiter per minute per Worker instance, so a flood cannot drain the (org-wide) Sentry quota |
 | `/monitor/test` | error | `FleetDesk Worker monitoring test — this error is deliberate` | `route=other`, `test=true` |
 
-`route` is `pdf` (/ai/dashboard), `odometer` (/ai/driver), `compliance`
-(/ai/compliance) or `other`. `tenant` (the tenant UUID, never the name) is
-added on the driver route only — `driver_page_init` returns it. The signed-in
+`route` is `pdf` (/ai/dashboard), `compliance` (/ai/compliance),
+`driver-init` / `driver-photo` / `driver-submit` (/driver/*) or `other`.
+`tenant` (the tenant UUID, never the name) is
+added on the driver routes only — `driver_page_init` returns it. The signed-in
 routes only see the Supabase user, whose record carries no tenant id; adding
 it would cost an extra Supabase call per request, so it is left out.
 
@@ -190,7 +196,9 @@ request bodies / URLs / headers / fetch breadcrumbs are not installed
 `request`, `user`, `breadcrumbs`, `extra`, `spans`, all contexts except
 `trace`/`runtime`/`cloud_resource`, every tag not on its allow-list, and
 redacts base64-looking runs (40+ chars), `sk-ant-…`, `Bearer …` and
-`AAA-0000` patterns in any message before cutting it to 300 characters. If
+driver-code patterns (old `AAA-0000` and new `AAA-XXXXXXXX` formats — the
+mask deliberately stays broader than what the routes accept) in any message
+before cutting it to 300 characters. If
 the scrub itself throws, the event is dropped rather than sent. Verified
 locally on 2026-09-07 by pointing `SENTRY_DSN` at a local catcher and
 replaying the driver route with a fake image: the payload held the message,
@@ -234,7 +242,8 @@ curl -i -X POST http://localhost:8787/               -H "Origin: https://pholaco
 curl -i -X POST http://localhost:8787/login          -H "Origin: https://pholacoaches.github.io"   # 404
 curl -i -X POST http://localhost:8787/ai/dashboard   -H "Origin: https://evil.example"             # 403
 curl -i -X POST http://localhost:8787/ai/dashboard   -H "Origin: https://pholacoaches.github.io"   # 401
-curl -i -X POST http://localhost:8787/ai/driver      -H "Origin: https://pholacoaches.github.io" -H "X-Driver-Code: ZZZ-0000"   # 401
+curl -i -X POST http://localhost:8787/ai/driver      -H "Origin: https://pholacoaches.github.io" -H "X-Driver-Code: ZZZ-0000"       # 404 (route removed 2026-09-10)
+curl -i -X POST http://localhost:8787/driver/init    -H "Origin: https://pholacoaches.github.io" -H "X-Driver-Code: ZZZ-ZZZZZZZZ"   # 401
 curl -i -X POST http://localhost:8787/ai/compliance  -H "Origin: https://pholacoaches.github.io"   # 401
 ```
 
