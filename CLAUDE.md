@@ -9,9 +9,11 @@ Greg is a non-technical solo builder — plain English, short answers.
 Session state lives in the planning chat's knowledge file, not here —
 this file is stable rules only.
 
-## The app is SEVEN files — back up all seven before any change
-index.html (~211KB, single-file app), driver.html, sw.js,
-manifest.json, esc.js, monitor.js, sentry.bundle.min.js.
+## The app is EIGHT files — back up all eight before any change
+index.html (~428KB, single-file app), driver.html, sw.js,
+manifest.json, esc.js, monitor.js, sentry.bundle.min.js,
+xlsx.full.min.js (self-hosted SheetJS 0.20.3 — patched, do not
+downgrade to npm/CDN 0.18.5).
 Backups go to "..\fleet tracker AUDIT\AUDIT_<date>_<task>\" —
 NEVER inside the repo. Check the date with Get-Date first.
 

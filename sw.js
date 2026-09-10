@@ -6,6 +6,7 @@ const PRECACHE = [
   '/fleet-tracker/esc.js',
   '/fleet-tracker/monitor.js',
   '/fleet-tracker/sentry.bundle.min.js',
+  '/fleet-tracker/xlsx.full.min.js',
   '/fleet-tracker/manifest.json',
   '/fleet-tracker/hero.jpg',
   '/fleet-tracker/savika-hero.jpg',
