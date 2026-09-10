@@ -3029,12 +3029,20 @@ async function deleteReport(i){
   const period=reportPeriod(r);
   if(!confirm(`Delete the ${period} report for ${TENANT?.display_name||'your company'}? It can be restored by support within 30 days.`))return;
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?period=eq.${encodeURIComponent(period)}&deleted_at=is.null`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?period=eq.${encodeURIComponent(period)}&deleted_at=is.null&select=period`,{
       method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({deleted_at:new Date().toISOString()})
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
+    // return=representation: 0 rows back = nothing was soft-deleted (RLS block
+    // or row gone) — do NOT touch local state, the report must stay visible.
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] Report delete matched no rows for period',period);
+      alert('Update didn\'t save — please try again.');
+      return;
+    }
   }catch(err){
     console.error('[FleetDesk] Report delete failed:',err);
     alert('Could not delete the report. Please check your connection and try again.');
@@ -3279,12 +3287,20 @@ async function clearAllData(){
   }
   // 3) Soft-delete every live report in the DB — must also succeed first
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?deleted_at=is.null`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?deleted_at=is.null&select=period`,{
       method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({deleted_at:new Date().toISOString()})
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
+    // return=representation: 0 rows back = the DB soft-deleted nothing (RLS
+    // block, or no live rows) — stop here, local cache stays untouched.
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] clearAllData: fuel_reports soft-delete step matched no rows');
+      alert('Update didn\'t save — please try again.');
+      return;
+    }
   }catch(err){
     alert('⚠️ Could not clear the cloud data — nothing has been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.');
     return;
@@ -6107,13 +6123,20 @@ async function submitMaintJob(){
 
 async function markJobDone(id){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}&select=id`,{
       method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({date_out:new Date().toISOString().slice(0,10),status:'done'})
     });
     if(!res.ok){
       alert('Could not update the job. Please try again.');
+      return;
+    }
+    // return=representation: 0 rows back = the job row wasn't updated
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] markJobDone matched no row for id',id);
+      alert('Update didn\'t save — please try again.');
       return;
     }
     await renderMaintTab();
@@ -6418,7 +6441,8 @@ async function submitDriver(){
       const body={name,phone:phone||null,
         licence_expiry:document.getElementById('df-licence').value||null,
         prdp_expiry:document.getElementById('df-prdp').value||null};
-      res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverFormMode}`,{method:'PATCH',headers,body:JSON.stringify(body)});
+      // PATCH uses return=representation so 0 rows back = nothing saved (the POST add path keeps return=minimal — a real insert can't silently match 0 rows)
+      res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverFormMode}&select=id`,{method:'PATCH',headers:{...headers,'Prefer':'return=representation'},body:JSON.stringify(body)});
     }else{
       // Refresh the list first so the uniqueness check sees codes added from other devices
       await fetchDrivers();
@@ -6436,6 +6460,16 @@ async function submitDriver(){
       errEl.classList.add('show');
       btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+(editing?'Save Changes':'Save Driver');
       return;
+    }
+    if(editing){
+      const rows=await res.json();
+      if(!Array.isArray(rows)||rows.length===0){
+        console.error('[FleetDesk] Driver edit matched no row for id',driverFormMode);
+        errEl.textContent='Update didn\'t save — please try again.';
+        errEl.classList.add('show');
+        btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+'Save Changes';
+        return;
+      }
     }
     closeDriverForm();
     await renderDriversTab();
@@ -6467,12 +6501,19 @@ async function copyLaunchList(btn){
 
 async function toggleDriverActive(id,makeActive){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${id}`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${id}&select=id`,{
       method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({active:makeActive==='true'||makeActive===true})
     });
     if(!res.ok){alert('Could not update the driver. Please try again.');return;}
+    // return=representation: 0 rows back = the driver row wasn't updated
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] toggleDriverActive matched no row for id',id);
+      alert('Update didn\'t save — please try again.');
+      return;
+    }
     if(driverFormMode&&driverFormMode!=='add')closeDriverForm();
     await renderDriversTab();
   }catch{alert('Could not update the driver. Please check your connection and try again.');}
@@ -7082,14 +7123,22 @@ function closeSubmissionModal(){
 
 async function updateSubmissionStatus(id,status){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}&select=id`,{
       method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({status})
     });
     if(!res.ok){
       console.error('[FleetDesk] Status update failed:',res.status,await res.text());
       alert('Could not save the status update. Please check your connection and try again.');
+      return false;
+    }
+    // return=representation: 0 rows back = the reading wasn't updated — bail
+    // BEFORE the local notifData/pendingData/approvedData mutations below.
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] Status update matched no row for id',id);
+      alert('Update didn\'t save — please try again.');
       return false;
     }
     const item=notifData.find(n=>n.id===id);
