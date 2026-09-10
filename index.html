@@ -7123,14 +7123,22 @@ function closeSubmissionModal(){
 
 async function updateSubmissionStatus(id,status){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}&select=id`,{
       method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({status})
     });
     if(!res.ok){
       console.error('[FleetDesk] Status update failed:',res.status,await res.text());
       alert('Could not save the status update. Please check your connection and try again.');
+      return false;
+    }
+    // return=representation: 0 rows back = the reading wasn't updated — bail
+    // BEFORE the local notifData/pendingData/approvedData mutations below.
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] Status update matched no row for id',id);
+      alert('Update didn\'t save — please try again.');
       return false;
     }
     const item=notifData.find(n=>n.id===id);
