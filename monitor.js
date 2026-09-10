@@ -24,7 +24,7 @@
 (function(){
   'use strict';
 
-  var FLEETDESK_RELEASE='fleetdesk-v77';
+  var FLEETDESK_RELEASE='fleetdesk-v78';
   var DSN='https://7415a2ef1c96f2c4907c7b4c958541f4@o4512041337618432.ingest.de.sentry.io/4512041379758160';
   var PAGE=/driver\.html$/i.test(location.pathname)?'driver':'dashboard';
   var ENV=(/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname)||location.protocol==='file:')?'local':'production';
@@ -42,7 +42,7 @@
     [/\bsb_(?:publishable|secret)_[A-Za-z0-9_-]+/g,'[key]'],
     [/\bdata:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+\/=]+/gi,'[data-uri]'],
     [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,'[email]'],
-    [/\b[A-Z]{3}-\d{4}\b/g,'[driver-code]'],                 // driver personal codes
+    [/\b[A-Z]{3}-(?:\d{4}|[A-HJ-NP-Z2-9]{8})\b/g,'[driver-code]'], // driver codes, old + new format
     [/\b[A-Z]{2,3}\s?\d{3,6}(?:[\s-]?\d{3})?\s?(?:[A-Z]{2}\b)?/g,'[plate]'], // SA plate shapes: CA 123-456, ND 123456, ABC 123 GP
     [/\d[\d\s-]{4,}\d/g,'[number]']                          // phones, odometers, dates
   ];
