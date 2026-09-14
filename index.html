@@ -2375,6 +2375,11 @@ function fmtTxDate(s){
 // carry markup. Writer and readers of an id must both use this.
 function plateDomId(p){return String(p??'').replace(/[^A-Za-z0-9_-]/g,'_');}
 
+// odo-sanity-checks: a reading is implausible when it implies more than this
+// many km per day since the previous entry (same rule as the Worker's
+// history_flag check — keep the two in sync; per-tenant later).
+const MAX_KM_PER_DAY=1000;
+
 function computeVehicleStats(v,fleetAvg){
   const txs=v.transactions;
   txs.forEach((tx,i)=>{
@@ -2382,6 +2387,13 @@ function computeVehicleStats(v,fleetAvg){
       const prev=txs[i-1],km=tx.odometer-prev.odometer;
       if(km>0&&km<2000&&tx.litres>0){tx.kmPerLitre=parseFloat((km/tx.litres).toFixed(2));tx.costPerKm=parseFloat((tx.amount/km).toFixed(2));}
       else{tx.kmPerLitre=null;tx.costPerKm=null;if(km<0)tx.odometerFlag=true;}
+      // Forward jumps flag too (odo-sanity fix 1). Only when both odometers
+      // were actually captured — 0/null means "not captured", not a jump.
+      // Elapsed time floors at 1 day so same-day pairs get the full allowance.
+      if(km>0&&prev.odometer>0&&tx.odometer>0){
+        const days=Math.max(1,(parseDateStr(tx.date)-parseDateStr(prev.date))/86400000);
+        if(km/days>MAX_KM_PER_DAY)tx.odometerFlag=true;
+      }
     }else{tx.kmPerLitre=null;tx.costPerKm=null;}
   });
   v.totalLitres=parseFloat(txs.reduce((s,t)=>s+t.litres,0).toFixed(2));
@@ -2950,7 +2962,7 @@ function renderVehicleBlock(v,vi){
     return`<tr><td class="td-date">${escapeHtml(fmtTxDate(tx.date))}</td><td class="td-merchant">${escapeHtml(tx.merchant)}${srcTag}${tx.isCompetitor?'<span class="badge badge-comp">Comp</span>':''}${unverifiedTag}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?svgIcon('alert-triangle'):''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
   }).join('');
 
-  const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn">${svgIcon('alert-triangle')}<span>Odometer query: one or more readings are lower than the previous entry. Please verify with the fuel supplier or the driver — may be a data capture error.</span></div>`:'';
+  const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn">${svgIcon('alert-triangle')}<span>Odometer query: one or more readings are lower than the previous entry or jumped implausibly far. Please verify with the fuel supplier or the driver — may be a data capture error.</span></div>`:'';
   const highNote=v.isHighSpend?`<div class="vc-note note-high"><span class="status-dot"></span><span>High spend alert: this vehicle's fuel cost is significantly above the fleet average for this period. Please review.</span></div>`:'';
   const chevron=`<svg class="vc-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 8 10 13 15 8"/></svg>`;
 
@@ -3845,6 +3857,11 @@ function renderNotifPanel(){
     const unverifiedBadge=n.photo_verified===false
       ?subBadgeHtml('unverified','Photo unverified')
       :'';
+    // odo-sanity block 4: Approve/Flag also lives right here in the panel, so
+    // the history verdict must be visible without opening the popup.
+    const historyBadge=n.history_flag
+      ?subBadgeHtml('mismatch',n.history_flag==='below_last'?'Below last':'Big jump')
+      :'';
     const actionBtns=(!n.status||n.status==='pending')
       ?`<div style="display:flex;gap:6px;margin-top:8px;">
           <button class="notif-action-btn" onclick="approveNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--green);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('circle-check')}Approve</button>
@@ -3854,7 +3871,7 @@ function renderNotifPanel(){
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
         <span class="notif-item-plate">${escapeHtml(n.plate)}</span>
         <span class="notif-item-odo">${n.odometer?n.odometer.toLocaleString('en-US')+' km':'—'}</span>
-        ${statusBadge}${mismatchBadge}${unverifiedBadge}
+        ${statusBadge}${mismatchBadge}${historyBadge}${unverifiedBadge}
       </div>
       <div class="notif-item-driver">${svgIcon('user')}${escapeHtml(n.driver_name||'—')}</div>
       <div class="notif-item-time">${svgIcon('calendar')}${timeStr}</div>
@@ -3998,6 +4015,25 @@ const SUB_BADGE_ICON={approved:'circle-check',flagged:'flag',mismatch:'alert-tri
 function subBadgeHtml(kind,text){
   const ic=SUB_BADGE_ICON[kind];
   return`<span class="sub-badge ${kind}">${ic?svgIcon(ic):''}${text}</span>`;
+}
+
+// odo-sanity block 4: history_flag display helpers. The flag itself is the
+// Worker's verdict at submit time; the baseline SHOWN is looked up live from
+// approvedData (last-10-approved RPC) so it stays current if other readings
+// were approved since.
+function lastApprovedReading(plate){
+  let best=null;
+  (approvedData||[]).forEach(n=>{
+    if(n.status==='approved'&&n.plate===plate&&n.odometer&&(!best||new Date(n.created_at)>new Date(best.created_at)))best=n;
+  });
+  return best;
+}
+function historyWarnText(rec){
+  const last=lastApprovedReading(rec.plate);
+  const lastStr=last?`${last.odometer.toLocaleString('en-US')} km on ${fmtDDMMYYYY(last.created_at)}`:'not on file';
+  if(rec.history_flag==='below_last')return`Below the last approved reading — last approved: ${lastStr}`;
+  if(rec.history_flag==='jump')return`Implausible jump — over ${MAX_KM_PER_DAY.toLocaleString('en-US')} km/day since the last approved reading (${lastStr})`;
+  return'';
 }
 
 // Local-date ISO (YYYY-MM-DD). toISOString() would shift a local midnight to
@@ -5446,15 +5482,21 @@ function renderTyreVehiclePanel(){
 }
 
 async function fetchLatestOdoForPlate(plate){
+  // Baseline = approved readings only: a pending/flagged garbage reading must
+  // never become the tyre/maintenance prefill (odo-sanity-checks fix 2).
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&select=odometer&order=created_at.desc&limit=1`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&status=eq.approved&select=odometer&order=created_at.desc&limit=1`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(res.ok){
       const rows=await res.json();
       if(rows.length>0&&rows[0].odometer!=null)return rows[0].odometer;
+    }else{
+      console.error('[FleetDesk] fetchLatestOdoForPlate failed:',res.status);
     }
-  }catch{}
+  }catch(err){
+    console.error('[FleetDesk] fetchLatestOdoForPlate error:',err);
+  }
   // Fall back to the latest fuel-report transaction for this vehicle
   const v=currentReport?currentReport.vehicles.find(v=>v.plate===plate):null;
   if(v&&v.transactions&&v.transactions.length>0){
@@ -7004,6 +7046,8 @@ initApp();
         <div id="popupPhotoBox"></div>
       </div>
       <div id="popupMismatch" style="display:none;background:var(--accent-light);border:2px solid var(--accent);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--accent);font-weight:700;margin-bottom:16px;line-height:1.6;"></div>
+      <!-- odo-sanity block 4: Worker history_flag (below_last / jump) -->
+      <div id="popupHistory" style="display:none;background:var(--red-light);border:2px solid var(--red);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);font-weight:700;margin-bottom:16px;line-height:1.6;"></div>
       <!-- Pilot fix 1b: AI never read this photo (driver-page second-failure manual entry) -->
       <div id="popupUnverified" style="display:none;background:#FFF9DB;border:2px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-bottom:16px;line-height:1.6;"><svg class="icon icon-lead" aria-hidden="true"><use href="#icon-camera"/></svg><strong>Photo unverified</strong> — the AI could not read this odometer photo; the reading was typed manually. Please check the photo against the entered km.</div>
       <div id="popupNotes" style="display:none;background:var(--amber-light);border:1px solid #FFE066;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:16px;"></div>
@@ -7095,6 +7139,13 @@ function showNotifPopup(rows){
     }else{
       mismatchEl.style.display='none';
     }
+    const historyEl=document.getElementById('popupHistory');
+    if(rec.history_flag){
+      historyEl.style.display='block';
+      historyEl.innerHTML=`${svgIcon('alert-triangle','icon-lead')}<strong>Odometer History Warning</strong> — ${escapeHtml(rec.plate)}<br><span style="font-size:11px;font-weight:400;">${escapeHtml(historyWarnText(rec))}</span>`;
+    }else{
+      historyEl.style.display='none';
+    }
     document.getElementById('popupUnverified').style.display=rec.photo_verified===false?'block':'none';
   }else{
     // Batch view — one grouped popup; clicking anywhere on it opens the bell panel
@@ -7112,7 +7163,11 @@ function showNotifPopup(rows){
     const unverifiedWarn=unverified.length>0
       ?`<div style="background:#FFF9DB;border:1.5px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-top:12px;">${svgIcon('camera','icon-lead')}${unverified.length} submission${unverified.length!==1?'s are':' is'} photo unverified — ${escapeHtml(unverified.map(m=>m.plate).join(', '))}</div>`
       :'';
-    document.getElementById('popupBatchList').innerHTML=plateList+mismatchWarn+unverifiedWarn;
+    const history=rows.filter(r=>r.history_flag);
+    const historyWarn=history.length>0
+      ?`<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);font-weight:700;margin-top:12px;">${svgIcon('alert-triangle','icon-lead')}${history.length} submission${history.length!==1?'s have':' has'} an odometer history warning — ${escapeHtml(history.map(m=>m.plate).join(', '))}</div>`
+      :'';
+    document.getElementById('popupBatchList').innerHTML=plateList+mismatchWarn+unverifiedWarn+historyWarn;
   }
   modal.style.display='flex';
 }
