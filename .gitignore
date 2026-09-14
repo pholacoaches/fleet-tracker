@@ -20,6 +20,7 @@
 !fleetdesk-*.svg
 !hero.jpg
 !savika-hero.jpg
+!demo-hero.jpg
 
 # ── Business/document folders living alongside the repo ────────
 # business documents - never commit
