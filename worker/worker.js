@@ -209,6 +209,12 @@ const ODO_MIN = 1000;              // same bounds driver.html enforces client-si
 const ODO_MAX = 2000000;
 const AI_ODO_MAX = 9999999;        // pilot fix 2: 7-digit cap on AI reads
 const NOTES_MAX = 500;
+// odo-sanity-checks (2026-09-14): a reading is suspicious when it is below the
+// vehicle's last APPROVED reading, or implies more than this many km per day
+// since it. Warn-only — the row still saves, with history_flag set for the
+// admin popup. Same constant lives in index.html — keep in sync (per-tenant
+// later).
+const MAX_KM_PER_DAY = 1000;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 // Computed once per request in fetch(): {} when the Origin is not allowed,
@@ -897,6 +903,37 @@ async function handleDriverPhoto(request, env, cors) {
   return jsonOk(cors, res);
 }
 
+// ── History check (odo-sanity-checks 2026-09-14) ─────────────────────────────
+// Looks up the vehicle's last APPROVED reading and returns 'below_last'
+// (typed reading is lower), 'jump' (implies > MAX_KM_PER_DAY since it) or
+// null. Warn-only by design: no previous approved reading, or any lookup
+// failure, returns null and the submit proceeds — a broken check must never
+// block a driver.
+async function computeHistoryFlag(env, tenantId, plate, odometer) {
+  try {
+    const url = `${env.SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&tenant_id=eq.${encodeURIComponent(tenantId)}&status=eq.approved&select=odometer,created_at&order=created_at.desc&limit=1`;
+    const res = await fetch(url, {
+      headers: { apikey: env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}` },
+    });
+    if (!res.ok) {
+      reportMessage(`history check failed ${res.status}`, 'warning', { upstream: 'supabase', http_status: res.status });
+      return null;
+    }
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0 || !Number.isInteger(rows[0].odometer)) return null;
+    const last = rows[0];
+    if (odometer < last.odometer) return 'below_last';
+    // Elapsed time floors at 1 day: a second same-day reading gets the full
+    // daily allowance instead of dividing by a tiny fraction.
+    const days = Math.max(1, (Date.now() - new Date(last.created_at).getTime()) / 86400000);
+    if ((odometer - last.odometer) / days > MAX_KM_PER_DAY) return 'jump';
+    return null;
+  } catch {
+    reportMessage('history check error', 'warning', { upstream: 'supabase' });
+    return null;
+  }
+}
+
 // ── Route: POST /driver/submit ───────────────────────────────────────────────
 // Writes the reading. Everything the row claims is server-derived: driver_name
 // and tenant from the RPC, photo path + ai_odometer from the verified token,
@@ -929,6 +966,7 @@ async function handleDriverSubmit(request, env, cors) {
 
   const aiOdo = Number.isInteger(token.a) ? token.a : null;
   const photoVerified = aiOdo !== null && Math.abs(odometer - aiOdo) <= AI_MATCH_TOLERANCE_KM;
+  const historyFlag = await computeHistoryFlag(env, pre.driver.tenant_id, plate, odometer);
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/odometer_readings`, {
     method: 'POST',
@@ -949,6 +987,9 @@ async function handleDriverSubmit(request, env, cors) {
       // getSignedPhotoUrl strips the bucket prefix.
       photo_path: `${ODO_PHOTO_BUCKET}/${token.p}`,
       photo_verified: photoVerified,
+      // odo-sanity-checks: verdict vs the last approved reading at submit
+      // time (below_last | jump | null). Warn-only — admin sees it at approval.
+      history_flag: historyFlag,
       // The set_reading_tenant trigger re-resolves this from the code on
       // every insert (confirmed) — kept as a second validation layer.
       tenant_id: pre.driver.tenant_id,
