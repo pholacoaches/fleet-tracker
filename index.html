@@ -2375,6 +2375,11 @@ function fmtTxDate(s){
 // carry markup. Writer and readers of an id must both use this.
 function plateDomId(p){return String(p??'').replace(/[^A-Za-z0-9_-]/g,'_');}
 
+// odo-sanity-checks: a reading is implausible when it implies more than this
+// many km per day since the previous entry (same rule as the Worker's
+// history_flag check — keep the two in sync; per-tenant later).
+const MAX_KM_PER_DAY=1000;
+
 function computeVehicleStats(v,fleetAvg){
   const txs=v.transactions;
   txs.forEach((tx,i)=>{
@@ -2382,6 +2387,13 @@ function computeVehicleStats(v,fleetAvg){
       const prev=txs[i-1],km=tx.odometer-prev.odometer;
       if(km>0&&km<2000&&tx.litres>0){tx.kmPerLitre=parseFloat((km/tx.litres).toFixed(2));tx.costPerKm=parseFloat((tx.amount/km).toFixed(2));}
       else{tx.kmPerLitre=null;tx.costPerKm=null;if(km<0)tx.odometerFlag=true;}
+      // Forward jumps flag too (odo-sanity fix 1). Only when both odometers
+      // were actually captured — 0/null means "not captured", not a jump.
+      // Elapsed time floors at 1 day so same-day pairs get the full allowance.
+      if(km>0&&prev.odometer>0&&tx.odometer>0){
+        const days=Math.max(1,(parseDateStr(tx.date)-parseDateStr(prev.date))/86400000);
+        if(km/days>MAX_KM_PER_DAY)tx.odometerFlag=true;
+      }
     }else{tx.kmPerLitre=null;tx.costPerKm=null;}
   });
   v.totalLitres=parseFloat(txs.reduce((s,t)=>s+t.litres,0).toFixed(2));
@@ -2950,7 +2962,7 @@ function renderVehicleBlock(v,vi){
     return`<tr><td class="td-date">${escapeHtml(fmtTxDate(tx.date))}</td><td class="td-merchant">${escapeHtml(tx.merchant)}${srcTag}${tx.isCompetitor?'<span class="badge badge-comp">Comp</span>':''}${unverifiedTag}${photoThumb}</td><td class="td-odo r ${tx.odometerFlag?'flagged':''}">${tx.odometer?tx.odometer.toLocaleString('en-US')+(tx.odometerFlag?svgIcon('alert-triangle'):''):'—'}</td><td class="td-litres r">${tx.litres.toFixed(2)} L</td><td class="td-amount r">R${tx.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="td-cons r ${tx.kmPerLitre?'val':'dash'}">${tx.kmPerLitre?tx.kmPerLitre+' km/L':'—'}</td><td class="td-cons r ${tx.costPerKm?'':'dash'}" style="font-size:10px;">${tx.costPerKm?'R'+tx.costPerKm+'/km':'—'}</td></tr>`;
   }).join('');
 
-  const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn">${svgIcon('alert-triangle')}<span>Odometer query: one or more readings are lower than the previous entry. Please verify with the fuel supplier or the driver — may be a data capture error.</span></div>`:'';
+  const odoNote=v.hasOdometerIssue?`<div class="vc-note note-warn">${svgIcon('alert-triangle')}<span>Odometer query: one or more readings are lower than the previous entry or jumped implausibly far. Please verify with the fuel supplier or the driver — may be a data capture error.</span></div>`:'';
   const highNote=v.isHighSpend?`<div class="vc-note note-high"><span class="status-dot"></span><span>High spend alert: this vehicle's fuel cost is significantly above the fleet average for this period. Please review.</span></div>`:'';
   const chevron=`<svg class="vc-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 8 10 13 15 8"/></svg>`;
 
