@@ -9,13 +9,14 @@ Greg is a non-technical solo builder — plain English, short answers.
 Session state lives in the planning chat's knowledge file, not here —
 this file is stable rules only.
 
-## The app is ELEVEN files — back up all eleven before any change
+## The app is TWELVE files — back up all twelve before any change
 index.html (~428KB, single-file app), driver.html, sw.js,
 manifest.json, esc.js, monitor.js, sentry.bundle.min.js,
 xlsx.full.min.js (self-hosted SheetJS 0.20.3 — patched, do not
 downgrade to npm/CDN 0.18.5), pdf-lib.min.js (self-hosted 1.17.1),
 hero.jpg (default hero background image),
-savika-hero.jpg (Savika per-tenant branding hero image).
+savika-hero.jpg (Savika per-tenant branding hero image),
+demo-hero.jpg (Demo Fleet per-tenant branding hero image).
 The sw.js precache also lists 5 fleetdesk-icon files (svg +
 32/180/192/512 png) — static, regenerable from the SVG, not part
 of the backup ritual.
