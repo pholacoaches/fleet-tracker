@@ -5446,15 +5446,21 @@ function renderTyreVehiclePanel(){
 }
 
 async function fetchLatestOdoForPlate(plate){
+  // Baseline = approved readings only: a pending/flagged garbage reading must
+  // never become the tyre/maintenance prefill (odo-sanity-checks fix 2).
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&select=odometer&order=created_at.desc&limit=1`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&status=eq.approved&select=odometer&order=created_at.desc&limit=1`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(res.ok){
       const rows=await res.json();
       if(rows.length>0&&rows[0].odometer!=null)return rows[0].odometer;
+    }else{
+      console.error('[FleetDesk] fetchLatestOdoForPlate failed:',res.status);
     }
-  }catch{}
+  }catch(err){
+    console.error('[FleetDesk] fetchLatestOdoForPlate error:',err);
+  }
   // Fall back to the latest fuel-report transaction for this vehicle
   const v=currentReport?currentReport.vehicles.find(v=>v.plate===plate):null;
   if(v&&v.transactions&&v.transactions.length>0){
