@@ -32,7 +32,9 @@
  *                        the HMAC token binds {code, tenant, path, AI read}.
  *   POST /driver/submit  Exchanges the token + typed values for the reading
  *                        row. photo_verified and ai_odometer are set HERE,
- *                        never by the client.
+ *                        never by the client. A missing token is a legal
+ *                        "no photo" submission (option 3, 2026-09-15):
+ *                        photo_path/ai_odometer null, photo_verified false.
  *
  * Everything else — including "/", "/login", "/auth/*" and the legacy
  * "/ai/driver" (removed in the P1 cleanup, 2026-09-10) — is 404.
@@ -941,7 +943,8 @@ async function computeHistoryFlag(env, tenantId, plate, odometer) {
 // of the typed value), plate checked against the tenant's own vehicle list.
 // Prefer: return=representation + a row-count check — a "success" that wrote
 // nothing is a failure (project rule: 204 lies).
-// Body: { photo_token, plate, odometer, notes? }.
+// Body: { photo_token?, plate, odometer, notes? } — photo_token optional
+// since option 3 (2026-09-15): absent means a "no photo" submission.
 async function handleDriverSubmit(request, env, cors) {
   if (!env.SUPABASE_SECRET_KEY || !env.PHOTO_TOKEN_KEY) return jsonError(cors, 500, 'api_error', 'Proxy is not configured.');
   const pre = await driverPrelude(request, env, cors);
@@ -950,9 +953,16 @@ async function handleDriverSubmit(request, env, cors) {
   const { body, error } = await readJsonBody(request, MAX_BODY_SUBMIT);
   if (error) return jsonError(cors, 400, 'invalid_request_error', error);
 
-  const token = await readPhotoToken(env, body && body.photo_token);
-  if (!token || token.c !== pre.code || token.t !== pre.driver.tenant_id || typeof token.p !== 'string') {
-    return jsonError(cors, 401, 'invalid_request_error', 'Photo check expired — please retake the photo and submit again.');
+  // Option 3 (2026-09-15): a missing photo_token is a legal "no photo"
+  // submission (bad signal — the photo never reached /driver/photo). The
+  // reading saves with photo_path null, ai_odometer null, photo_verified
+  // false. When a token IS present it must still verify exactly as before.
+  let token = null;
+  if (body && body.photo_token) {
+    token = await readPhotoToken(env, body.photo_token);
+    if (!token || token.c !== pre.code || token.t !== pre.driver.tenant_id || typeof token.p !== 'string') {
+      return jsonError(cors, 401, 'invalid_request_error', 'Photo check expired — please retake the photo and submit again.');
+    }
   }
   const odometer = body.odometer;
   if (!Number.isInteger(odometer) || odometer < ODO_MIN || odometer > ODO_MAX) {
@@ -964,7 +974,7 @@ async function handleDriverSubmit(request, env, cors) {
   }
   const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim().slice(0, NOTES_MAX) : null;
 
-  const aiOdo = Number.isInteger(token.a) ? token.a : null;
+  const aiOdo = token && Number.isInteger(token.a) ? token.a : null;
   const photoVerified = aiOdo !== null && Math.abs(odometer - aiOdo) <= AI_MATCH_TOLERANCE_KM;
   const historyFlag = await computeHistoryFlag(env, pre.driver.tenant_id, plate, odometer);
 
@@ -985,7 +995,7 @@ async function handleDriverSubmit(request, env, cors) {
       driver_name: pre.driver.name,
       // Same "bucket/path" shape the old client wrote — the dashboard's
       // getSignedPhotoUrl strips the bucket prefix.
-      photo_path: `${ODO_PHOTO_BUCKET}/${token.p}`,
+      photo_path: token ? `${ODO_PHOTO_BUCKET}/${token.p}` : null,
       photo_verified: photoVerified,
       // odo-sanity-checks: verdict vs the last approved reading at submit
       // time (below_last | jump | null). Warn-only — admin sees it at approval.
