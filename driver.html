@@ -322,7 +322,6 @@ let currentFleetNo='';    // fleet/bus number of the picked vehicle ('' when not
 let photoBase64='';       // compressed JPEG dataURL (preview + AI retry)
 let photoToken='';        // P1: Worker-issued HMAC token binding the stored photo + its AI read
 let aiDetectedOdometer=null;
-let aiFailCount=0;        // consecutive AI read failures for THIS submission (pilot fix 1b)
 
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('show',s.id===id));
@@ -503,9 +502,9 @@ async function handlePhoto(event){
     photoArea.classList.add('has-photo');
     document.getElementById('retakeBtn').style.display='block';
     document.getElementById('photoRequiredBanner').style.display='none';
-    // Pilot fix 1b: Submit stays disabled until the AI read resolves — it is
-    // enabled on a successful read, or after the SECOND failed read (manual
-    // entry fallback). readOdometerWithAI owns the button from here.
+    // Submit stays disabled until the AI read resolves — readOdometerWithAI
+    // owns the button from here and re-enables it on EVERY outcome (option 3,
+    // 2026-09-15: the AI read assists, it never gates submission).
     document.getElementById('submitBtn').disabled=true;
     await readOdometerWithAI(photoBase64.split(',')[1]);
   }catch(err){
@@ -527,20 +526,21 @@ async function readOdometerWithAI(base64){
   // is still NEVER pre-filled from the AI — the two values stay independent
   // and the Worker records both (odometer vs ai_odometer) at submit.
   //
-  // Same four outcomes as before (pilot fixes 1b/1c), only 'unreadable'
-  // counts a strike —
+  // Same four outcomes as before, but since option 3 (2026-09-15) EVERY
+  // outcome enables Submit — the AI read assists, it never gates submission:
   //   'ok'          model returned an integer odometer
-  //   'unreadable'  model answered, explicitly {"odometer": null}
+  //   'unreadable'  model answered, explicitly {"odometer": null} — manual
+  //                 entry, ai_odometer stays null (photo-unverified)
   //   'error'       fetch threw or non-2xx HTTP — a CONNECTION problem:
-  //                 offer Retry on the same photo, no strike. A 200 with
-  //                 outcome:"error" (Worker answered, AI failed to judge)
-  //                 counts a strike like 'unreadable' — after two, manual
-  //                 entry (accepted: AI outage → unverified readings).
+  //                 Retry re-sends the same photo. A 200 with outcome:"error"
+  //                 (Worker answered, AI failed to judge) is treated as
+  //                 'unreadable'.
   //   'limited'     429 (per-code / per-IP throttle, or Anthropic's own
-  //                 limit): calm message + Retry, no strike.
+  //                 limit): calm message + Retry also available.
   // The photo_token comes back on EVERY 200 (the photo is stored even when
-  // unreadable — that feeds the two-strike manual path). prev_token makes a
-  // retake or Retry REPLACE the previous upload instead of accumulating.
+  // unreadable — manual entries keep their photo as evidence). prev_token
+  // makes a retake or Retry REPLACE the previous upload instead of
+  // accumulating.
   let outcome='error',aiOdo=null;
   try{
     const response=await fetch(`${WORKER}/driver/photo`,{
@@ -563,7 +563,6 @@ async function readOdometerWithAI(base64){
   }
   if(outcome==='ok'){
     aiDetectedOdometer=aiOdo;
-    aiFailCount=0;
     status.className='ai-status success';
     status.textContent='✅ Photo read — now type the reading yourself below';
     result.textContent=`Photo shows: ${aiOdo.toLocaleString('en-ZA')} km`;
@@ -576,30 +575,25 @@ async function readOdometerWithAI(base64){
   checkAiMismatch();
   status.className='ai-status error';
   if(outcome==='limited'){
-    status.textContent='⏸ Too many photos in a short time — wait a minute, then tap Retry';
+    status.textContent='⏸ Too many photos in a short time — wait a minute and tap Retry, or type the reading below and submit';
     document.getElementById('aiRetryBtn').style.display='block';
-    document.getElementById('submitBtn').disabled=true;
+    document.getElementById('submitBtn').disabled=false;
     return;
   }
   if(outcome==='error'){
-    // No strike: the photo was never judged. Submit stays disabled — Retry
-    // re-sends the same photo once the signal is back.
-    status.textContent='⚠ Connection problem — check your signal and try again';
+    // The photo was never judged (and may not have reached the server).
+    // Retry re-sends the same photo once the signal is back, but the driver
+    // can also type the reading and submit.
+    status.textContent='⚠ Connection problem — tap Retry, or type the reading below and submit';
     document.getElementById('aiRetryBtn').style.display='block';
-    document.getElementById('submitBtn').disabled=true;
+    document.getElementById('submitBtn').disabled=false;
     return;
   }
-  // Pilot fix 1b: genuinely unreadable photo. The first failure forces a
-  // retake; the second allows manual entry (ai_odometer stays null, so the
-  // office can see the reading was not photo-verified).
-  aiFailCount++;
-  if(aiFailCount===1){
-    status.textContent='⚠ Couldn’t read the odometer — retake with the total km filling the frame';
-    document.getElementById('submitBtn').disabled=true;
-  }else{
-    status.textContent='⚠ Still couldn’t read the photo — type the reading below. The office will see it as photo unverified.';
-    document.getElementById('submitBtn').disabled=false;
-  }
+  // Option 3 (2026-09-15): the AI read is an assistant, not a gatekeeper.
+  // Any unreadable photo unlocks manual entry immediately (ai_odometer stays
+  // null, so the office sees the reading as photo-unverified).
+  status.textContent='⚠ Couldn’t read the odometer — retake the photo, or type the reading below and submit';
+  document.getElementById('submitBtn').disabled=false;
 }
 
 // Pilot fix 1c: re-run the AI read on the photo already taken (no new capture)
@@ -622,7 +616,7 @@ function checkAiMismatch(){
 }
 
 async function submitReading(){
-  if(!photoToken){showDriverError('Please take a photo of your odometer first.');return;}
+  if(!photoToken&&!photoBase64){showDriverError('Please take a photo of your odometer first.');return;}
   const odo=parseInt(document.getElementById('odoInput').value);
   const notes=document.getElementById('notesInput').value.trim();
   // Pilot fix 1c: an AI/typed mismatch no longer blocks submission — the
@@ -630,6 +624,10 @@ async function submitReading(){
   // (the dashboard already badges rows where they differ by more than 25 km).
   if(!odo||odo<1000){showDriverError('Please enter a valid odometer reading — must be at least 1,000 km.');return;}
   if(odo>2000000){showDriverError('That reading seems too high. Please check the odometer and try again.');return;}
+  // Option 3 (2026-09-15): a photo that never reached the server no longer
+  // blocks the reading — it goes in as a no-photo submission, clearly badged
+  // for the office (photo_path null, photo_verified false, set server-side).
+  if(!photoToken)showDriverError('Your photo didn’t reach the server — submitting your typed reading without a photo.');
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   btn.innerHTML='<span class="loading-spinner"></span> Submitting...';
@@ -641,7 +639,7 @@ async function submitReading(){
     const response=await fetch(`${WORKER}/driver/submit`,{
       method:'POST',
       headers:{'Content-Type':'application/json','X-Driver-Code':driver.personal_code},
-      body:JSON.stringify({photo_token:photoToken,plate:currentPlate,odometer:odo,notes:notes||null})
+      body:JSON.stringify({...(photoToken?{photo_token:photoToken}:{}),plate:currentPlate,odometer:odo,notes:notes||null})
     });
     let out=null;
     try{out=await response.json();}catch{/* non-JSON body → generic error below */}
@@ -703,7 +701,7 @@ function resetFormFields(){
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   btn.innerHTML='✅ Submit Odometer Reading';
-  photoBase64='';photoToken='';aiDetectedOdometer=null;aiFailCount=0;
+  photoBase64='';photoToken='';aiDetectedOdometer=null;
 }
 
 function startAnother(){
