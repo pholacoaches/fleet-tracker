@@ -616,7 +616,7 @@ function checkAiMismatch(){
 }
 
 async function submitReading(){
-  if(!photoToken){showDriverError('Please take a photo of your odometer first.');return;}
+  if(!photoToken&&!photoBase64){showDriverError('Please take a photo of your odometer first.');return;}
   const odo=parseInt(document.getElementById('odoInput').value);
   const notes=document.getElementById('notesInput').value.trim();
   // Pilot fix 1c: an AI/typed mismatch no longer blocks submission — the
@@ -624,6 +624,10 @@ async function submitReading(){
   // (the dashboard already badges rows where they differ by more than 25 km).
   if(!odo||odo<1000){showDriverError('Please enter a valid odometer reading — must be at least 1,000 km.');return;}
   if(odo>2000000){showDriverError('That reading seems too high. Please check the odometer and try again.');return;}
+  // Option 3 (2026-09-15): a photo that never reached the server no longer
+  // blocks the reading — it goes in as a no-photo submission, clearly badged
+  // for the office (photo_path null, photo_verified false, set server-side).
+  if(!photoToken)showDriverError('Your photo didn’t reach the server — submitting your typed reading without a photo.');
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   btn.innerHTML='<span class="loading-spinner"></span> Submitting...';
@@ -635,7 +639,7 @@ async function submitReading(){
     const response=await fetch(`${WORKER}/driver/submit`,{
       method:'POST',
       headers:{'Content-Type':'application/json','X-Driver-Code':driver.personal_code},
-      body:JSON.stringify({photo_token:photoToken,plate:currentPlate,odometer:odo,notes:notes||null})
+      body:JSON.stringify({...(photoToken?{photo_token:photoToken}:{}),plate:currentPlate,odometer:odo,notes:notes||null})
     });
     let out=null;
     try{out=await response.json();}catch{/* non-JSON body → generic error below */}
