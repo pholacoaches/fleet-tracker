@@ -357,8 +357,9 @@ async function init(){
   const params=new URLSearchParams(window.location.search);
   const code=(params.get('d')||'').trim().toUpperCase();
   // Old ?id=PLATE links (flow removed) and missing/malformed codes all land
-  // here. P1: both the legacy AAA-0000 and the new AAA-XXXXXXXX codes pass.
-  if(!code||!/^[A-Z]{3}-(?:[0-9]{4}|[A-HJ-NP-Z2-9]{8})$/.test(code)){showScreen('invalidScreen');return;}
+  // here. P2: only the AAA-XXXXXXXX format exists now — every tenant's codes
+  // were regenerated (16 Sep 2026), so legacy AAA-0000 links are invalid.
+  if(!code||!/^[A-Z]{3}-[A-HJ-NP-Z2-9]{8}$/.test(code)){showScreen('invalidScreen');return;}
   try{
     // P1: the Worker validates the code (rate-limited) via driver_page_init
     // server-side and returns a TRIMMED payload — first name only, the two
