@@ -1682,7 +1682,7 @@ function wipeTenantLocalData(){
     try{tid=JSON.parse(localStorage.getItem(TENANT_CACHE_KEY))?.id||null;}catch{}
   }
   // Bare (pre-#4a) leftovers of the same keys are removed too.
-  [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY,SERVICE_MIGRATED_KEY].forEach(k=>{
+  [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY,SERVICE_MIGRATED_KEY,UPLOAD_IDS_MIGRATED_KEY].forEach(k=>{
     if(tid)localStorage.removeItem(k+':'+tid);
     localStorage.removeItem(k);
   });
@@ -2400,11 +2400,70 @@ let activeReportIndex=state.reports.length-1;
 let currentView='grid';
 let currentReport=null;
 
+// ── UPLOAD IDS ↔ DATABASE (P2 remainder) ─────────────────────────────────────
+// upload_ids is the source of truth for duplicate-upload detection: one row
+// per tenant per (source, id). Dedup checks always fetch fresh from the DB —
+// ids written by other devices must count — so there is NO cache; localStorage
+// (fleet_upload_ids_v1) survives only as input to the one-time migration.
 const UPLOAD_IDS_KEY='fleet_upload_ids_v1';
-function loadUploadIds(){try{return JSON.parse(localStorage.getItem(nsKey(UPLOAD_IDS_KEY)))||{engen:[],freight:[]};}catch{return{engen:[],freight:[]};}}
-function saveUploadIds(d){localStorage.setItem(nsKey(UPLOAD_IDS_KEY),JSON.stringify(d));}
-function checkEngenDuplicates(ids){const s=new Set(loadUploadIds().engen||[]);return ids.filter(i=>s.has(i));}
-function checkFreightDuplicates(nums){const s=new Set(loadUploadIds().freight||[]);return nums.filter(n=>s.has(n));}
+const UPLOAD_IDS_MIGRATED_KEY='fleet_upload_ids_migrated_v1';
+function loadLocalUploadIds(){try{return JSON.parse(localStorage.getItem(nsKey(UPLOAD_IDS_KEY)))||{engen:[],freight:[]};}catch{return{engen:[],freight:[]};}}
+
+// One-time per tenant: push this device's known upload ids to the DB so
+// statements uploaded before this build are still caught as duplicates.
+// ignore-duplicates makes a re-run a no-op; the flag is only set once the
+// insert has succeeded.
+async function migrateLocalUploadIdsOnce(){
+  if(localStorage.getItem(nsKey(UPLOAD_IDS_MIGRATED_KEY)))return;
+  const local=loadLocalUploadIds();
+  const rows=[
+    ...(local.engen||[]).map(i=>({source:'engen',upload_id:String(i)})),
+    ...(local.freight||[]).map(i=>({source:'freight',upload_id:String(i)}))
+  ];
+  if(rows.length){
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/upload_ids?on_conflict=tenant_id,source,upload_id`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'resolution=ignore-duplicates,return=minimal'},
+      body:JSON.stringify(rows)
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    console.log('[FleetDesk] Local upload ids migrated to the database');
+  }
+  localStorage.setItem(nsKey(UPLOAD_IDS_MIGRATED_KEY),new Date().toISOString());
+}
+
+// Authoritative read: migrate-once, then fetch the tenant's ids for one source
+// fresh from the DB. Throws on any failure — a dedup check that cannot see the
+// DB must abort the upload, never guess.
+async function fetchUploadIdsFromDb(source){
+  await migrateLocalUploadIdsOnce();
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/upload_ids?select=upload_id&source=eq.${source}`,{
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+  });
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  return new Set((await res.json()).map(r=>r.upload_id));
+}
+
+async function checkFreightDuplicates(nums){const s=await fetchUploadIdsFromDb('freight');return nums.filter(n=>s.has(n));}
+
+// After a report save: record its ids so a re-upload is caught on every
+// device. The ids were pre-filtered as new, so 0 rows back = nothing was
+// written (RLS block) — a failure, never "already there".
+async function appendUploadIdsToDb(newEngenIds,newFreightIds){
+  const rows=[
+    ...newEngenIds.map(i=>({source:'engen',upload_id:String(i)})),
+    ...newFreightIds.map(i=>({source:'freight',upload_id:String(i)}))
+  ];
+  if(rows.length===0)return;
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/upload_ids?on_conflict=tenant_id,source,upload_id`,{
+    method:'POST',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'resolution=ignore-duplicates,return=representation'},
+    body:JSON.stringify(rows)
+  });
+  if(!res.ok)throw new Error('HTTP '+res.status+' — '+await res.text().catch(()=>''));
+  const saved=await res.json();
+  if(!Array.isArray(saved)||saved.length===0)throw new Error('no rows returned');
+}
 
 function getPeriod(scheduleDate){
   if(!scheduleDate)return'';
@@ -2521,11 +2580,13 @@ function finaliseAndSave(reportData,newEngenIds,newFreightIds){
     state.reports.push(report);
     activeReportIndex=state.reports.length-1;
   }
-  const ids=loadUploadIds();
-  ids.engen=[...(ids.engen||[]),...newEngenIds];
-  ids.freight=[...(ids.freight||[]),...newFreightIds];
-  saveUploadIds(ids);
   saveStorage(state);
+  // Dedup ids go to the DB. A failure here cannot un-save the report — warn
+  // instead, because a re-upload of this same file may then not be flagged.
+  appendUploadIdsToDb(newEngenIds,newFreightIds).catch(err=>{
+    console.error('[FleetDesk] Cloud save of the upload ids failed:',err);
+    alert('⚠️ The report was saved, but its duplicate-detection ids could not be saved to the cloud.\n\nIf this same statement is uploaded again it may NOT be flagged as a duplicate.');
+  });
   // Write-through to the DB. On failure the period stays marked dirty and is
   // re-pushed by the next syncFuelReports(), so the DB copy can't silently
   // overwrite this newer local version on the next load.
@@ -2583,7 +2644,7 @@ async function parseFreightExcel(file){
     if(data.length===0) throw new Error('No valid fuel rows found. Check the browser console (F12) for raw row data to diagnose the column layout.');
 
     const orderNums=data.map(r=>String(r[2]).trim()).filter(Boolean);
-    const dupes=checkFreightDuplicates(orderNums);
+    const dupes=await checkFreightDuplicates(orderNums);
     if(dupes.length>0){ hideLoading(); alert('This file has already been uploaded. Please check your upload history.'); return; }
 
     function fmtDate(raw){
@@ -2711,7 +2772,7 @@ async function extractWithAI(base64Data,filename){
     vehicles.forEach(v=>v.transactions.sort((a,b)=>parseDateStr(a.date)-parseDateStr(b.date)));
 
     // Filter-based deduplication: skip already-seen transactions so partial re-uploads work correctly
-    const existingEngenIds=new Set(loadUploadIds().engen||[]);
+    const existingEngenIds=await fetchUploadIdsFromDb('engen');
     const newVehicles=[];
     const newEngenIds=[];
     vehicles.forEach(v=>{
@@ -3380,7 +3441,16 @@ async function clearAllData(){
   const typed=prompt(`⚠️ This deletes ALL fuel reports for ${who} on every device. Type DELETE to confirm. Reports can be restored by support within 30 days.\n\n(A JSON backup is also downloaded to your computer and saved to your cloud backups first.)`);
   if(typed===null)return;
   if(typed.trim()!=='DELETE'){alert('Nothing was deleted — you must type DELETE (in capitals) to confirm.');return;}
-  const backup={exportedAt:new Date().toISOString(),data:state,uploadIds:loadUploadIds()};
+  // Upload ids come fresh from the DB (the authoritative copy) — an
+  // unreadable id list would make the backup incomplete, so stop here.
+  let backupIds;
+  try{
+    backupIds={engen:[...await fetchUploadIdsFromDb('engen')],freight:[...await fetchUploadIdsFromDb('freight')]};
+  }catch(err){
+    alert('⚠️ Could not read the upload history from the cloud — nothing has been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.');
+    return;
+  }
+  const backup={exportedAt:new Date().toISOString(),data:state,uploadIds:backupIds};
   const json=JSON.stringify(backup,null,2);
   // 1) Download the local backup first (existing behaviour)
   const a=document.createElement('a');
@@ -3395,7 +3465,24 @@ async function clearAllData(){
     alert('⚠️ Cloud backup failed — your data has NOT been cleared.\n\n'+(err.message||err)+'\n\n(The local JSON file was still downloaded. Please try again, or keep that file safe.)');
     return;
   }
-  // 3) Soft-delete every live report in the DB — must also succeed first
+  // 3) Delete the tenant's dedup ids — after a clear, re-uploading the old
+  // statements must work again. Runs BEFORE the report soft-delete so a
+  // partial failure can never leave Clear Data permanently blocked (the
+  // report step below refuses to run twice). 0 rows deleted only counts as
+  // failure when the fetch above showed ids exist.
+  try{
+    const delRes=await fetch(`${SUPABASE_URL}/rest/v1/upload_ids?source=in.(engen,freight)`,{
+      method:'DELETE',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Prefer':'return=representation'}
+    });
+    if(!delRes.ok)throw new Error('HTTP '+delRes.status);
+    const gone=await delRes.json();
+    if((backupIds.engen.length+backupIds.freight.length)>0&&(!Array.isArray(gone)||gone.length===0))throw new Error('no rows deleted');
+  }catch(err){
+    alert('⚠️ Could not clear the upload history in the cloud — the reports have NOT been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.');
+    return;
+  }
+  // 4) Soft-delete every live report in the DB — must also succeed first
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?deleted_at=is.null&select=period`,{
       method:'PATCH',
@@ -3415,10 +3502,12 @@ async function clearAllData(){
     alert('⚠️ Could not clear the cloud data — nothing has been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.');
     return;
   }
-  // 4) All good — clear the local cache
+  // 5) All good — clear the local cache
   state={reports:[]};saveStorage(state);
   saveDirtyPeriods([]);
-  saveUploadIds({engen:[],freight:[]});
+  // Legacy local id cache dies too (the migration marker stays set, so these
+  // cleared ids can never be re-migrated back into the DB)
+  localStorage.removeItem(nsKey(UPLOAD_IDS_KEY));
   activeReportIndex=-1;currentReport=null;
   document.getElementById('emptyState').classList.remove('hidden');
   document.getElementById('dashboard').classList.add('hidden');
