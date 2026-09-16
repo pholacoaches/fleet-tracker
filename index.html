@@ -1630,6 +1630,7 @@ function migrateLegacyLocalData(){
 // from the tenant's namespace now, then let renderDashboard rebuild the view.
 function reloadTenantState(){
   state=loadStorage();
+  serviceData=readServiceCache();
   activeReportIndex=state.reports.length-1;
   currentReport=null;
 }
@@ -1681,7 +1682,7 @@ function wipeTenantLocalData(){
     try{tid=JSON.parse(localStorage.getItem(TENANT_CACHE_KEY))?.id||null;}catch{}
   }
   // Bare (pre-#4a) leftovers of the same keys are removed too.
-  [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY].forEach(k=>{
+  [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY,SERVICE_MIGRATED_KEY].forEach(k=>{
     if(tid)localStorage.removeItem(k+':'+tid);
     localStorage.removeItem(k);
   });
@@ -1750,6 +1751,7 @@ async function showDashboard(){
   recomputeAllStats();
   renderDashboard();          // fast paint from the local cache
   syncFuelReports();          // then the DB (source of truth) takes over
+  syncVehicleService();       // service settings: same cache-then-DB pattern
   fetchSubmissions().then(()=>startRealtimeListener());
   fetchCompliance().then(()=>{updateDiscTabBadge();renderAlertBanner();});
 }
@@ -2262,22 +2264,110 @@ async function syncFuelReports(){
   }
 }
 
+// ── VEHICLE SERVICE ↔ DATABASE (P2 remainder) ────────────────────────────────
+// vehicle_service is the source of truth: one row per tenant per plate
+// (last_service_odo + service_interval). localStorage (fleet_service_v1) is
+// only a cache for fast paint and offline viewing. A save goes to the DB
+// first; the in-memory map and the cache only update once the DB confirms.
 const SERVICE_KEY='fleet_service_v1';
-function loadServiceData(){try{return JSON.parse(localStorage.getItem(nsKey(SERVICE_KEY)))||{};}catch{return{};}}
-function saveServiceData(d){localStorage.setItem(nsKey(SERVICE_KEY),JSON.stringify(d));}
+const SERVICE_MIGRATED_KEY='fleet_service_migrated_v1';
+let serviceData=readServiceCache();
+function readServiceCache(){try{return JSON.parse(localStorage.getItem(nsKey(SERVICE_KEY)))||{};}catch{return{};}}
+function saveServiceCache(){localStorage.setItem(nsKey(SERVICE_KEY),JSON.stringify(serviceData));}
+function loadServiceData(){return serviceData;}
+
+async function upsertVehicleServiceToDb(plate,rec){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_service?on_conflict=tenant_id,plate`,{
+    method:'POST',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+    // updated_at sent explicitly — vehicle_service has no touch trigger
+    body:JSON.stringify({plate,last_service_odo:rec.lastServiceOdo,service_interval:rec.interval,updated_at:new Date().toISOString()})
+  });
+  if(!res.ok)throw new Error('HTTP '+res.status+' — '+await res.text().catch(()=>''));
+  // return=representation: 0 rows back = the DB saved nothing (RLS block) —
+  // that is a failure, never a success (204 lies).
+  const rows=await res.json();
+  if(!Array.isArray(rows)||rows.length===0)throw new Error('no row returned');
+}
+
+// One-time per tenant: push local-only service settings up to the DB. A plate
+// already in the DB is never overwritten (existence check + ignore-duplicates),
+// so a re-run is a no-op, and the flag is only set once every upload has
+// succeeded. Corruption is NOT "nothing to migrate" — leave the flag unset so
+// this retries, and never mark unreadable data as done.
+async function migrateLocalServiceOnce(){
+  if(localStorage.getItem(nsKey(SERVICE_MIGRATED_KEY)))return;
+  const raw=localStorage.getItem(nsKey(SERVICE_KEY));
+  let local=null;
+  if(raw!==null){try{local=JSON.parse(raw);}catch{local=null;}}
+  if(raw!==null&&(local===null||typeof local!=='object')){
+    console.error('[FleetDesk] Local service data exists but cannot be read — NOT marking as migrated');
+    return;
+  }
+  // Only rows that pass the DB checks (both values > 0) are uploaded
+  const plates=Object.keys(local||{}).filter(p=>local[p]&&local[p].lastServiceOdo>0&&local[p].interval>0);
+  if(plates.length){
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_service?select=plate`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const existing=new Set((await res.json()).map(r=>r.plate));
+    const missing=plates.filter(p=>!existing.has(p));
+    if(missing.length){
+      const ins=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_service?on_conflict=tenant_id,plate`,{
+        method:'POST',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'resolution=ignore-duplicates,return=minimal'},
+        body:JSON.stringify(missing.map(p=>({plate:p,last_service_odo:local[p].lastServiceOdo,service_interval:local[p].interval})))
+      });
+      if(!ins.ok)throw new Error('HTTP '+ins.status);
+    }
+    console.log('[FleetDesk] Local service settings migrated to the database');
+  }
+  localStorage.setItem(nsKey(SERVICE_MIGRATED_KEY),new Date().toISOString());
+}
+
+async function fetchVehicleServiceFromDb(){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_service?select=plate,last_service_odo,service_interval`,{
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+  });
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  const map={};
+  (await res.json()).forEach(r=>{map[r.plate]={lastServiceOdo:r.last_service_odo,interval:r.service_interval};});
+  return map;
+}
+
+// Once after login: migrate-once, then make the DB version the live map. On
+// any network failure the cached copy stays in effect and retries next load.
+async function syncVehicleService(){
+  try{
+    await migrateLocalServiceOnce();
+    serviceData=await fetchVehicleServiceFromDb();
+    saveServiceCache();
+    filterVehicles(); // refresh service rows on vehicle cards (no-op pre-render)
+  }catch(err){
+    console.warn('[FleetDesk] Service data sync failed — showing cached data:',err);
+  }
+}
 
 function editVehicleService(plate){
   const form=document.getElementById('vsf-'+plateDomId(plate));
   if(form)form.classList.toggle('open');
 }
-function saveVehicleService(plate){
+async function saveVehicleService(plate){
   const id=plateDomId(plate);
   const odo=parseInt(document.getElementById('vs-odo-'+id)?.value,10);
   const interval=parseInt(document.getElementById('vs-int-'+id)?.value,10);
   if(!odo||!interval||odo<=0||interval<=0){alert('Please enter a valid odometer and interval.');return;}
-  const svcData=loadServiceData();
-  svcData[plate]={lastServiceOdo:odo,interval};
-  saveServiceData(svcData);
+  const rec={lastServiceOdo:odo,interval};
+  try{
+    await upsertVehicleServiceToDb(plate,rec);
+  }catch(err){
+    console.error('[FleetDesk] Vehicle service save failed:',err);
+    alert('⚠️ Could not save to the cloud — nothing was changed.\n\nPlease check your connection and try again.');
+    return;
+  }
+  serviceData[plate]=rec;
+  saveServiceCache();
   filterVehicles();
   const card=document.getElementById('vc-'+id);
   if(card)card.classList.add('open');
