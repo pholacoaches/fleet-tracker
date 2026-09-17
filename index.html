@@ -1472,6 +1472,14 @@ input[type=file] { display: none; }
         </div>
         <div class="history-grid" id="historyGrid"></div>
       </div>
+      <!-- Gap B phase 1: soft-deleted readings / jobs / fuel reports, restorable -->
+      <div class="history-section" style="margin-top:26px;">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-trash"/></svg>Recently Deleted</div>
+          <div class="section-actions" id="rdFilters"></div>
+        </div>
+        <div id="rdList"></div>
+      </div>
     </div>
 
     <!-- TAB 7: TYRES -->
@@ -2113,6 +2121,7 @@ function switchDashTab(tab){
   if(tab==='tyres')renderTyresTab();
   if(tab==='maint')renderMaintTab();
   if(tab==='reports')renderReportsTab();
+  if(tab==='history')renderRecentlyDeleted();
 }
 
 // Data keys are namespaced per tenant via nsKey() once the tenant is known
@@ -2124,8 +2133,9 @@ function saveStorage(d){localStorage.setItem(nsKey(STORAGE_KEY),JSON.stringify(d
 
 // ── FUEL REPORTS ↔ DATABASE (build #4b) ──────────────────────────────────────
 // fuel_reports is the source of truth: one row per tenant per period, soft
-// delete via deleted_at (app never issues DELETE — restore is a support-side
-// SQL action). localStorage (fleet_tracker_v2) is only a cache for fast paint
+// delete via deleted_at (app never issues DELETE — restore lives in the
+// History tab's Recently Deleted section since gap B phase 1).
+// localStorage (fleet_tracker_v2) is only a cache for fast paint
 // and offline viewing. DB writes happen at the mutation points — upload,
 // per-report delete, Clear Data — never on render.
 const FUEL_MIGRATED_KEY='fleet_fuel_migrated_v1';
@@ -3202,18 +3212,18 @@ function renderHistory(){
   }).join('');
 }
 
-// Soft-deletes one period (UPDATE deleted_at — never a real DELETE). Restore
-// is a support-side SQL action; there is deliberately no restore UI.
+// Soft-deletes one period (UPDATE deleted_at — never a real DELETE). Gap B
+// phase 1: restorable from the History tab's Recently Deleted section.
 async function deleteReport(i){
   const r=state.reports[i];
   if(!r)return;
   const period=reportPeriod(r);
-  if(!confirm(`Delete the ${period} report for ${TENANT?.display_name||'your company'}? It can be restored by support within 30 days.`))return;
+  if(!confirm(`Delete the ${period} report for ${TENANT?.display_name||'your company'}?\n\nIt moves to Recently deleted (History tab) and can be restored from there.`))return;
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?period=eq.${encodeURIComponent(period)}&deleted_at=is.null&select=period`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?period=eq.${encodeURIComponent(period)}&deleted_at=is.null&select=id,period`,{
       method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify({deleted_at:new Date().toISOString()})
+      body:JSON.stringify({deleted_at:new Date().toISOString(),deleted_by:getAuthUserId()})
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
     // return=representation: 0 rows back = nothing was soft-deleted (RLS block
@@ -3224,6 +3234,10 @@ async function deleteReport(i){
       alert('Update didn\'t save — please try again.');
       return;
     }
+    // Slim before-snapshot on purpose: the full report JSON still lives in the
+    // soft-deleted row itself — copying it into audit_log would double a
+    // multi-hundred-KB blob per delete.
+    logAudit('delete','fuel_reports',rows[0].id,{period,vehicles:r.vehicles.length,uploadedAt:r.uploadedAt});
   }catch(err){
     console.error('[FleetDesk] Report delete failed:',err);
     alert('Could not delete the report. Please check your connection and try again.');
@@ -3235,6 +3249,118 @@ async function deleteReport(i){
   currentReport=null;
   saveStorage(state);
   renderDashboard();
+  if(currentDashTab==='history')renderRecentlyDeleted();
+}
+
+// ── RECENTLY DELETED (gap B phase 1) ─────────────────────────────────────────
+// History-tab section listing soft-deleted readings, maintenance jobs and fuel
+// reports (100 most recent each), with per-item Restore. Rows come straight
+// from the three tables (deleted_at=not.is.null) — RLS keeps it tenant-scoped.
+let rdRows=[],rdFilter='all';
+const RD_TYPES={
+  odometer_readings:{label:'Reading',badge:'pending'},
+  maintenance_jobs:{label:'Job',badge:'unverified'},
+  fuel_reports:{label:'Report',badge:'approved'}
+};
+
+async function renderRecentlyDeleted(){
+  const list=document.getElementById('rdList');
+  if(!list)return;
+  list.innerHTML='<div class="notif-empty">Loading…</div>';
+  try{
+    const headers={'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()};
+    const q='deleted_at=not.is.null&order=deleted_at.desc&limit=100';
+    const[rRes,jRes,fRes]=await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=id,plate,odometer,driver_name,created_at,deleted_at,deleted_by&${q}`,{headers}),
+      fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?select=id,plate,category,description,date_in,total_cost,deleted_at,deleted_by&${q}`,{headers}),
+      fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?select=id,period,deleted_at,deleted_by&${q}`,{headers})
+    ]);
+    if(!rRes.ok||!jRes.ok||!fRes.ok)throw new Error(`HTTP ${rRes.status}/${jRes.status}/${fRes.status}`);
+    const[readings,jobs,reports]=await Promise.all([rRes.json(),jRes.json(),fRes.json()]);
+    rdRows=[
+      ...readings.map(r=>({type:'odometer_readings',id:r.id,deleted_at:r.deleted_at,deleted_by:r.deleted_by,
+        label:`${r.plate||'—'} · ${r.odometer?Number(r.odometer).toLocaleString('en-US')+' km':'—'} · ${r.driver_name||'—'}`,
+        sub:`submitted ${fmtDayMonYear(r.created_at)}`})),
+      ...jobs.map(j=>({type:'maintenance_jobs',id:j.id,deleted_at:j.deleted_at,deleted_by:j.deleted_by,
+        label:`${j.plate||'—'} · ${(MAINT_CATEGORIES[j.category]||MAINT_CATEGORIES.other).label}${j.total_cost?' · '+fmtTotalR(j.total_cost):''}`,
+        sub:`${j.description?String(j.description).slice(0,60):''} · in ${fmtDayMonYear(j.date_in)}`})),
+      ...reports.map(f=>({type:'fuel_reports',id:f.id,deleted_at:f.deleted_at,deleted_by:f.deleted_by,
+        label:`${f.period} fuel report`,sub:''}))
+    ].sort((a,b)=>new Date(b.deleted_at)-new Date(a.deleted_at));
+    renderRdList();
+  }catch(err){
+    console.error('[FleetDesk] Recently deleted fetch failed:',err);
+    list.innerHTML='<div class="notif-empty">Could not load Recently Deleted. Please check your connection and try again.</div>';
+  }
+}
+
+function rdSetFilter(f){rdFilter=f;renderRdList();}
+
+function renderRdList(){
+  const chips=document.getElementById('rdFilters');
+  const list=document.getElementById('rdList');
+  if(!chips||!list)return;
+  const counts={all:rdRows.length};
+  Object.keys(RD_TYPES).forEach(t=>counts[t]=rdRows.filter(r=>r.type===t).length);
+  chips.innerHTML=[['all','All'],['odometer_readings','Readings'],['maintenance_jobs','Jobs'],['fuel_reports','Reports']]
+    .map(([k,lbl])=>`<button onclick="rdSetFilter('${k}')" style="padding:6px 14px;border-radius:20px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid ${rdFilter===k?'var(--accent)':'var(--border)'};background:${rdFilter===k?'var(--accent-light)':'transparent'};color:${rdFilter===k?'var(--accent)':'var(--text3)'};">${lbl} (${counts[k]})</button>`).join('');
+  const rows=rdFilter==='all'?rdRows:rdRows.filter(r=>r.type===rdFilter);
+  if(rows.length===0){
+    list.innerHTML='<div class="notif-empty">Nothing in Recently Deleted.</div>';
+    return;
+  }
+  const me=getAuthUserId();
+  list.innerHTML=rows.map(r=>{
+    const t=RD_TYPES[r.type];
+    const who=r.deleted_by?(r.deleted_by===me?(getAuthEmail()||'you'):'another user'):'—';
+    return`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap;">
+      <span class="sub-badge ${t.badge}" style="flex-shrink:0;">${t.label}</span>
+      <div style="flex:1;min-width:180px;">
+        <div style="font-weight:700;color:var(--text2);">${escapeHtml(r.label)}</div>
+        <div style="color:var(--text3);font-size:11px;">${r.sub?escapeHtml(r.sub)+' · ':''}deleted ${fmtDayMonYear(r.deleted_at)} ${fmtTimeHM(r.deleted_at)} by ${escapeHtml(who)}</div>
+      </div>
+      <button onclick="restoreDeleted('${r.type}',${escapeHtml(JSON.stringify(r.id))})" style="flex-shrink:0;padding:6px 14px;background:var(--green);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('circle-check')}Restore</button>
+    </div>`;
+  }).join('');
+}
+
+// Restore = clear deleted_at + deleted_by. Guarded on deleted_at=not.is.null:
+// restoring a row someone already restored fails loudly instead of silently
+// re-stamping. Then the affected view refetches from the DB.
+async function restoreDeleted(table,id){
+  if(!RD_TYPES[table])return;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}&deleted_at=not.is.null&select=id`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({deleted_at:null,deleted_by:null})
+    });
+    if(!res.ok){
+      console.error('[FleetDesk] Restore failed:',table,res.status,await res.text().catch(()=>''));
+      alert('Could not restore the item. Please check your connection and try again.');
+      return;
+    }
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] Restore matched no row:',table,id);
+      alert('Restore didn\'t save — it may already have been restored. Refreshing the list.');
+      renderRecentlyDeleted();
+      return;
+    }
+    logAudit('restore',table,id,null);
+    if(table==='odometer_readings')await fetchSubmissions();
+    if(table==='maintenance_jobs')await renderMaintTab();
+    if(table==='fuel_reports'){
+      state.reports=await fetchFuelReportsFromDb();
+      activeReportIndex=state.reports.length-1;
+      currentReport=null;
+      renderDashboard();
+    }
+    renderRecentlyDeleted();
+  }catch(err){
+    console.error('[FleetDesk] Restore error:',err);
+    alert('Could not restore the item. Please check your connection and try again.');
+  }
 }
 
 function renderComparison(){
@@ -3494,10 +3620,10 @@ async function clearAllData(){
   }
   // 4) Soft-delete every live report in the DB — must also succeed first
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?deleted_at=is.null&select=period`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?deleted_at=is.null&select=id,period`,{
       method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify({deleted_at:new Date().toISOString()})
+      body:JSON.stringify({deleted_at:new Date().toISOString(),deleted_by:getAuthUserId()})
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
     // return=representation: 0 rows back = the DB soft-deleted nothing (RLS
@@ -3508,6 +3634,9 @@ async function clearAllData(){
       alert('Update didn\'t save — please try again.');
       return;
     }
+    // Gap B phase 1: one audit row per report cleared (slim snapshot — the
+    // report JSON survives in the soft-deleted row).
+    rows.forEach(row=>logAudit('delete','fuel_reports',row.id,{period:row.period,via:'clear_all_data'}));
   }catch(err){
     alert('⚠️ Could not clear the cloud data — nothing has been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.');
     return;
@@ -6455,6 +6584,7 @@ async function deleteMaintJob(id){
     }
     logAudit('delete','maintenance_jobs',id,snap);
     await renderMaintTab();
+    if(currentDashTab==='history')renderRecentlyDeleted();
   }catch(err){
     console.error('[FleetDesk] Job delete error:',err);
     alert('Could not delete the job. Please check your connection and try again.');
@@ -7550,6 +7680,7 @@ async function deleteReading(id){
       _dhRows=_dhRows.filter(r=>r.id!==id);
       renderDriverHistoryList(_dhHasMore);
     }
+    if(currentDashTab==='history')renderRecentlyDeleted();
   }catch(err){
     console.error('[FleetDesk] Reading delete error:',err);
     alert('Could not delete the reading. Please check your connection and try again.');
