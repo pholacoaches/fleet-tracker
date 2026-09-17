@@ -5903,7 +5903,7 @@ async function fetchMaintData(){
   try{
     const headers={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`};
     const[jobsRes,partsRes]=await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?select=*&order=date_in.desc,created_at.desc`,{headers}),
+      fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?select=*&deleted_at=is.null&order=date_in.desc,created_at.desc`,{headers}),
       fetch(`${SUPABASE_URL}/rest/v1/maintenance_parts?select=*`,{headers})
     ]);
     if(jobsRes.ok)maintJobs=await jobsRes.json();
@@ -6167,7 +6167,10 @@ function renderMaintJobCard(j,i){
     </div>
     <div class="maint-job-footer">
       <span>${j.invoice_url?invoiceLinkHtml(j.invoice_url,'View Invoice'):''}</span>
-      ${open?`<button class="def-save" style="background:var(--green);" onclick="markJobDone('${j.id}')">${svgIcon('circle-check')}Back in service</button>`:''}
+      <span style="display:inline-flex;gap:8px;align-items:center;">
+        ${open?`<button class="def-save" style="background:var(--green);" onclick="markJobDone('${j.id}')">${svgIcon('circle-check')}Back in service</button>`:''}
+        <button class="def-save" title="Delete job" style="background:transparent;color:var(--red);border:1.5px solid var(--red);" onclick="deleteMaintJob('${j.id}')">${svgIcon('trash')}Delete</button>
+      </span>
     </div>
   </div>`;
 }
@@ -6372,8 +6375,17 @@ async function submitMaintJob(){
     }
     const saved=await res.json();
     const jobId=saved[0]&&saved[0].id;
-    if(jobId)logAudit('add','maintenance_jobs',jobId,null);
-    if(jobId&&parts.length>0){
+    // return=representation: 0 rows / no id back = the job was NOT saved
+    // (204 lies rule) — fail loudly instead of rendering as if it worked.
+    if(!jobId){
+      console.error('[FleetDesk] Job save returned no row');
+      errEl.textContent='Could not save the job. Please try again.';
+      errEl.classList.add('show');
+      btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+'Save Job';
+      return;
+    }
+    logAudit('add','maintenance_jobs',jobId,null);
+    if(parts.length>0){
       const pRes=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_parts`,{
         method:'POST',
         headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
@@ -6414,6 +6426,39 @@ async function markJobDone(id){
     logAudit('edit','maintenance_jobs',id,_beforeSnap);
     await renderMaintTab();
   }catch{alert('Could not update the job. Please check your connection and try again.');}
+}
+
+// Gap B phase 1: admin soft-delete of a maintenance job. Parts rows stay put —
+// they are keyed to the job and come back with it on restore.
+async function deleteMaintJob(id){
+  const job=maintJobs.find(j=>j.id===id);
+  const label=job?`${job.plate} — ${(MAINT_CATEGORIES[job.category]||MAINT_CATEGORIES.other).label}, ${fmtDayMonYear(job.date_in)}`:'this job';
+  if(!confirm(`Delete this maintenance job (${label})?\n\nIt moves to Recently deleted (History tab) and can be restored from there.`))return;
+  const snap=job?{...job}:null;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}&deleted_at=is.null&select=id`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({deleted_at:new Date().toISOString(),deleted_by:getAuthUserId()})
+    });
+    if(!res.ok){
+      console.error('[FleetDesk] Job delete failed:',res.status,await res.text().catch(()=>''));
+      alert('Could not delete the job. Please check your connection and try again.');
+      return;
+    }
+    // return=representation: 0 rows back = nothing was soft-deleted
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] Job delete matched no row for id',id);
+      alert('Delete didn\'t save — please try again.');
+      return;
+    }
+    logAudit('delete','maintenance_jobs',id,snap);
+    await renderMaintTab();
+  }catch(err){
+    console.error('[FleetDesk] Job delete error:',err);
+    alert('Could not delete the job. Please check your connection and try again.');
+  }
 }
 
 // ── DRIVERS TAB (Stage 1: admin registry only; driver.html integration is Stage 2) ──
