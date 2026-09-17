@@ -3282,7 +3282,9 @@ async function renderRecentlyDeleted(){
         label:`${r.plate||'—'} · ${r.odometer?Number(r.odometer).toLocaleString('en-US')+' km':'—'} · ${r.driver_name||'—'}`,
         sub:`submitted ${fmtDayMonYear(r.created_at)}`})),
       ...jobs.map(j=>({type:'maintenance_jobs',id:j.id,deleted_at:j.deleted_at,deleted_by:j.deleted_by,
-        label:`${j.plate||'—'} · ${(MAINT_CATEGORIES[j.category]||MAINT_CATEGORIES.other).label}${j.total_cost?' · '+fmtTotalR(j.total_cost):''}`,
+        // fmtRand, not fmtTotalR: this label is escaped as plain text, and
+        // fmtTotalR returns responsive <span> markup (sv-desk/sv-phone).
+        label:`${j.plate||'—'} · ${(MAINT_CATEGORIES[j.category]||MAINT_CATEGORIES.other).label}${j.total_cost?' · '+fmtRand(j.total_cost):''}`,
         sub:`${j.description?String(j.description).slice(0,60):''} · in ${fmtDayMonYear(j.date_in)}`})),
       ...reports.map(f=>({type:'fuel_reports',id:f.id,deleted_at:f.deleted_at,deleted_by:f.deleted_by,
         label:`${f.period} fuel report`,sub:''}))
