@@ -913,7 +913,9 @@ async function handleDriverPhoto(request, env, cors) {
 // block a driver.
 async function computeHistoryFlag(env, tenantId, plate, odometer) {
   try {
-    const url = `${env.SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&tenant_id=eq.${encodeURIComponent(tenantId)}&status=eq.approved&select=odometer,created_at&order=created_at.desc&limit=1`;
+    // Gap B phase 1: the secret key bypasses RLS, so soft-deleted readings
+    // must be excluded here explicitly or a deleted reading stays the baseline.
+    const url = `${env.SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&tenant_id=eq.${encodeURIComponent(tenantId)}&status=eq.approved&deleted_at=is.null&select=odometer,created_at&order=created_at.desc&limit=1`;
     const res = await fetch(url, {
       headers: { apikey: env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}` },
     });
