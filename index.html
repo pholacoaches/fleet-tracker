@@ -3680,6 +3680,31 @@ function authToken(){
   return t;
 }
 
+// ── AUDIT LOG (gap B phase 1) ─────────────────────────────────────────────────
+// Single writer for the audit_log table: every add/edit/delete/restore of
+// readings, maintenance jobs and fuel reports goes through here. tenant_id,
+// user_id and created_at are stamped by DB defaults — the app sends only the
+// event itself. Callers do NOT await this: a failed audit write must never
+// block the user's action, so failures go to console + Sentry only.
+// Reading ADDs are logged by a DB trigger on odometer_readings — never call
+// this for a driver submission, it would double up.
+async function logAudit(action,tableName,recordId,before){
+  let status=0;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/audit_log`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({action,table_name:tableName,record_id:recordId,before:before||null})
+    });
+    status=res.status;
+    // return=representation: 0 rows back = nothing was written (204 lies)
+    const rows=res.ok?await res.json().catch(()=>null):null;
+    if(res.ok&&Array.isArray(rows)&&rows.length>0)return;
+  }catch{}
+  console.error('[FleetDesk] audit_log write failed:',action,tableName,recordId,status);
+  try{window.FleetDesk&&FleetDesk.reportError&&FleetDesk.reportError('audit_log write failed',{action,table:tableName,status});}catch{}
+}
+
 // ── ODOMETER PHOTOS (private bucket, signed URLs) ─────────────────────────────
 const ODO_PHOTO_BUCKET='odometer-photos';
 const ODO_PHOTO_TTL=5400; // seconds (90 min)
@@ -6332,6 +6357,7 @@ async function submitMaintJob(){
     }
     const saved=await res.json();
     const jobId=saved[0]&&saved[0].id;
+    if(jobId)logAudit('add','maintenance_jobs',jobId,null);
     if(jobId&&parts.length>0){
       const pRes=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_parts`,{
         method:'POST',
@@ -6351,6 +6377,8 @@ async function submitMaintJob(){
 }
 
 async function markJobDone(id){
+  const _before=maintJobs.find(j=>j.id===id);
+  const _beforeSnap=_before?{..._before}:null;
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}&select=id`,{
       method:'PATCH',
@@ -6368,6 +6396,7 @@ async function markJobDone(id){
       alert('Update didn\'t save — please try again.');
       return;
     }
+    logAudit('edit','maintenance_jobs',id,_beforeSnap);
     await renderMaintTab();
   }catch{alert('Could not update the job. Please check your connection and try again.');}
 }
@@ -7373,6 +7402,10 @@ function closeSubmissionModal(){
 }
 
 async function updateSubmissionStatus(id,status){
+  // Audit before-snapshot: the row as the app knows it, captured BEFORE the
+  // local mutations below flip its status.
+  const _before=notifData.find(n=>n.id===id)||pendingData.find(n=>n.id===id)||approvedData.find(n=>n.id===id)||null;
+  const _beforeSnap=_before?{..._before}:null;
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}&select=id`,{
       method:'PATCH',
@@ -7392,6 +7425,7 @@ async function updateSubmissionStatus(id,status){
       alert('Update didn\'t save — please try again.');
       return false;
     }
+    logAudit('edit','odometer_readings',id,_beforeSnap);
     const item=notifData.find(n=>n.id===id);
     if(item)item.status=status;
     // Keep the split arrays in sync: the record leaves the pending set, and an
