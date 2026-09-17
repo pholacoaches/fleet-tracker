@@ -1983,6 +1983,16 @@ function getAuthEmail(){
   }catch{return'';}
 }
 
+// Current user's auth uuid (JWT sub claim) — stamped into deleted_by on
+// soft-deletes so Recently deleted can show who removed each item.
+function getAuthUserId(){
+  try{
+    const token=localStorage.getItem(AUTH_TOKEN_KEY);
+    const payload=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return payload.sub||null;
+  }catch{return null;}
+}
+
 function openAccountPanel(){
   document.getElementById('accountEmail').textContent=getAuthEmail()||'Unknown';
   document.getElementById('accountPw0').value='';
@@ -3898,7 +3908,7 @@ async function fetchSubmissions(){
     // bell badge must count every pending submission. Approved readings come
     // from the approved_readings_per_vehicle RPC — last 10 per plate.
     const[pendRes,apprRes]=await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=*&or=(status.is.null,status.eq.pending)&order=created_at.desc`,{headers}),
+      fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=*&or=(status.is.null,status.eq.pending)&deleted_at=is.null&order=created_at.desc`,{headers}),
       fetch(`${SUPABASE_URL}/rest/v1/rpc/approved_readings_per_vehicle`,{
         method:'POST',
         headers:{...headers,'Content-Type':'application/json'},
@@ -4066,11 +4076,16 @@ function renderNotifPanel(){
     const historyBadge=n.history_flag
       ?subBadgeHtml('mismatch',n.history_flag==='below_last'?'Below last':'Big jump')
       :'';
+    // Gap B phase 1: every reading gets a Delete (soft-delete) button; pending
+    // ones keep Approve/Flag beside it.
+    const delBtn=`<button class="notif-action-btn" title="Delete reading" onclick="deleteReading(${escapeHtml(JSON.stringify(n.id))})" style="flex:0 0 auto;padding:5px 10px;background:transparent;color:var(--red);border:1.5px solid var(--red);border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('trash')}</button>`;
     const actionBtns=(!n.status||n.status==='pending')
       ?`<div style="display:flex;gap:6px;margin-top:8px;">
           <button class="notif-action-btn" onclick="approveNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--green);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('circle-check')}Approve</button>
           <button class="notif-action-btn" onclick="rejectNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--red);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('flag')}Flag</button>
-        </div>`:'';
+          ${delBtn}
+        </div>`
+      :`<div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">${delBtn}</div>`;
     return`<div class="notif-item">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
         <span class="notif-item-plate">${escapeHtml(n.plate)}</span>
@@ -4123,7 +4138,7 @@ function stopRealtimeListener(){
 async function pollForNewSubmissions(){
   try{
     const res=await fetch(
-      `${SUPABASE_URL}/rest/v1/odometer_readings?select=*&created_at=gt.${encodeURIComponent(pollTimestamp)}&order=created_at.asc`,
+      `${SUPABASE_URL}/rest/v1/odometer_readings?select=*&created_at=gt.${encodeURIComponent(pollTimestamp)}&deleted_at=is.null&order=created_at.asc`,
       {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}}
     );
     if(!res.ok)return;
@@ -5689,7 +5704,7 @@ async function fetchLatestOdoForPlate(plate){
   // Baseline = approved readings only: a pending/flagged garbage reading must
   // never become the tyre/maintenance prefill (odo-sanity-checks fix 2).
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&status=eq.approved&select=odometer&order=created_at.desc&limit=1`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?plate=eq.${encodeURIComponent(plate)}&status=eq.approved&deleted_at=is.null&select=odometer&order=created_at.desc&limit=1`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(res.ok){
@@ -6475,7 +6490,7 @@ async function renderDriverWatchdog(){
   const wd=document.getElementById('driverWatchdog');
   if(!wd)return;
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=driver_code&created_at=gte.${encodeURIComponent(weekStartISO())}`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=driver_code&deleted_at=is.null&created_at=gte.${encodeURIComponent(weekStartISO())}`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(!res.ok){console.error('[FleetDesk] Watchdog fetch failed:',res.status,await res.text().catch(()=>''));wd.innerHTML='';return;}
@@ -6521,7 +6536,7 @@ function toggleWatchdogList(){
 
 // ── PER-DRIVER SUBMISSION HISTORY (paged, DB only — never localStorage) ──────
 const DRIVER_HISTORY_PAGE=20;
-let _dhCode=null,_dhRows=[],_dhBusy=false;
+let _dhCode=null,_dhRows=[],_dhBusy=false,_dhHasMore=false;
 
 async function openDriverHistory(id){
   const d=driversData.find(x=>x.id===id);
@@ -6543,7 +6558,7 @@ async function loadDriverHistoryPage(){
   btn.disabled=true;btn.textContent='Loading…';
   try{
     const res=await fetch(
-      `${SUPABASE_URL}/rest/v1/odometer_readings?select=id,plate,odometer,status,created_at,photo_verified,photo_path,photo_url&driver_code=eq.${encodeURIComponent(_dhCode)}&order=created_at.desc&limit=${DRIVER_HISTORY_PAGE}&offset=${_dhRows.length}`,
+      `${SUPABASE_URL}/rest/v1/odometer_readings?select=id,plate,odometer,status,created_at,photo_verified,photo_path,photo_url&driver_code=eq.${encodeURIComponent(_dhCode)}&deleted_at=is.null&order=created_at.desc&limit=${DRIVER_HISTORY_PAGE}&offset=${_dhRows.length}`,
       {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}}
     );
     if(!res.ok){
@@ -6566,6 +6581,7 @@ async function loadDriverHistoryPage(){
 }
 
 function renderDriverHistoryList(hasMore){
+  _dhHasMore=hasMore; // remembered so deleteReading can re-render in place
   const list=document.getElementById('dhList');
   const btn=document.getElementById('dhMoreBtn');
   const note=document.getElementById('dhFootNote');
@@ -6589,6 +6605,7 @@ function renderDriverHistoryList(hasMore){
       <span style="font-weight:700;letter-spacing:0.5px;color:var(--accent);">${escapeHtml(r.plate||'—')}</span>
       <span style="font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span>
       ${badge}${unverifiedBadge}
+      <button title="Delete reading" onclick="deleteReading(${escapeHtml(JSON.stringify(r.id))})" style="background:transparent;border:none;color:var(--red);cursor:pointer;padding:2px;display:inline-flex;flex-shrink:0;">${svgIcon('trash')}</button>
     </div>`;
   }).join('');
   btn.style.display=hasMore?'block':'none';
@@ -7444,6 +7461,53 @@ async function updateSubmissionStatus(id,status){
     console.error('[FleetDesk] Status update error:',err);
     alert('Could not save the status update. Please check your connection and try again.');
     return false;
+  }
+}
+
+// Gap B phase 1: admin soft-delete of a reading. The row keeps living in the
+// DB (deleted_at + deleted_by stamped); every reading query filters it out and
+// the History tab's Recently deleted section can restore it.
+async function deleteReading(id){
+  const rec=notifData.find(n=>n.id===id)||pendingData.find(n=>n.id===id)||approvedData.find(n=>n.id===id)||_dhRows.find(r=>r.id===id)||null;
+  const label=rec?`${rec.plate||'—'}, ${rec.odometer?Number(rec.odometer).toLocaleString('en-US')+' km':'—'}`:'this reading';
+  if(!confirm(`Delete this odometer reading (${label})?\n\nIt moves to Recently deleted (History tab) and can be restored from there.`))return;
+  const snap=rec?{...rec}:null;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}&deleted_at=is.null&select=id`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({deleted_at:new Date().toISOString(),deleted_by:getAuthUserId()})
+    });
+    if(!res.ok){
+      console.error('[FleetDesk] Reading delete failed:',res.status,await res.text().catch(()=>''));
+      alert('Could not delete the reading. Please check your connection and try again.');
+      return;
+    }
+    // return=representation: 0 rows back = nothing was soft-deleted (already
+    // deleted elsewhere, or RLS block) — leave local state alone.
+    const rows=await res.json();
+    if(!Array.isArray(rows)||rows.length===0){
+      console.error('[FleetDesk] Reading delete matched no row for id',id);
+      alert('Delete didn\'t save — please try again.');
+      return;
+    }
+    logAudit('delete','odometer_readings',id,snap);
+    notifData=notifData.filter(n=>n.id!==id);
+    pendingData=pendingData.filter(n=>n.id!==id);
+    approvedData=approvedData.filter(n=>n.id!==id);
+    updateNotifBadge();
+    renderNotifPanel();
+    // Same refresh rule as fetchSubmissions: readings-only mode may need the
+    // whole dashboard to flip, not just the vehicle blocks.
+    if(state.reports.length===0)renderDashboard();
+    else filterVehicles();
+    if(_dhCode){
+      _dhRows=_dhRows.filter(r=>r.id!==id);
+      renderDriverHistoryList(_dhHasMore);
+    }
+  }catch(err){
+    console.error('[FleetDesk] Reading delete error:',err);
+    alert('Could not delete the reading. Please check your connection and try again.');
   }
 }
 
