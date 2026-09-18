@@ -36,6 +36,10 @@
  *                        "no photo" submission (option 3, 2026-09-15):
  *                        photo_path/ai_odometer null, photo_verified false.
  *
+ *   GET /health          Uptime probe for UptimeRobot (gap F, 2026-09-18):
+ *                        200 + {ok, release}. No auth, no secrets, no
+ *                        database or upstream call.
+ *
  * Everything else — including "/", "/login", "/auth/*" and the legacy
  * "/ai/driver" (removed in the P1 cleanup, 2026-09-10) — is 404.
  *
@@ -420,6 +424,25 @@ async function handleMonitorTest(request, env, url) {
   return new Response(lines.join('\n'), {
     status: 200,
     headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+
+// ── Route: GET /health (gap F, 2026-09-18) ───────────────────────────────────
+// Tiny uptime probe for UptimeRobot: 200 + {ok, release}. The release is
+// Cloudflare's own deploy id (the same one Sentry uses), so an uptime check
+// also shows which version is live. No auth, no secrets, no database or
+// upstream call — and deliberately no rate limit (the response costs nothing
+// and probes ping every few minutes) and no CORS headers (probes are not
+// browsers; the app never calls this).
+function handleHealth(request, env) {
+  if (request.method !== 'GET') {
+    return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET', 'Cache-Control': 'no-store' } });
+  }
+  const meta = env.CF_VERSION_METADATA;
+  const release = meta && typeof meta.id === 'string' ? meta.id : 'unknown';
+  return new Response(JSON.stringify({ ok: true, release }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
 }
 
@@ -1127,6 +1150,9 @@ const handler = {
 
     // Monitoring self-test (GET, keyed, throttled, no upstream calls).
     if (path === '/monitor/test') return handleMonitorTest(request, env, url);
+
+    // Uptime probe (GET, open, no upstream calls) — before the POST-only gate.
+    if (path === '/health') return handleHealth(request, env);
 
     const driverLike = path === '/driver/init' || path === '/driver/photo' || path === '/driver/submit';
     const known = path === '/ai/dashboard' || path === '/ai/compliance' || driverLike;
