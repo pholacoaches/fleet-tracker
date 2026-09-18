@@ -51,9 +51,9 @@
     "SENTRY_DSN": "https://01f10bd9c2d9251984ff6cc864c854f2@o4512041337618432.ingest.de.sentry.io/4512044174868560",
     "SENTRY_ENVIRONMENT": "production",
     // Retention cron deletes ONLY when this is exactly "false"; anything
-    // else = dry run (log only). Flip to "false" at the arming deploy, after
-    // the dry-run output has been reviewed.
-    "PHOTO_RETENTION_DRY_RUN": "true"
+    // else = dry run (log only). Armed 2026-09-18 after the dev dry run was
+    // reviewed and the real dev run deleted the 9 verified orphans.
+    "PHOTO_RETENTION_DRY_RUN": "false"
   },
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
 
