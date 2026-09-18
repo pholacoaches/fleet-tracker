@@ -36,6 +36,16 @@
  *                        "no photo" submission (option 3, 2026-09-15):
  *                        photo_path/ai_odometer null, photo_verified false.
  *
+ *   GET /health          Uptime probe for UptimeRobot (gap F, 2026-09-18):
+ *                        200 + {ok, release}. No auth, no secrets, no
+ *                        database or upstream call.
+ *
+ *   scheduled (cron)     Monthly photo-retention run (gap F, 2026-09-18):
+ *                        deletes odometer photos older than 12 months and
+ *                        orphan files older than 7 days from the
+ *                        odometer-photos bucket. Invoice files are never
+ *                        touched. See "Photo retention cron" below.
+ *
  * Everything else — including "/", "/login", "/auth/*" and the legacy
  * "/ai/driver" (removed in the P1 cleanup, 2026-09-10) — is 404.
  *
@@ -67,6 +77,10 @@
  *                                only, never `wrangler secret put`.
  *   PHOTO_TOKEN_KEY     secret — random HMAC key for the P1 photo token.
  *                                Dashboard only, never `wrangler secret put`.
+ *   PHOTO_RETENTION_DRY_RUN
+ *                       var    — the retention cron only deletes when this is
+ *                                exactly "false"; any other value (or missing)
+ *                                = dry run, log only. Fails safe.
  */
 
 import * as Sentry from '@sentry/cloudflare';
@@ -420,6 +434,25 @@ async function handleMonitorTest(request, env, url) {
   return new Response(lines.join('\n'), {
     status: 200,
     headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+
+// ── Route: GET /health (gap F, 2026-09-18) ───────────────────────────────────
+// Tiny uptime probe for UptimeRobot: 200 + {ok, release}. The release is
+// Cloudflare's own deploy id (the same one Sentry uses), so an uptime check
+// also shows which version is live. No auth, no secrets, no database or
+// upstream call — and deliberately no rate limit (the response costs nothing
+// and probes ping every few minutes) and no CORS headers (probes are not
+// browsers; the app never calls this).
+function handleHealth(request, env) {
+  if (request.method !== 'GET') {
+    return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET', 'Cache-Control': 'no-store' } });
+  }
+  const meta = env.CF_VERSION_METADATA;
+  const release = meta && typeof meta.id === 'string' ? meta.id : 'unknown';
+  return new Response(JSON.stringify({ ok: true, release }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
 }
 
@@ -1113,6 +1146,233 @@ function extractSingleImage(messages) {
   return { type: 'image', source: { type: 'base64', media_type: src.media_type, data: src.data } };
 }
 
+// ── Photo retention cron (gap F, 2026-09-18) ─────────────────────────────────
+// Runs monthly (wrangler.jsonc "triggers", PRODUCTION ONLY — the dev env
+// clears the cron because both Workers share the same real storage).
+//
+// The rules, as agreed with Greg 2026-09-18:
+//   • Odometer photos referenced by an odometer_readings row are deleted when
+//     older than RETENTION_PHOTO_DAYS (12 months) — a blanket rule, all
+//     tenants, REGARDLESS of the reading's status. Reading rows are never
+//     touched; the dashboard already shows "Photo unavailable" for a missing
+//     photo. Soft-deleted readings count as referencing their photo too (a
+//     restorable reading still owns it), so their photos age out under this
+//     rule, never the orphan rule.
+//   • ORPHANS — files no odometer_readings row references — belong to no
+//     reading, so the 12-month rule does NOT apply to them: they may be
+//     deleted once older than RETENTION_ORPHAN_DAYS (7 days), which clears
+//     the 30-minute photo→submit token window many times over.
+//   • INVOICE FILES are NEVER deleted, referenced or orphaned. The tyre and
+//     maintenance invoices share this bucket (index.html uploadInvoiceFile)
+//     and are financial records. Protected twice: by the invoice_url
+//     reference sets AND by INVOICE_FILE_RE on the filename.
+//   • DRY RUN: deletes happen only when PHOTO_RETENTION_DRY_RUN is exactly
+//     "false". Anything else — missing var, typo — logs what WOULD be
+//     deleted and deletes nothing. Fails safe.
+//   • Any failure reading the reference tables ABORTS the run before any
+//     delete: an incomplete reference set would make referenced photos look
+//     like orphans.
+// Everything is storage calls + read-only REST reads on the secret key; this
+// cron never writes to the database.
+const RETENTION_PHOTO_DAYS = 365;
+const RETENTION_ORPHAN_DAYS = 7;
+const RETENTION_PAGE = 1000;         // page size for storage lists + REST reads
+const RETENTION_DELETE_BATCH = 100;  // objects per bulk-delete call
+const RETENTION_MAX_DELETES = 500;   // per-run cap; the rest goes next month
+const INVOICE_FILE_RE = /(^|\/)(tyre|maint)-invoice_/;
+
+function retentionDryRun(env) {
+  return env.PHOTO_RETENTION_DRY_RUN !== 'false';
+}
+
+// photo_path / photo_url / invoice_url → object path within the bucket, or
+// null. Mirrors the app's normalisation (index.html ~3953): legacy rows hold
+// a full public/sign URL, newer rows "odometer-photos/<path>".
+function bucketPathFromRef(ref) {
+  if (typeof ref !== 'string' || !ref) return null;
+  const m = ref.match(/\/object\/(?:public|sign)\/odometer-photos\/([^?]+)/);
+  let p;
+  if (m) {
+    // URL paths may be percent-encoded; the storage list returns raw names.
+    try { p = decodeURIComponent(m[1]); } catch { p = m[1]; }
+  } else {
+    p = ref.replace(/^odometer-photos\//, '');
+  }
+  return p || null;
+}
+
+function retentionHeaders(env) {
+  return { apikey: env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`, 'Content-Type': 'application/json' };
+}
+
+// Read-only REST paging. Throws on any bad page — see the abort rule above.
+async function fetchAllRows(env, table, select, filter) {
+  const rows = [];
+  for (let offset = 0; ; offset += RETENTION_PAGE) {
+    const url = `${env.SUPABASE_URL}/rest/v1/${table}?select=${select}&${filter}&order=id.asc&limit=${RETENTION_PAGE}&offset=${offset}`;
+    const res = await fetch(url, { headers: retentionHeaders(env) });
+    if (!res.ok) throw new Error(`retention: ${table} read failed ${res.status}`);
+    const page = await res.json();
+    if (!Array.isArray(page)) throw new Error(`retention: ${table} read returned non-array`);
+    rows.push(...page);
+    if (page.length < RETENTION_PAGE) return rows;
+  }
+}
+
+// Every bucket path any odometer_readings row references, soft-deleted
+// rows included (see the rules above).
+async function fetchReferencedPhotoPaths(env) {
+  const rows = await fetchAllRows(env, 'odometer_readings', 'photo_path,photo_url',
+    'or=(photo_path.not.is.null,photo_url.not.is.null)');
+  const set = new Set();
+  rows.forEach((r) => {
+    const a = bucketPathFromRef(r.photo_path);
+    const b = bucketPathFromRef(r.photo_url);
+    if (a) set.add(a);
+    if (b) set.add(b);
+  });
+  return set;
+}
+
+// Invoice references from both tables that store them (see the rules above).
+async function fetchProtectedInvoicePaths(env) {
+  const set = new Set();
+  for (const table of ['tyres', 'maintenance_jobs']) {
+    const rows = await fetchAllRows(env, table, 'invoice_url', 'invoice_url=not.is.null');
+    rows.forEach((r) => {
+      const p = bucketPathFromRef(r.invoice_url);
+      if (p) set.add(p);
+    });
+  }
+  return set;
+}
+
+async function storageListPage(env, prefix, offset) {
+  const res = await fetch(`${env.SUPABASE_URL}/storage/v1/object/list/${ODO_PHOTO_BUCKET}`, {
+    method: 'POST',
+    headers: retentionHeaders(env),
+    body: JSON.stringify({ prefix, limit: RETENTION_PAGE, offset, sortBy: { column: 'name', order: 'asc' } }),
+  });
+  if (!res.ok) throw new Error(`retention: storage list "${prefix}" failed ${res.status}`);
+  const page = await res.json();
+  if (!Array.isArray(page)) throw new Error('retention: storage list returned non-array');
+  return page;
+}
+
+// The bucket is one level deep: legacy files at the root (pre-build#4b) plus
+// one folder per tenant. List entries with a null id are folders. Returns
+// [{path, createdAt}] for every file.
+async function listAllBucketFiles(env, summary) {
+  const files = [];
+  const folders = [];
+  const walk = async (prefix) => {
+    for (let offset = 0; ; offset += RETENTION_PAGE) {
+      const page = await storageListPage(env, prefix, offset);
+      for (const o of page) {
+        if (!o || typeof o.name !== 'string') continue;
+        const path = prefix ? `${prefix}/${o.name}` : o.name;
+        if (o.id === null || o.id === undefined) {
+          if (prefix) {
+            // A folder below the tenant level is unexpected — skip it rather
+            // than recurse into the unknown, and say so in the summary.
+            summary.skippedUnexpected++;
+            console.warn('retention: unexpected nested folder skipped:', path);
+          } else {
+            folders.push(path);
+          }
+        } else {
+          files.push({ path, createdAt: o.created_at });
+        }
+      }
+      if (page.length < RETENTION_PAGE) break;
+    }
+  };
+  await walk('');
+  for (const f of folders) await walk(f);
+  return files;
+}
+
+// Bulk delete — the same endpoint storage-js remove() uses. A failed batch is
+// counted and reported but does not stop the remaining batches.
+async function deleteStorageBatch(env, paths) {
+  const res = await fetch(`${env.SUPABASE_URL}/storage/v1/object/${ODO_PHOTO_BUCKET}`, {
+    method: 'DELETE',
+    headers: retentionHeaders(env),
+    body: JSON.stringify({ prefixes: paths }),
+  });
+  if (!res.ok) throw new Error(`retention: bulk delete failed ${res.status}`);
+}
+
+// The run. Never throws: every failure is caught, logged and Sentry-reported,
+// and the summary line prints whatever happened. agedPhotos/orphans count the
+// files that QUALIFIED; deleted counts what was actually removed (0 in a dry
+// run); deferred = qualified but beyond the per-run cap.
+async function runPhotoRetention(env) {
+  const dryRun = retentionDryRun(env);
+  const summary = {
+    dryRun, scanned: 0, agedPhotos: 0, orphans: 0, deleted: 0,
+    skippedYoung: 0, skippedProtected: 0, skippedUnexpected: 0, deferred: 0, errors: 0,
+  };
+  try { Sentry.setTag('route', 'photo-retention'); } catch { /* monitoring must never break the run */ }
+  try {
+    if (!env.SUPABASE_SECRET_KEY) throw new Error('retention: SUPABASE_SECRET_KEY not set — nothing scanned');
+
+    const referenced = await fetchReferencedPhotoPaths(env);
+    const protectedInvoices = await fetchProtectedInvoicePaths(env);
+    const files = await listAllBucketFiles(env, summary);
+    summary.scanned = files.length;
+
+    const now = Date.now();
+    const toDelete = [];
+    for (const f of files) {
+      if (INVOICE_FILE_RE.test(f.path) || protectedInvoices.has(f.path)) {
+        summary.skippedProtected++;
+        continue;
+      }
+      // Never delete a file without a trustworthy timestamp.
+      const created = Date.parse(f.createdAt || '');
+      if (Number.isNaN(created)) {
+        summary.errors++;
+        console.warn('retention: no usable created_at, skipped:', f.path);
+        continue;
+      }
+      const ageDays = (now - created) / 86400000;
+      if (referenced.has(f.path)) {
+        if (ageDays <= RETENTION_PHOTO_DAYS) { summary.skippedYoung++; continue; }
+        summary.agedPhotos++;
+      } else {
+        if (ageDays <= RETENTION_ORPHAN_DAYS) { summary.skippedYoung++; continue; }
+        summary.orphans++;
+      }
+      if (toDelete.length >= RETENTION_MAX_DELETES) { summary.deferred++; continue; }
+      toDelete.push(f.path);
+    }
+
+    if (dryRun) {
+      toDelete.forEach((p) => console.log('retention DRY RUN — would delete:', p));
+    } else {
+      for (let i = 0; i < toDelete.length; i += RETENTION_DELETE_BATCH) {
+        const batch = toDelete.slice(i, i + RETENTION_DELETE_BATCH);
+        try {
+          await deleteStorageBatch(env, batch);
+          summary.deleted += batch.length;
+          batch.forEach((p) => console.log('retention deleted:', p));
+        } catch (err) {
+          summary.errors++;
+          console.error('retention: batch delete failed:', err && err.message);
+          try { Sentry.captureException(err); } catch { /* never break the run */ }
+        }
+      }
+    }
+  } catch (err) {
+    summary.errors++;
+    console.error('retention run aborted:', err && err.message);
+    try { Sentry.captureException(err); } catch { /* never break the run */ }
+  }
+  console.log('retention summary:', JSON.stringify(summary));
+  return summary;
+}
+
 // ── Router ───────────────────────────────────────────────────────────────────
 // Wrapped with Sentry.withSentry (options from sentryOptions above). The
 // wrapper only adds reporting around fetch(); every response the client sees
@@ -1127,6 +1387,9 @@ const handler = {
 
     // Monitoring self-test (GET, keyed, throttled, no upstream calls).
     if (path === '/monitor/test') return handleMonitorTest(request, env, url);
+
+    // Uptime probe (GET, open, no upstream calls) — before the POST-only gate.
+    if (path === '/health') return handleHealth(request, env);
 
     const driverLike = path === '/driver/init' || path === '/driver/photo' || path === '/driver/submit';
     const known = path === '/ai/dashboard' || path === '/ai/compliance' || driverLike;
@@ -1176,6 +1439,13 @@ const handler = {
       Sentry.captureException(err);
       return jsonError(cors, 502, 'api_error', 'The AI service could not be reached. Please try again.');
     }
+  },
+
+  // Monthly photo-retention run (gap F) — see "Photo retention cron" above.
+  // runPhotoRetention catches everything itself, so a bad run can never
+  // affect the fetch routes; waitUntil lets it finish in the background.
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(runPhotoRetention(env));
   },
 };
 
