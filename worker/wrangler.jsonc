@@ -13,7 +13,8 @@
  *
  * Note: wrangler does NOT inherit `vars` into named environments, so the
  * "dev" block repeats the Supabase vars on purpose. Keep the two blocks in
- * step; only ALLOWED_ORIGINS and SENTRY_ENVIRONMENT should differ.
+ * step; only ALLOWED_ORIGINS, SENTRY_ENVIRONMENT and (once armed on prod)
+ * PHOTO_RETENTION_DRY_RUN should differ.
  *
  * Monitoring (2026-09-07): @sentry/cloudflare, errors only. Needs the
  * nodejs_als compatibility flag (AsyncLocalStorage, so each request gets
@@ -31,6 +32,14 @@
   "workers_dev": true,
   "observability": { "enabled": true },
 
+  // ── Photo retention cron (gap F, 2026-09-18) ──────────────────────────
+  // Monthly, 1st at 02:17 UTC — runs worker.js's scheduled() handler
+  // (12-month odometer-photo retention + 7-day orphan cleanup; invoices
+  // never touched). PRODUCTION ONLY: "triggers" is inherited by named
+  // environments, so the dev block below clears it — both Workers point at
+  // the SAME real storage and the job must fire once, not twice.
+  "triggers": { "crons": ["17 2 1 * *"] },
+
   // ── Production (default environment) ──────────────────────────────────
   // ALLOWED_ORIGINS: comma-separated CORS allowlist. GitHub Pages only —
   // no localhost / 127.0.0.1 here, ever. worker.js falls back to the
@@ -40,7 +49,11 @@
     "SUPABASE_ANON_KEY": "sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5",
     "ALLOWED_ORIGINS": "https://pholacoaches.github.io",
     "SENTRY_DSN": "https://01f10bd9c2d9251984ff6cc864c854f2@o4512041337618432.ingest.de.sentry.io/4512044174868560",
-    "SENTRY_ENVIRONMENT": "production"
+    "SENTRY_ENVIRONMENT": "production",
+    // Retention cron deletes ONLY when this is exactly "false"; anything
+    // else = dry run (log only). Flip to "false" at the arming deploy, after
+    // the dry-run output has been reviewed.
+    "PHOTO_RETENTION_DRY_RUN": "true"
   },
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
 
@@ -74,8 +87,14 @@
         "SUPABASE_ANON_KEY": "sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5",
         "ALLOWED_ORIGINS": "https://pholacoaches.github.io,http://localhost:8787,http://localhost:8377",
         "SENTRY_DSN": "https://01f10bd9c2d9251984ff6cc864c854f2@o4512041337618432.ingest.de.sentry.io/4512044174868560",
-        "SENTRY_ENVIRONMENT": "development"
+        "SENTRY_ENVIRONMENT": "development",
+        // Dev stays in dry run permanently; real dev-side runs are triggered
+        // by hand with a command-line override (see gap F test plan).
+        "PHOTO_RETENTION_DRY_RUN": "true"
       },
+      // Clears the inherited prod cron — dev must never fire the retention
+      // job on a schedule (same real storage). Do not remove.
+      "triggers": { "crons": [] },
       "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "ratelimits": [
         { "name": "DRIVER_IP_LIMIT",      "namespace_id": "2001", "simple": { "limit": 60, "period": 60 } },
