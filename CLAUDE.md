@@ -6,6 +6,8 @@ Multi-tenant fleet management PWA. Live on GitHub Pages
 data tables). Cloudflare Worker fleet-proxy for AI routes.
 Phone breakpoint 600px.
 Greg is a non-technical solo builder — plain English, short answers.
+Be concise in every response: lead with the answer, skip preamble, no
+recaps unless asked.
 Session state lives in the planning chat's knowledge file, not here —
 this file is stable rules only.
 
@@ -35,6 +37,14 @@ NEVER inside the repo. Check the date with Get-Date first.
   thresholds unless that IS the task.
 - STANDING CLAUSE: report security holes, data leaks, dead code,
   design weaknesses noticed — even out of scope. Never fix silently.
+
+## Database — never write
+Claude Code NEVER writes to the database. No INSERT, UPDATE, DELETE,
+no DDL, no migrations, no Supabase MCP write tools (apply_migration,
+execute_sql with writes, create_branch, etc.). All SQL runs from the
+planning chat with Greg's explicit go. Read-only SELECTs are
+tolerable; writes never. If a task needs a write, write the SQL out
+for Greg and STOP.
 
 ## Release rule
 Bump BOTH sw.js const CACHE and monitor.js FLEETDESK_RELEASE to the
