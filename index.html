@@ -1315,7 +1315,6 @@ input[type=file] { display: none; }
       <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicle Blocks</button>
       <button class="dash-tab-btn"        data-tab="drivers"     onclick="switchDashTab('drivers')"><svg class="icon" aria-hidden="true"><use href="#icon-user"/></svg>Drivers</button>
       <button class="dash-tab-btn"        data-tab="discs"       onclick="switchDashTab('discs')"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc Renewal<span class="dash-tab-badge" id="discTabBadge">0</span></button>
-      <button class="dash-tab-btn"        data-tab="history"     onclick="switchDashTab('history')"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>History</button>
       <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyres</button>
       <button class="dash-tab-btn"        data-tab="maint"       onclick="switchDashTab('maint')"><svg class="icon" aria-hidden="true"><use href="#icon-tool"/></svg>Maintenance</button>
       <button class="dash-tab-btn"        data-tab="reports"     onclick="switchDashTab('reports')"><svg class="icon" aria-hidden="true"><use href="#icon-file-analytics"/></svg>Reports</button>
@@ -1464,24 +1463,6 @@ input[type=file] { display: none; }
   <div class="disc-scan-wrap hidden" id="discScanWrap"></div>
 </div>
 
-    <!-- TAB 6: HISTORY -->
-    <div class="tab-panel" id="tab-history">
-      <div class="history-section">
-        <div class="section-header">
-          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>Upload History</div>
-        </div>
-        <div class="history-grid" id="historyGrid"></div>
-      </div>
-      <!-- Gap B phase 1: soft-deleted readings / jobs / fuel reports, restorable -->
-      <div class="history-section" style="margin-top:26px;">
-        <div class="section-header">
-          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-trash"/></svg>Recently Deleted</div>
-          <div class="section-actions" id="rdFilters"></div>
-        </div>
-        <div id="rdList"></div>
-      </div>
-    </div>
-
     <!-- TAB 7: TYRES -->
     <div class="tab-panel" id="tab-tyres">
       <div class="section-header">
@@ -1568,6 +1549,22 @@ input[type=file] { display: none; }
           <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="renderBackupsList()"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Refresh</button>
         </div>
         <div id="backupsList"><p class="backups-empty">Loading cloud backups…</p></div>
+      </div>
+
+      <!-- Tab consolidation: former History tab, now two sections of Reports -->
+      <div class="history-section" style="margin-top:34px;">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>Upload History</div>
+        </div>
+        <div class="history-grid" id="historyGrid"></div>
+      </div>
+      <!-- Gap B phase 1: soft-deleted readings / jobs / fuel reports, restorable -->
+      <div class="history-section" style="margin-top:26px;">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-trash"/></svg>Recently Deleted</div>
+          <div class="section-actions" id="rdFilters"></div>
+        </div>
+        <div id="rdList"></div>
       </div>
     </div>
 
@@ -2120,8 +2117,7 @@ function switchDashTab(tab){
   if(tab==='discs')renderDiscsTab();
   if(tab==='tyres')renderTyresTab();
   if(tab==='maint')renderMaintTab();
-  if(tab==='reports')renderReportsTab();
-  if(tab==='history')renderRecentlyDeleted();
+  if(tab==='reports'){renderReportsTab();renderRecentlyDeleted();}
 }
 
 // Data keys are namespaced per tenant via nsKey() once the tenant is known
@@ -3249,7 +3245,7 @@ async function deleteReport(i){
   currentReport=null;
   saveStorage(state);
   renderDashboard();
-  if(currentDashTab==='history')renderRecentlyDeleted();
+  if(currentDashTab==='reports')renderRecentlyDeleted();
 }
 
 // ── RECENTLY DELETED (gap B phase 1) ─────────────────────────────────────────
@@ -6586,7 +6582,7 @@ async function deleteMaintJob(id){
     }
     logAudit('delete','maintenance_jobs',id,snap);
     await renderMaintTab();
-    if(currentDashTab==='history')renderRecentlyDeleted();
+    if(currentDashTab==='reports')renderRecentlyDeleted();
   }catch(err){
     console.error('[FleetDesk] Job delete error:',err);
     alert('Could not delete the job. Please check your connection and try again.');
@@ -7682,7 +7678,7 @@ async function deleteReading(id){
       _dhRows=_dhRows.filter(r=>r.id!==id);
       renderDriverHistoryList(_dhHasMore);
     }
-    if(currentDashTab==='history')renderRecentlyDeleted();
+    if(currentDashTab==='reports')renderRecentlyDeleted();
   }catch(err){
     console.error('[FleetDesk] Reading delete error:',err);
     alert('Could not delete the reading. Please check your connection and try again.');
