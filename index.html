@@ -458,10 +458,22 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .dash-tab-btn .icon { width:15px; height:15px; }
 .tab-panel { display:none; }
 .tab-panel.active { display:block; }
-/* Tab consolidation: the Vehicles tab stacks three sections; whichever one is
-   first on the page (Disc & Compliance when an alert is live) sits flush. */
-.veh-section { margin-top:34px; }
-#tab-vehicles > .veh-section:first-child { margin-top:0; }
+/* Sub-tabs: secondary in-panel switch. Pills, deliberately lighter than the
+   main tab bar's underlined row. */
+.sub-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px; }
+.sub-tab-btn {
+  display:flex; align-items:center; gap:6px; padding:7px 14px;
+  font-family:var(--font); font-size:11px; font-weight:700;
+  color:var(--text3); background:var(--surface2);
+  border:1.5px solid var(--border); border-radius:20px;
+  cursor:pointer; white-space:nowrap;
+  transition:color 0.15s, border-color 0.15s, background 0.15s;
+}
+.sub-tab-btn:hover { color:var(--text2); }
+.sub-tab-btn.active { color:#fff; background:var(--accent); border-color:var(--accent); }
+.sub-tab-btn .icon { width:14px; height:14px; }
+.sub-panel { display:none; }
+.sub-panel.active { display:block; }
 
 .history-section { margin-top: 0; }
 .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 14px; }
@@ -1088,8 +1100,9 @@ input[type=file] { display: none; }
   .notif-panel { width:calc(100vw - 20px); right:10px; }
 }
 @media print {
-  .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs { display: none !important; }
+  .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs, .sub-tabs { display: none !important; }
   .tab-panel { display: block !important; }
+  .sub-panel { display: block !important; }
   .vehicle-card { break-inside: avoid; }
 }
 </style>
@@ -1389,7 +1402,12 @@ input[type=file] { display: none; }
 
     <!-- TAB 3: VEHICLES — blocks, tyres and disc/compliance as three sections -->
     <div class="tab-panel" id="tab-vehicles">
-      <div class="veh-section" id="sec-blocks">
+      <div class="sub-tabs" id="vehSubTabs">
+        <button class="sub-tab-btn" data-sub="discs"  onclick="switchVehSub('discs')"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc &amp; Compliance</button>
+        <button class="sub-tab-btn" data-sub="blocks" onclick="switchVehSub('blocks')"><svg class="icon" aria-hidden="true"><use href="#icon-layout-grid"/></svg>Vehicle Blocks</button>
+        <button class="sub-tab-btn" data-sub="tyres"  onclick="switchVehSub('tyres')"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyres</button>
+      </div>
+      <div class="sub-panel" id="sec-blocks">
       <div class="section-header">
         <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicle Blocks</div>
         <div class="section-count" id="vehicleCount"></div>
@@ -1415,7 +1433,7 @@ input[type=file] { display: none; }
       </div>
 
       <!-- Tab consolidation block C: former Tyres tab -->
-      <div class="veh-section" id="sec-tyres">
+      <div class="sub-panel" id="sec-tyres">
         <div class="section-header">
           <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyre Management</div>
           <div style="font-size:12px;color:var(--text3);margin-left:8px;">Select a vehicle to view and manage its tyres</div>
@@ -1424,9 +1442,9 @@ input[type=file] { display: none; }
         <div id="tyreVehiclePanel"><p class="tyre-empty">Select a vehicle above to view its tyres.</p></div>
       </div>
 
-      <!-- Tab consolidation block C: former Disc Renewal tab. orderVehiclesSections()
-           moves this to the top of the panel whenever a disc alert is live. -->
-      <div class="veh-section" id="sec-discs">
+      <!-- Tab consolidation block C: former Disc Renewal tab. Block D makes it
+           the default sub-tab whenever a disc alert is live. -->
+      <div class="sub-panel" id="sec-discs">
         <div class="section-header">
           <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc &amp; Compliance Renewal</div>
           <div class="section-actions">
@@ -1492,6 +1510,11 @@ input[type=file] { display: none; }
 
     <!-- TAB 9: REPORTS -->
     <div class="tab-panel" id="tab-reports">
+      <div class="sub-tabs" id="repSubTabs">
+        <button class="sub-tab-btn" data-sub="reports" onclick="switchRepSub('reports')"><svg class="icon" aria-hidden="true"><use href="#icon-file-analytics"/></svg>Reports</button>
+        <button class="sub-tab-btn" data-sub="history" onclick="switchRepSub('history')"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>History</button>
+      </div>
+      <div class="sub-panel" id="sec-reports">
       <div class="section-header">
         <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-file-analytics"/></svg>Reports</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Generate a print-ready PDF for printing or emailing</div>
@@ -1555,9 +1578,11 @@ input[type=file] { display: none; }
         </div>
         <div id="backupsList"><p class="backups-empty">Loading cloud backups…</p></div>
       </div>
+      </div>
 
-      <!-- Tab consolidation: former History tab, now two sections of Reports -->
-      <div class="history-section" style="margin-top:34px;">
+      <!-- Tab consolidation: former History tab, now the History sub-tab -->
+      <div class="sub-panel" id="sec-history">
+      <div class="history-section">
         <div class="section-header">
           <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>Upload History</div>
         </div>
@@ -1570,6 +1595,7 @@ input[type=file] { display: none; }
           <div class="section-actions" id="rdFilters"></div>
         </div>
         <div id="rdList"></div>
+      </div>
       </div>
     </div>
 
@@ -2119,9 +2145,40 @@ function switchDashTab(tab){
   document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   if(tab==='cpk')renderCpkTab();
   if(tab==='drivers')renderDriversTab();
-  if(tab==='vehicles'){renderDiscsTab().then(orderVehiclesSections);renderTyresTab();}
+  if(tab==='vehicles')openVehiclesTab();
   if(tab==='maint')renderMaintTab();
-  if(tab==='reports'){renderReportsTab();renderRecentlyDeleted();}
+  if(tab==='reports')switchRepSub('reports',true);
+}
+
+// Block D: in-panel sub-tabs. One section visible at a time; each sub-tab
+// fires only the renderer that already owned that section, so opening the
+// Vehicles tab no longer runs both the compliance and the tyre fetch.
+let currentVehSub=null,currentRepSub=null;
+
+function switchVehSub(sub,force){
+  if(currentVehSub===sub&&!force)return;
+  currentVehSub=sub;
+  document.querySelectorAll('#tab-vehicles > .sub-panel').forEach(p=>p.classList.toggle('active',p.id==='sec-'+sub));
+  document.querySelectorAll('#vehSubTabs .sub-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.sub===sub));
+  if(sub==='discs')renderDiscsTab();
+  if(sub==='tyres')renderTyresTab();
+}
+
+// Default sub-tab: Disc & Compliance when any alert tier is live, otherwise
+// Vehicle Blocks. Same counts the tab badge uses, read from the compliance
+// data already in memory — no extra fetch to make the decision.
+function openVehiclesTab(){
+  const c=getComplianceAlertCounts();
+  switchVehSub(COMP_ALERT_TIERS.reduce((n,t)=>n+c[t],0)>0?'discs':'blocks',true);
+}
+
+function switchRepSub(sub,force){
+  if(currentRepSub===sub&&!force)return;
+  currentRepSub=sub;
+  document.querySelectorAll('#tab-reports > .sub-panel').forEach(p=>p.classList.toggle('active',p.id==='sec-'+sub));
+  document.querySelectorAll('#repSubTabs .sub-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.sub===sub));
+  if(sub==='reports')renderReportsTab();
+  if(sub==='history')renderRecentlyDeleted();
 }
 
 // Data keys are namespaced per tenant via nsKey() once the tenant is known
@@ -3249,7 +3306,7 @@ async function deleteReport(i){
   currentReport=null;
   saveStorage(state);
   renderDashboard();
-  if(currentDashTab==='reports')renderRecentlyDeleted();
+  if(currentDashTab==='reports'&&currentRepSub==='history')renderRecentlyDeleted();
 }
 
 // ── RECENTLY DELETED (gap B phase 1) ─────────────────────────────────────────
@@ -4597,20 +4654,6 @@ function updateDiscTabBadge(){
   const total=COMP_ALERT_TIERS.reduce((n,t)=>n+c[t],0);
   if(total>0){badge.textContent=total>99?'99+':total;badge.style.display='flex';}
   else{badge.style.display='none';}
-}
-
-// Tab consolidation block C: inside the Vehicles tab, the Disc & Compliance
-// section moves to the top of the panel whenever any alert tier is non-zero,
-// and returns to its normal third position otherwise. Same counts the tab
-// badge uses — no threshold logic here. Runs on tab open only, so the section
-// never jumps while an edit is in progress.
-function orderVehiclesSections(){
-  const panel=document.getElementById('tab-vehicles');
-  const discs=document.getElementById('sec-discs');
-  if(!panel||!discs)return;
-  const c=getComplianceAlertCounts();
-  const alert=COMP_ALERT_TIERS.reduce((n,t)=>n+c[t],0)>0;
-  if(alert)panel.prepend(discs); else panel.append(discs);
 }
 
 // Overview alert banner — fuel anomalies + compliance, rebuilt whenever either changes
@@ -6600,7 +6643,7 @@ async function deleteMaintJob(id){
     }
     logAudit('delete','maintenance_jobs',id,snap);
     await renderMaintTab();
-    if(currentDashTab==='reports')renderRecentlyDeleted();
+    if(currentDashTab==='reports'&&currentRepSub==='history')renderRecentlyDeleted();
   }catch(err){
     console.error('[FleetDesk] Job delete error:',err);
     alert('Could not delete the job. Please check your connection and try again.');
@@ -7696,7 +7739,7 @@ async function deleteReading(id){
       _dhRows=_dhRows.filter(r=>r.id!==id);
       renderDriverHistoryList(_dhHasMore);
     }
-    if(currentDashTab==='reports')renderRecentlyDeleted();
+    if(currentDashTab==='reports'&&currentRepSub==='history')renderRecentlyDeleted();
   }catch(err){
     console.error('[FleetDesk] Reading delete error:',err);
     alert('Could not delete the reading. Please check your connection and try again.');
