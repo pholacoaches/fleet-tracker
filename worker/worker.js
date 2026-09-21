@@ -43,8 +43,9 @@
  *                        Creates the login (admin generate_link, type
  *                        invite) + the profile row in the CALLER's tenant.
  *                        Returns { invite_url, expires_at } — a link to OUR
- *                        page carrying the one-time hashed_token; nothing is
- *                        spent until the invitee presses Save there.
+ *                        accept.html carrying the one-time hashed_token plus
+ *                        display-only inviter name, company name and role;
+ *                        nothing is spent until the invitee presses Save there.
  *   POST /users/remove   { user_id }. Deletes the login of someone in the
  *                        caller's own tenant (profile row cascades).
  *                        Role changes are NOT here — the app does them
@@ -1128,7 +1129,7 @@ const FULL_NAME_MAX = 100;
 // Must equal Supabase → Authentication → Emails → "Email OTP Expiration"
 // (the invite link's lifetime). Only used to tell the owner when the link
 // stops working; Supabase itself enforces the real expiry.
-const INVITE_LINK_TTL_S = 3600;
+const INVITE_LINK_TTL_S = 86400;
 // The app page the invite link opens, per allowed Origin. The origin is only
 // ever taken from the Worker's own ALLOWED_ORIGINS list (checked again in
 // inviteAppUrl) — never from the body or any other header. Origins not listed
@@ -1148,7 +1149,7 @@ function adminHeaders(env, extra) {
 
 // Shared start of both routes: token → verified user → per-user throttle →
 // the caller's own profile (secret key) → role must be exactly 'owner'.
-// Returns { user, tenantId } or { fail }.
+// Returns { user, tenantId, fullName } or { fail }.
 async function ownerPrelude(request, env, cors) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
@@ -1160,7 +1161,7 @@ async function ownerPrelude(request, env, cors) {
   if (await rateLimited(env, 'DASHBOARD_USER_LIMIT', user.id)) return { fail: rateLimitResponse(cors, 'DASHBOARD_USER_LIMIT') };
 
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role,tenant_id`,
+    `${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role,tenant_id,full_name`,
     { headers: adminHeaders(env) }
   );
   if (!res.ok) {
@@ -1173,7 +1174,27 @@ async function ownerPrelude(request, env, cors) {
     return { fail: jsonError(cors, 403, 'permission_error', 'Only the company owner can manage users.') };
   }
   Sentry.setTag('tenant', me.tenant_id);
-  return { user, tenantId: me.tenant_id };
+  const fullName = typeof me.full_name === 'string' ? me.full_name.trim() : '';
+  return { user, tenantId: me.tenant_id, fullName };
+}
+
+// The caller's company name for the invite link (display only). Secret key,
+// but filtered to the tenant ownerPrelude already proved is the caller's.
+// Returns the name, '' when the row has none, or null when the read failed.
+async function tenantDisplayName(env, tenantId) {
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/tenants?id=eq.${encodeURIComponent(tenantId)}&select=display_name,name`,
+    { headers: adminHeaders(env) }
+  );
+  if (!res.ok) {
+    reportMessage(`tenant name read failed ${res.status}`, 'error', { upstream: 'supabase', http_status: res.status });
+    return null;
+  }
+  const rows = await res.json().catch(() => null);
+  const t = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+  if (!t) return null;
+  const pick = (v) => (typeof v === 'string' ? v.trim() : '');
+  return pick(t.display_name) || pick(t.name);
 }
 
 // The invite link's base: the caller's Origin, re-checked against this
@@ -1230,6 +1251,14 @@ async function handleUsersInvite(request, env, cors, origin) {
   const appUrl = inviteAppUrl(env, origin);
   if (!appUrl) return jsonError(cors, 403, 'permission_error', 'Origin not allowed.');
 
+  // The accept page shows who sent the invite and for which company; both
+  // come from the database, never the body. No stand-in text: an owner with
+  // no name, or a company with no name, cannot send an invite.
+  if (!pre.fullName) return jsonError(cors, 400, 'invalid_request_error', 'Your profile has no name yet, so the invite cannot say who it is from.');
+  const companyName = await tenantDisplayName(env, pre.tenantId);
+  if (companyName === null) return jsonError(cors, 502, 'api_error', USERS_UNAVAILABLE);
+  if (!companyName) return jsonError(cors, 400, 'invalid_request_error', 'Your company has no name yet, so the invite cannot say which company it is for.');
+
   // generate_link on an address that already has a pending (unconfirmed)
   // invite would silently re-issue THAT user's token — so any existing login
   // is refused up front, before Supabase is asked to create anything.
@@ -1257,11 +1286,6 @@ async function handleUsersInvite(request, env, cors, origin) {
     }
     reportMessage(`generate_link failed ${linkRes.status}`, 'error', { upstream: 'supabase', http_status: linkRes.status });
     return jsonError(cors, 502, 'api_error', 'Could not create the invite. Please try again.');
-  }
-  // TEMPORARY (dev only, removed before merge): field NAMES of the reply,
-  // never values — to confirm the shape empirically (4a block 2).
-  if (env.SENTRY_ENVIRONMENT === 'development') {
-    console.log('generate_link keys:', Object.keys(link).join(','), link.properties ? '| properties: ' + Object.keys(link.properties).join(',') : '');
   }
   // GoTrue's REST reply is the user object with the link fields at the top
   // level; supabase-js nests them under properties/user. Accept both.
@@ -1309,11 +1333,14 @@ async function handleUsersInvite(request, env, cors, origin) {
 
   // The token rides in the #fragment: browsers never send it to the web
   // server or in a Referer, and link previewers cannot spend it (it is only
-  // used by the page's Save button). The email is for display only — the
-  // page shows the address Supabase confirms once the token is verified.
-  const fragment = new URLSearchParams({ token_hash: hashedToken, email }).toString();
+  // used by the page's Save button). email, inviter, company and role are for
+  // display only — the token alone decides which login is activated, and the
+  // role that counts is the profile row written above.
+  const fragment = new URLSearchParams({
+    token_hash: hashedToken, email, inviter: pre.fullName, company: companyName, role,
+  }).toString();
   return jsonOk(cors, {
-    invite_url: `${appUrl}?invite=1#${fragment}`,
+    invite_url: `${appUrl}accept.html#${fragment}`,
     expires_at: new Date(startedAt + INVITE_LINK_TTL_S * 1000).toISOString(),
   });
 }
