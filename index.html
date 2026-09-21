@@ -458,6 +458,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .dash-tab-btn .icon { width:15px; height:15px; }
 .tab-panel { display:none; }
 .tab-panel.active { display:block; }
+/* Tab consolidation: the Vehicles tab stacks three sections; whichever one is
+   first on the page (Disc & Compliance when an alert is live) sits flush. */
+.veh-section { margin-top:34px; }
+#tab-vehicles > .veh-section:first-child { margin-top:0; }
 
 .history-section { margin-top: 0; }
 .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 14px; }
@@ -1042,11 +1046,11 @@ input[type=file] { display: none; }
      rows, then Bulk Edit | 45-Day CSV over Add Vehicle | Scan Licences in a
      2x2 grid of equal widths. Icons and labels stay. "Show archived" (only
      shown when something is archived) takes a full row of its own. */
-  #tab-discs .section-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; margin-left:0; }
-  #tab-discs .section-actions > #discSearch,
-  #tab-discs .section-actions > #discFilter,
-  #tab-discs .section-actions > .disc-show-archived { grid-column:1 / -1; width:100%; }
-  #tab-discs .section-actions > .btn { justify-content:center; width:100%; white-space:nowrap; }
+  #sec-discs .section-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; margin-left:0; }
+  #sec-discs .section-actions > #discSearch,
+  #sec-discs .section-actions > #discFilter,
+  #sec-discs .section-actions > .disc-show-archived { grid-column:1 / -1; width:100%; }
+  #sec-discs .section-actions > .btn { justify-content:center; width:100%; white-space:nowrap; }
 
   /* Overview stat cards sit two per row (~157px each); the 24px
      "R468,139.52" needed 158px and was clipped by the card's overflow:hidden.
@@ -1312,10 +1316,8 @@ input[type=file] { display: none; }
       <button class="dash-tab-btn active" data-tab="overview"    onclick="switchDashTab('overview')"><svg class="icon" aria-hidden="true"><use href="#icon-layout-dashboard"/></svg>Overview</button>
       <button class="dash-tab-btn"        data-tab="cpk"         onclick="switchDashTab('cpk')"><svg class="icon" aria-hidden="true"><use href="#icon-coin"/></svg>CPK</button>
       <button class="dash-tab-btn"        data-tab="performance" onclick="switchDashTab('performance')"><svg class="icon" aria-hidden="true"><use href="#icon-trophy"/></svg>Performance</button>
-      <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicle Blocks</button>
+      <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicles<span class="dash-tab-badge" id="discTabBadge">0</span></button>
       <button class="dash-tab-btn"        data-tab="drivers"     onclick="switchDashTab('drivers')"><svg class="icon" aria-hidden="true"><use href="#icon-user"/></svg>Drivers</button>
-      <button class="dash-tab-btn"        data-tab="discs"       onclick="switchDashTab('discs')"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc Renewal<span class="dash-tab-badge" id="discTabBadge">0</span></button>
-      <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyres</button>
       <button class="dash-tab-btn"        data-tab="maint"       onclick="switchDashTab('maint')"><svg class="icon" aria-hidden="true"><use href="#icon-tool"/></svg>Maintenance</button>
       <button class="dash-tab-btn"        data-tab="reports"     onclick="switchDashTab('reports')"><svg class="icon" aria-hidden="true"><use href="#icon-file-analytics"/></svg>Reports</button>
     </div>
@@ -1385,8 +1387,9 @@ input[type=file] { display: none; }
       </div>
     </div>
 
-    <!-- TAB 3: VEHICLE BLOCKS -->
+    <!-- TAB 3: VEHICLES — blocks, tyres and disc/compliance as three sections -->
     <div class="tab-panel" id="tab-vehicles">
+      <div class="veh-section" id="sec-blocks">
       <div class="section-header">
         <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicle Blocks</div>
         <div class="section-count" id="vehicleCount"></div>
@@ -1409,6 +1412,54 @@ input[type=file] { display: none; }
       </div>
       <div id="vehiclesGrid" class="vehicles-grid"></div>
       <div id="vehiclesTableWrap" class="vehicles-table-wrap hidden"></div>
+      </div>
+
+      <!-- Tab consolidation block C: former Tyres tab -->
+      <div class="veh-section" id="sec-tyres">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyre Management</div>
+          <div style="font-size:12px;color:var(--text3);margin-left:8px;">Select a vehicle to view and manage its tyres</div>
+        </div>
+        <div class="tyre-plate-strip" id="tyrePlateStrip"></div>
+        <div id="tyreVehiclePanel"><p class="tyre-empty">Select a vehicle above to view its tyres.</p></div>
+      </div>
+
+      <!-- Tab consolidation block C: former Disc Renewal tab. orderVehiclesSections()
+           moves this to the top of the panel whenever a disc alert is live. -->
+      <div class="veh-section" id="sec-discs">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc &amp; Compliance Renewal</div>
+          <div class="section-actions">
+            <!-- mobile-layout: inline style moved to #discSearch in <style> so the phone rule can make it full-width -->
+            <input type="text" id="discSearch" placeholder="Search plate..." oninput="renderDiscView()">
+            <select id="discFilter" onchange="renderDiscView()" class="sort-select">
+              <option value="all">All statuses</option>
+              <option value="overdue">Overdue</option>
+              <option value="week">This week (≤7 days)</option>
+              <option value="unknown">Not set</option>
+              <option value="book">Book now (≤30 days)</option>
+              <option value="soon">Expiring soon (≤45 days)</option>
+              <option value="not_required">Not required</option>
+              <option value="ok">Valid</option>
+            </select>
+            <!-- Archive build: hidden entirely while nothing is archived (renderDiscView) -->
+            <label class="disc-show-archived hidden" id="discShowArchivedWrap" title="Archived vehicles are out of service; nothing is deleted">
+              <input type="checkbox" id="discShowArchivedCb" onchange="discShowArchived=this.checked;renderDiscView()"> Show archived (<span id="discArchivedCount">0</span>)
+            </label>
+            <button class="btn btn-outline" onclick="toggleDiscBulk()" id="discBulkBtn" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Bulk Edit</button>
+            <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-download"/></svg>45-Day CSV</button>
+            <button class="btn btn-outline" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Vehicle</button>
+            <!-- Compliance photo-scan Stage 1: multi-select, no capture attribute so
+                 desktop gets a file picker and phones still offer the camera. -->
+            <input type="file" id="discScanInput" accept="image/*" multiple style="display:none;" onchange="startLicenceScan(event)">
+            <button class="btn btn-outline" onclick="document.getElementById('discScanInput').click()" id="discScanBtn" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-camera"/></svg>Scan Licences</button>
+          </div>
+        </div>
+        <div class="disc-summary-strip" id="discSummaryStrip"></div>
+        <div class="discs-grid" id="discsGrid"></div>
+        <div class="disc-bulk-wrap hidden" id="discBulkWrap"></div>
+        <div class="disc-scan-wrap hidden" id="discScanWrap"></div>
+      </div>
     </div>
 
     <!-- TAB: DRIVERS (Stage 1 — admin registry; driver page integration is Stage 2) -->
@@ -1426,52 +1477,6 @@ input[type=file] { display: none; }
       <div id="driversList"><p class="tyre-empty">Loading drivers...</p></div>
     </div>
 
-
-<!-- TAB 4: DISC RENEWAL / COMPLIANCE -->
-<div class="tab-panel" id="tab-discs">
-  <div class="section-header">
-    <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc & Compliance Renewal</div>
-    <div class="section-actions">
-      <!-- mobile-layout: inline style moved to #discSearch in <style> so the phone rule can make it full-width -->
-      <input type="text" id="discSearch" placeholder="Search plate..." oninput="renderDiscView()">
-      <select id="discFilter" onchange="renderDiscView()" class="sort-select">
-        <option value="all">All statuses</option>
-        <option value="overdue">Overdue</option>
-        <option value="week">This week (≤7 days)</option>
-        <option value="unknown">Not set</option>
-        <option value="book">Book now (≤30 days)</option>
-        <option value="soon">Expiring soon (≤45 days)</option>
-        <option value="not_required">Not required</option>
-        <option value="ok">Valid</option>
-      </select>
-      <!-- Archive build: hidden entirely while nothing is archived (renderDiscView) -->
-      <label class="disc-show-archived hidden" id="discShowArchivedWrap" title="Archived vehicles are out of service; nothing is deleted">
-        <input type="checkbox" id="discShowArchivedCb" onchange="discShowArchived=this.checked;renderDiscView()"> Show archived (<span id="discArchivedCount">0</span>)
-      </label>
-      <button class="btn btn-outline" onclick="toggleDiscBulk()" id="discBulkBtn" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Bulk Edit</button>
-      <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-download"/></svg>45-Day CSV</button>
-      <button class="btn btn-outline" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Vehicle</button>
-      <!-- Compliance photo-scan Stage 1: multi-select, no capture attribute so
-           desktop gets a file picker and phones still offer the camera. -->
-      <input type="file" id="discScanInput" accept="image/*" multiple style="display:none;" onchange="startLicenceScan(event)">
-      <button class="btn btn-outline" onclick="document.getElementById('discScanInput').click()" id="discScanBtn" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-camera"/></svg>Scan Licences</button>
-    </div>
-  </div>
-  <div class="disc-summary-strip" id="discSummaryStrip"></div>
-  <div class="discs-grid" id="discsGrid"></div>
-  <div class="disc-bulk-wrap hidden" id="discBulkWrap"></div>
-  <div class="disc-scan-wrap hidden" id="discScanWrap"></div>
-</div>
-
-    <!-- TAB 7: TYRES -->
-    <div class="tab-panel" id="tab-tyres">
-      <div class="section-header">
-        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyre Management</div>
-        <div style="font-size:12px;color:var(--text3);margin-left:8px;">Select a vehicle to view and manage its tyres</div>
-      </div>
-      <div class="tyre-plate-strip" id="tyrePlateStrip"></div>
-      <div id="tyreVehiclePanel"><p class="tyre-empty">Select a vehicle above to view its tyres.</p></div>
-    </div>
 
     <!-- TAB 8: MAINTENANCE -->
     <div class="tab-panel" id="tab-maint">
@@ -2114,8 +2119,7 @@ function switchDashTab(tab){
   document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   if(tab==='cpk')renderCpkTab();
   if(tab==='drivers')renderDriversTab();
-  if(tab==='discs')renderDiscsTab();
-  if(tab==='tyres')renderTyresTab();
+  if(tab==='vehicles'){renderDiscsTab().then(orderVehiclesSections);renderTyresTab();}
   if(tab==='maint')renderMaintTab();
   if(tab==='reports'){renderReportsTab();renderRecentlyDeleted();}
 }
@@ -4593,6 +4597,20 @@ function updateDiscTabBadge(){
   const total=COMP_ALERT_TIERS.reduce((n,t)=>n+c[t],0);
   if(total>0){badge.textContent=total>99?'99+':total;badge.style.display='flex';}
   else{badge.style.display='none';}
+}
+
+// Tab consolidation block C: inside the Vehicles tab, the Disc & Compliance
+// section moves to the top of the panel whenever any alert tier is non-zero,
+// and returns to its normal third position otherwise. Same counts the tab
+// badge uses — no threshold logic here. Runs on tab open only, so the section
+// never jumps while an edit is in progress.
+function orderVehiclesSections(){
+  const panel=document.getElementById('tab-vehicles');
+  const discs=document.getElementById('sec-discs');
+  if(!panel||!discs)return;
+  const c=getComplianceAlertCounts();
+  const alert=COMP_ALERT_TIERS.reduce((n,t)=>n+c[t],0)>0;
+  if(alert)panel.prepend(discs); else panel.append(discs);
 }
 
 // Overview alert banner — fuel anomalies + compliance, rebuilt whenever either changes
