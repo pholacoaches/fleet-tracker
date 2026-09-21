@@ -457,20 +457,25 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .dash-tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
 .dash-tab-btn .icon { width:15px; height:15px; }
 .tab-panel { display:none; }
-.tab-panel.active { display:block; }
-/* Sub-tabs: secondary in-panel switch. Pills, deliberately lighter than the
-   main tab bar's underlined row. */
-.sub-tabs { display:flex; gap:8px; flex-wrap:wrap; padding-top:26px; margin-bottom:52px; }
-.sub-tab-btn {
-  display:flex; align-items:center; gap:7px; padding:10px 18px;
-  font-family:var(--font); font-size:13px; font-weight:700;
-  color:var(--text2); background:var(--surface);
-  border:1.5px solid var(--border2); border-radius:20px;
-  cursor:pointer; white-space:nowrap;
-  transition:color 0.15s, border-color 0.15s, background 0.15s;
+/* flow-root, not block: the sub-tab band is the panel's first child, so with a
+   plain block its top margin would collapse out through the panel. */
+.tab-panel.active { display:flow-root; }
+/* Sub-tabs: same light grey band as the dashboard period selector, so the
+   in-panel switch reads as existing app furniture rather than something new. */
+.sub-tabs {
+  display:flex; gap:4px; flex-wrap:wrap; justify-content:center; width:100%;
+  background:var(--surface2); border:1.5px solid var(--border);
+  border-radius:var(--radius-sm); padding:4px; margin:26px 0 52px;
 }
-.sub-tab-btn:hover { color:var(--accent); border-color:var(--accent); background:var(--surface2); }
-.sub-tab-btn.active { color:#fff; background:var(--accent); border-color:var(--accent); box-shadow:var(--shadow); }
+.sub-tab-btn {
+  display:flex; align-items:center; gap:7px; padding:7px 16px;
+  font-family:var(--font); font-size:13px; font-weight:700;
+  color:var(--text2); background:transparent;
+  border:none; border-radius:4px;
+  cursor:pointer; white-space:nowrap; transition:all 0.15s;
+}
+.sub-tab-btn:hover { color:var(--accent); background:var(--surface); }
+.sub-tab-btn.active { color:#fff; background:var(--accent); }
 .sub-tab-btn.active:hover { color:#fff; background:var(--accent); }
 .sub-tab-btn .icon { width:15px; height:15px; }
 .sub-panel { display:none; }
