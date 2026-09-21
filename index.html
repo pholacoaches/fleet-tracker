@@ -4016,14 +4016,22 @@ const CL_NOT_STORED_RE=/^\(large value\b/;
 // Fields tried, in order, to give a record a human label
 const CL_LABEL_FIELDS=['plate','period','full_name','name','display_name','upload_id','part_name','description'];
 let _clRows=[],_clBusy=false,_clHasMore=false,_clGen=0;
-let _clPeople=new Set(),_clNoActor=false,_clExpanded=new Set();
-let _clProfileNames=[]; // the company's logins (owner-readable via RLS)
+let _clExpanded=new Set();
+// Person filter. Option values: 'u:<user_id>' (a login in profiles, filtered
+// by user_id), CL_SYSTEM (rows with no user: user_id=is.null), 'n:<name>'
+// (someone with no profile row, filtered by actor_name).
+const CL_SYSTEM='sys';
+const CL_SYSTEM_LABEL='Driver app or system';
+let _clProfiles=[];          // [{id,label}] the company's logins (owner-readable via RLS)
+let _clSeenUsers=new Map();  // user_id -> actor_name, from loaded rows
+let _clPersonLabels={};      // option value -> label, so a selection survives a refresh
 
 function openChangeLog(){
   closeAccountPanel();
-  _clPeople=new Set();_clNoActor=false;_clProfileNames=[];
+  _clProfiles=[];_clSeenUsers=new Map();_clPersonLabels={};
   document.getElementById('clSearch').value='';
   document.getElementById('clPerson').innerHTML='<option value="">Everyone</option>';
+  clRefreshPeople();
   document.getElementById('clRange').value='all';
   document.getElementById('changeLogModal').style.display='flex';
   clLoadPeople();
@@ -4032,18 +4040,18 @@ function openChangeLog(){
 
 // Person list source: the company's profiles. [] means "no access" (or no
 // other logins) — never an error; the dropdown then relies on names seen in
-// loaded rows. actor_name is full_name at change time, so the option value
-// is full_name (email when a login has no name).
+// loaded rows. The label is the login's CURRENT name (email if unnamed); the
+// filter is by user_id, so rows saved under an older name are still found.
 async function clLoadPeople(){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=full_name,email&order=full_name`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,full_name,email&order=full_name`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
     if(!res.ok){console.warn('[FleetDesk] Change log people fetch failed:',res.status);return;}
     const rows=await res.json();
     if(!Array.isArray(rows))return;
-    const names=rows.map(p=>(typeof p.full_name==='string'&&p.full_name.trim())||(typeof p.email==='string'&&p.email.trim())||'').filter(Boolean);
-    _clProfileNames=[...new Set(names)];
+    _clProfiles=rows.filter(p=>p&&p.id).map(p=>({id:p.id,
+      label:(typeof p.full_name==='string'&&p.full_name.trim())||(typeof p.email==='string'&&p.email.trim())||'Unnamed login'}));
     clRefreshPeople();
   }catch(err){console.warn('[FleetDesk] Change log people fetch error:',err);}
 }
@@ -4057,8 +4065,9 @@ function closeChangeLog(){
 function clFilterQuery(){
   let q='';
   const person=document.getElementById('clPerson').value;
-  if(person==='__none__')q+='&actor_name=is.null';
-  else if(person)q+=`&actor_name=eq.${encodeURIComponent(person)}`;
+  if(person===CL_SYSTEM)q+='&user_id=is.null';
+  else if(person.startsWith('u:'))q+=`&user_id=eq.${encodeURIComponent(person.slice(2))}`;
+  else if(person.startsWith('n:'))q+=`&actor_name=eq.${encodeURIComponent(person.slice(2))}`;
   const range=document.getElementById('clRange').value;
   let since=null;
   if(range==='7')since=new Date(Date.now()-7*864e5);
@@ -4083,7 +4092,7 @@ async function loadChangeLogPage(reset){
   if(reset){list.innerHTML='<div class="notif-empty">Loading change log…</div>';btn.style.display='none';document.getElementById('clFootNote').textContent='';}
   try{
     const res=await fetch(
-      `${SUPABASE_URL}/rest/v1/audit_log?select=id,created_at,action,table_name,record_id,actor_name,changed_fields,before,after&source=eq.db${clFilterQuery()}&order=created_at.desc,id.desc&limit=${CHANGE_LOG_PAGE}&offset=${_clRows.length}`,
+      `${SUPABASE_URL}/rest/v1/audit_log?select=id,created_at,action,table_name,record_id,user_id,actor_name,changed_fields,before,after&source=eq.db${clFilterQuery()}&order=created_at.desc,id.desc&limit=${CHANGE_LOG_PAGE}&offset=${_clRows.length}`,
       {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}}
     );
     if(gen!==_clGen)return;
@@ -4098,7 +4107,7 @@ async function loadChangeLogPage(reset){
     const seen=new Set(_clRows.map(r=>r.id));
     const fresh=(Array.isArray(page)?page:[]).filter(r=>!seen.has(r.id)).map(clPrepareRow);
     _clRows=_clRows.concat(fresh);
-    fresh.forEach(r=>{if(r.actor_name)_clPeople.add(r.actor_name);else _clNoActor=true;});
+    fresh.forEach(r=>{if(r.user_id&&r.actor_name&&!_clSeenUsers.has(r.user_id))_clSeenUsers.set(r.user_id,r.actor_name);});
     clRefreshPeople();
     _clHasMore=Array.isArray(page)&&page.length===CHANGE_LOG_PAGE;
     _clBusy=false; // before render: an empty first page must reach the empty-state text
@@ -4112,18 +4121,23 @@ async function loadChangeLogPage(reset){
   }
 }
 
-// Person dropdown = the company's logins first, then any other actor_name
-// seen in loaded rows (e.g. "Driver app or system", people since removed).
-// The current selection is always kept.
+// Person dropdown = the company's logins (by user_id), then "Driver app or
+// system" (user_id is null), then anyone seen in loaded rows whose user_id
+// has no profile row (e.g. removed logins, by actor_name). The current
+// selection is always kept.
 function clRefreshPeople(){
   const sel=document.getElementById('clPerson');
   const cur=sel.value;
-  const extra=[..._clPeople].filter(n=>!_clProfileNames.includes(n)).sort((a,b)=>a.localeCompare(b));
-  const names=[..._clProfileNames,...extra];
-  if(cur&&cur!=='__none__'&&!names.includes(cur))names.push(cur);
+  const profileIds=new Set(_clProfiles.map(p=>p.id));
+  const opts=_clProfiles.map(p=>['u:'+p.id,p.label]);
+  opts.push([CL_SYSTEM,CL_SYSTEM_LABEL]);
+  const extraNames=[...new Set([..._clSeenUsers].filter(([uid])=>!profileIds.has(uid)).map(([,name])=>name))]
+    .sort((a,b)=>a.localeCompare(b));
+  extraNames.forEach(n=>opts.push(['n:'+n,n]));
+  opts.forEach(([v,l])=>{_clPersonLabels[v]=l;});
+  if(cur&&!opts.some(([v])=>v===cur))opts.push([cur,_clPersonLabels[cur]||cur]);
   sel.innerHTML='<option value="">Everyone</option>'
-    +names.map(n=>`<option value="${escAttr(n)}">${escapeHtml(n)}</option>`).join('')
-    +((_clNoActor||cur==='__none__')?'<option value="__none__">Unknown</option>':'');
+    +opts.map(([v,l])=>`<option value="${escAttr(v)}">${escapeHtml(l)}</option>`).join('');
   sel.value=cur;
 }
 
