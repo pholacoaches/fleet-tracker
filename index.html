@@ -448,16 +448,38 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .dash-tabs { display:flex; gap:0; justify-content:space-between; overflow-x:auto; box-shadow:inset 0 -2px 0 var(--border); margin-bottom:24px; }
 .dash-tab-btn {
   flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:5px;
-  padding:11px 4px; text-align:center; font-size:12px; font-weight:700; font-family:var(--font);
+  padding:11px 7px; text-align:center; font-size:14px; font-weight:600; font-family:var(--font);
   background:none; border:none; border-bottom:2px solid transparent;
-  cursor:pointer; color:var(--text3); white-space:nowrap;
+  cursor:pointer; color:var(--text2); white-space:nowrap;
   transition:color 0.15s, border-color 0.15s;
 }
-.dash-tab-btn:hover { color:var(--text2); }
+.dash-tab-btn:hover { color:var(--accent); }
 .dash-tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
 .dash-tab-btn .icon { width:15px; height:15px; }
 .tab-panel { display:none; }
-.tab-panel.active { display:block; }
+/* flow-root, not block: the sub-tab band is the panel's first child, so with a
+   plain block its top margin would collapse out through the panel. */
+.tab-panel.active { display:flow-root; }
+/* Sub-tabs: same light grey band as the dashboard period selector, so the
+   in-panel switch reads as existing app furniture rather than something new. */
+.sub-tabs {
+  display:flex; gap:4px; flex-wrap:wrap; justify-content:center; width:100%;
+  background:var(--surface2); border:1.5px solid var(--border);
+  border-radius:var(--radius-sm); padding:4px; margin:26px 0 52px;
+}
+.sub-tab-btn {
+  display:flex; align-items:center; gap:7px; padding:7px 16px;
+  font-family:var(--font); font-size:13px; font-weight:700;
+  color:var(--text2); background:transparent;
+  border:none; border-radius:4px;
+  cursor:pointer; white-space:nowrap; transition:all 0.15s;
+}
+.sub-tab-btn:hover { color:var(--accent); background:var(--surface); }
+.sub-tab-btn.active { color:#fff; background:var(--accent); }
+.sub-tab-btn.active:hover { color:#fff; background:var(--accent); }
+.sub-tab-btn .icon { width:15px; height:15px; }
+.sub-panel { display:none; }
+.sub-panel.active { display:block; }
 
 .history-section { margin-top: 0; }
 .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 14px; }
@@ -1042,11 +1064,14 @@ input[type=file] { display: none; }
      rows, then Bulk Edit | 45-Day CSV over Add Vehicle | Scan Licences in a
      2x2 grid of equal widths. Icons and labels stay. "Show archived" (only
      shown when something is archived) takes a full row of its own. */
-  #tab-discs .section-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; margin-left:0; }
-  #tab-discs .section-actions > #discSearch,
-  #tab-discs .section-actions > #discFilter,
-  #tab-discs .section-actions > .disc-show-archived { grid-column:1 / -1; width:100%; }
-  #tab-discs .section-actions > .btn { justify-content:center; width:100%; white-space:nowrap; }
+  #sec-discs .section-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; margin-left:0; }
+  #sec-discs .section-actions > #discSearch,
+  #sec-discs .section-actions > #discFilter,
+  #sec-discs .section-actions > .disc-show-archived { grid-column:1 / -1; width:100%; }
+  #sec-discs .section-actions > .btn { justify-content:center; width:100%; white-space:nowrap; }
+  /* Block F: the Cards / Bulk Edit segments take a full row and split it. */
+  #sec-discs .section-actions > .view-toggle { grid-column:1 / -1; width:100%; }
+  #sec-discs .section-actions > .view-toggle .view-btn { flex:1; justify-content:center; }
 
   /* Overview stat cards sit two per row (~157px each); the 24px
      "R468,139.52" needed 158px and was clipped by the card's overflow:hidden.
@@ -1084,8 +1109,9 @@ input[type=file] { display: none; }
   .notif-panel { width:calc(100vw - 20px); right:10px; }
 }
 @media print {
-  .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs { display: none !important; }
+  .app-header, .toolbar, .export-bar, .period-tabs, .history-section, .compare-section, .dash-tabs, .sub-tabs { display: none !important; }
   .tab-panel { display: block !important; }
+  .sub-panel { display: block !important; }
   .vehicle-card { break-inside: avoid; }
 }
 </style>
@@ -1312,12 +1338,8 @@ input[type=file] { display: none; }
       <button class="dash-tab-btn active" data-tab="overview"    onclick="switchDashTab('overview')"><svg class="icon" aria-hidden="true"><use href="#icon-layout-dashboard"/></svg>Overview</button>
       <button class="dash-tab-btn"        data-tab="cpk"         onclick="switchDashTab('cpk')"><svg class="icon" aria-hidden="true"><use href="#icon-coin"/></svg>CPK</button>
       <button class="dash-tab-btn"        data-tab="performance" onclick="switchDashTab('performance')"><svg class="icon" aria-hidden="true"><use href="#icon-trophy"/></svg>Performance</button>
-      <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicle Blocks</button>
+      <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicles<span class="dash-tab-badge" id="discTabBadge">0</span></button>
       <button class="dash-tab-btn"        data-tab="drivers"     onclick="switchDashTab('drivers')"><svg class="icon" aria-hidden="true"><use href="#icon-user"/></svg>Drivers</button>
-      <button class="dash-tab-btn"        data-tab="discs"       onclick="switchDashTab('discs')"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc Renewal<span class="dash-tab-badge" id="discTabBadge">0</span></button>
-      <button class="dash-tab-btn"        data-tab="trends"      onclick="switchDashTab('trends')"><svg class="icon" aria-hidden="true"><use href="#icon-trending-up"/></svg>Trends</button>
-      <button class="dash-tab-btn"        data-tab="history"     onclick="switchDashTab('history')"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>History</button>
-      <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyres</button>
       <button class="dash-tab-btn"        data-tab="maint"       onclick="switchDashTab('maint')"><svg class="icon" aria-hidden="true"><use href="#icon-tool"/></svg>Maintenance</button>
       <button class="dash-tab-btn"        data-tab="reports"     onclick="switchDashTab('reports')"><svg class="icon" aria-hidden="true"><use href="#icon-file-analytics"/></svg>Reports</button>
     </div>
@@ -1364,10 +1386,37 @@ input[type=file] { display: none; }
           <div class="bar-chart" id="litresChart"></div>
         </div>
       </div>
+
+      <!-- Tab consolidation: former Trends tab, now a section of Performance -->
+      <div class="section-header" style="margin-top:26px;">
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-trending-up"/></svg>Trends</div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-trending-up"/></svg>Total Spend Over Time</div>
+          <div class="trend-chart" id="trendChart"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Avg Litres Per Fill Over Time</div>
+          <div class="trend-chart" id="trendLitres"></div>
+        </div>
+      </div>
+      <div class="compare-section" id="compareSection">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-chart-bar"/></svg>Period Comparison</div>
+        </div>
+        <div id="compareContent"></div>
+      </div>
     </div>
 
-    <!-- TAB 3: VEHICLE BLOCKS -->
+    <!-- TAB 3: VEHICLES — blocks, tyres and disc/compliance as three sections -->
     <div class="tab-panel" id="tab-vehicles">
+      <div class="sub-tabs" id="vehSubTabs">
+        <button class="sub-tab-btn" data-sub="discs"  onclick="switchVehSub('discs')"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc &amp; Compliance</button>
+        <button class="sub-tab-btn" data-sub="blocks" onclick="switchVehSub('blocks')"><svg class="icon" aria-hidden="true"><use href="#icon-layout-grid"/></svg>Vehicle Blocks</button>
+        <button class="sub-tab-btn" data-sub="tyres"  onclick="switchVehSub('tyres')"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyres</button>
+      </div>
+      <div class="sub-panel" id="sec-blocks">
       <div class="section-header">
         <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicle Blocks</div>
         <div class="section-count" id="vehicleCount"></div>
@@ -1390,6 +1439,57 @@ input[type=file] { display: none; }
       </div>
       <div id="vehiclesGrid" class="vehicles-grid"></div>
       <div id="vehiclesTableWrap" class="vehicles-table-wrap hidden"></div>
+      </div>
+
+      <!-- Tab consolidation block C: former Tyres tab -->
+      <div class="sub-panel" id="sec-tyres">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyre Management</div>
+          <div style="font-size:12px;color:var(--text3);margin-left:8px;">Select a vehicle to view and manage its tyres</div>
+        </div>
+        <div class="tyre-plate-strip" id="tyrePlateStrip"></div>
+        <div id="tyreVehiclePanel"><p class="tyre-empty">Select a vehicle above to view its tyres.</p></div>
+      </div>
+
+      <!-- Tab consolidation block C: former Disc Renewal tab. Block D makes it
+           the default sub-tab whenever a disc alert is live. -->
+      <div class="sub-panel" id="sec-discs">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc &amp; Compliance Renewal</div>
+          <div class="section-actions">
+            <!-- mobile-layout: inline style moved to #discSearch in <style> so the phone rule can make it full-width -->
+            <input type="text" id="discSearch" placeholder="Search plate..." oninput="renderDiscView()">
+            <select id="discFilter" onchange="renderDiscView()" class="sort-select">
+              <option value="all">All statuses</option>
+              <option value="overdue">Overdue</option>
+              <option value="week">This week (≤7 days)</option>
+              <option value="unknown">Not set</option>
+              <option value="book">Book now (≤30 days)</option>
+              <option value="soon">Expiring soon (≤45 days)</option>
+              <option value="not_required">Not required</option>
+              <option value="ok">Valid</option>
+            </select>
+            <!-- Archive build: hidden entirely while nothing is archived (renderDiscView) -->
+            <label class="disc-show-archived hidden" id="discShowArchivedWrap" title="Archived vehicles are out of service; nothing is deleted">
+              <input type="checkbox" id="discShowArchivedCb" onchange="discShowArchived=this.checked;renderDiscView()"> Show archived (<span id="discArchivedCount">0</span>)
+            </label>
+            <div class="view-toggle" role="group" aria-label="Disc view">
+              <button class="view-btn active" id="discViewCards" onclick="setDiscBulk(false)"><svg class="icon" aria-hidden="true"><use href="#icon-layout-grid"/></svg>Cards</button>
+              <button class="view-btn" id="discViewBulk" onclick="setDiscBulk(true)"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Bulk Edit</button>
+            </div>
+            <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-download"/></svg>45-Day CSV</button>
+            <button class="btn btn-outline" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Vehicle</button>
+            <!-- Compliance photo-scan Stage 1: multi-select, no capture attribute so
+                 desktop gets a file picker and phones still offer the camera. -->
+            <input type="file" id="discScanInput" accept="image/*" multiple style="display:none;" onchange="startLicenceScan(event)">
+            <button class="btn btn-outline" onclick="document.getElementById('discScanInput').click()" id="discScanBtn" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-camera"/></svg>Scan Licences</button>
+          </div>
+        </div>
+        <div class="disc-summary-strip" id="discSummaryStrip"></div>
+        <div class="discs-grid" id="discsGrid"></div>
+        <div class="disc-bulk-wrap hidden" id="discBulkWrap"></div>
+        <div class="disc-scan-wrap hidden" id="discScanWrap"></div>
+      </div>
     </div>
 
     <!-- TAB: DRIVERS (Stage 1 — admin registry; driver page integration is Stage 2) -->
@@ -1408,90 +1508,6 @@ input[type=file] { display: none; }
     </div>
 
 
-<!-- TAB 4: DISC RENEWAL / COMPLIANCE -->
-<div class="tab-panel" id="tab-discs">
-  <div class="section-header">
-    <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc & Compliance Renewal</div>
-    <div class="section-actions">
-      <!-- mobile-layout: inline style moved to #discSearch in <style> so the phone rule can make it full-width -->
-      <input type="text" id="discSearch" placeholder="Search plate..." oninput="renderDiscView()">
-      <select id="discFilter" onchange="renderDiscView()" class="sort-select">
-        <option value="all">All statuses</option>
-        <option value="overdue">Overdue</option>
-        <option value="week">This week (≤7 days)</option>
-        <option value="unknown">Not set</option>
-        <option value="book">Book now (≤30 days)</option>
-        <option value="soon">Expiring soon (≤45 days)</option>
-        <option value="not_required">Not required</option>
-        <option value="ok">Valid</option>
-      </select>
-      <!-- Archive build: hidden entirely while nothing is archived (renderDiscView) -->
-      <label class="disc-show-archived hidden" id="discShowArchivedWrap" title="Archived vehicles are out of service; nothing is deleted">
-        <input type="checkbox" id="discShowArchivedCb" onchange="discShowArchived=this.checked;renderDiscView()"> Show archived (<span id="discArchivedCount">0</span>)
-      </label>
-      <button class="btn btn-outline" onclick="toggleDiscBulk()" id="discBulkBtn" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Bulk Edit</button>
-      <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-download"/></svg>45-Day CSV</button>
-      <button class="btn btn-outline" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Vehicle</button>
-      <!-- Compliance photo-scan Stage 1: multi-select, no capture attribute so
-           desktop gets a file picker and phones still offer the camera. -->
-      <input type="file" id="discScanInput" accept="image/*" multiple style="display:none;" onchange="startLicenceScan(event)">
-      <button class="btn btn-outline" onclick="document.getElementById('discScanInput').click()" id="discScanBtn" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-camera"/></svg>Scan Licences</button>
-    </div>
-  </div>
-  <div class="disc-summary-strip" id="discSummaryStrip"></div>
-  <div class="discs-grid" id="discsGrid"></div>
-  <div class="disc-bulk-wrap hidden" id="discBulkWrap"></div>
-  <div class="disc-scan-wrap hidden" id="discScanWrap"></div>
-</div>
-
-    <!-- TAB 5: TRENDS -->
-    <div class="tab-panel" id="tab-trends">
-      <div class="charts-row">
-        <div class="chart-card">
-          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-trending-up"/></svg>Total Spend Over Time</div>
-          <div class="trend-chart" id="trendChart"></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Avg Litres Per Fill Over Time</div>
-          <div class="trend-chart" id="trendLitres"></div>
-        </div>
-      </div>
-      <div class="compare-section" id="compareSection">
-        <div class="section-header">
-          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-chart-bar"/></svg>Period Comparison</div>
-        </div>
-        <div id="compareContent"></div>
-      </div>
-    </div>
-
-    <!-- TAB 6: HISTORY -->
-    <div class="tab-panel" id="tab-history">
-      <div class="history-section">
-        <div class="section-header">
-          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>Upload History</div>
-        </div>
-        <div class="history-grid" id="historyGrid"></div>
-      </div>
-      <!-- Gap B phase 1: soft-deleted readings / jobs / fuel reports, restorable -->
-      <div class="history-section" style="margin-top:26px;">
-        <div class="section-header">
-          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-trash"/></svg>Recently Deleted</div>
-          <div class="section-actions" id="rdFilters"></div>
-        </div>
-        <div id="rdList"></div>
-      </div>
-    </div>
-
-    <!-- TAB 7: TYRES -->
-    <div class="tab-panel" id="tab-tyres">
-      <div class="section-header">
-        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyre Management</div>
-        <div style="font-size:12px;color:var(--text3);margin-left:8px;">Select a vehicle to view and manage its tyres</div>
-      </div>
-      <div class="tyre-plate-strip" id="tyrePlateStrip"></div>
-      <div id="tyreVehiclePanel"><p class="tyre-empty">Select a vehicle above to view its tyres.</p></div>
-    </div>
-
     <!-- TAB 8: MAINTENANCE -->
     <div class="tab-panel" id="tab-maint">
       <div class="section-header">
@@ -1506,6 +1522,11 @@ input[type=file] { display: none; }
 
     <!-- TAB 9: REPORTS -->
     <div class="tab-panel" id="tab-reports">
+      <div class="sub-tabs" id="repSubTabs">
+        <button class="sub-tab-btn" data-sub="reports" onclick="switchRepSub('reports')"><svg class="icon" aria-hidden="true"><use href="#icon-file-analytics"/></svg>Reports</button>
+        <button class="sub-tab-btn" data-sub="history" onclick="switchRepSub('history')"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>History</button>
+      </div>
+      <div class="sub-panel" id="sec-reports">
       <div class="section-header">
         <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-file-analytics"/></svg>Reports</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Generate a print-ready PDF for printing or emailing</div>
@@ -1568,6 +1589,25 @@ input[type=file] { display: none; }
           <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="renderBackupsList()"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Refresh</button>
         </div>
         <div id="backupsList"><p class="backups-empty">Loading cloud backups…</p></div>
+      </div>
+      </div>
+
+      <!-- Tab consolidation: former History tab, now the History sub-tab -->
+      <div class="sub-panel" id="sec-history">
+      <div class="history-section">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>Upload History</div>
+        </div>
+        <div class="history-grid" id="historyGrid"></div>
+      </div>
+      <!-- Gap B phase 1: soft-deleted readings / jobs / fuel reports, restorable -->
+      <div class="history-section" style="margin-top:26px;">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-trash"/></svg>Recently Deleted</div>
+          <div class="section-actions" id="rdFilters"></div>
+        </div>
+        <div id="rdList"></div>
+      </div>
       </div>
     </div>
 
@@ -2117,11 +2157,40 @@ function switchDashTab(tab){
   document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   if(tab==='cpk')renderCpkTab();
   if(tab==='drivers')renderDriversTab();
-  if(tab==='discs')renderDiscsTab();
-  if(tab==='tyres')renderTyresTab();
+  if(tab==='vehicles')openVehiclesTab();
   if(tab==='maint')renderMaintTab();
-  if(tab==='reports')renderReportsTab();
-  if(tab==='history')renderRecentlyDeleted();
+  if(tab==='reports')switchRepSub('reports',true);
+}
+
+// Block D: in-panel sub-tabs. One section visible at a time; each sub-tab
+// fires only the renderer that already owned that section, so opening the
+// Vehicles tab no longer runs both the compliance and the tyre fetch.
+let currentVehSub=null,currentRepSub=null;
+
+function switchVehSub(sub,force){
+  if(currentVehSub===sub&&!force)return;
+  currentVehSub=sub;
+  document.querySelectorAll('#tab-vehicles > .sub-panel').forEach(p=>p.classList.toggle('active',p.id==='sec-'+sub));
+  document.querySelectorAll('#vehSubTabs .sub-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.sub===sub));
+  if(sub==='discs')renderDiscsTab();
+  if(sub==='tyres')renderTyresTab();
+}
+
+// Default sub-tab: Disc & Compliance when any alert tier is live, otherwise
+// Vehicle Blocks. Same counts the tab badge uses, read from the compliance
+// data already in memory — no extra fetch to make the decision.
+function openVehiclesTab(){
+  const c=getComplianceAlertCounts();
+  switchVehSub(COMP_ALERT_TIERS.reduce((n,t)=>n+c[t],0)>0?'discs':'blocks',true);
+}
+
+function switchRepSub(sub,force){
+  if(currentRepSub===sub&&!force)return;
+  currentRepSub=sub;
+  document.querySelectorAll('#tab-reports > .sub-panel').forEach(p=>p.classList.toggle('active',p.id==='sec-'+sub));
+  document.querySelectorAll('#repSubTabs .sub-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.sub===sub));
+  if(sub==='reports')renderReportsTab();
+  if(sub==='history')renderRecentlyDeleted();
 }
 
 // Data keys are namespaced per tenant via nsKey() once the tenant is known
@@ -3249,7 +3318,7 @@ async function deleteReport(i){
   currentReport=null;
   saveStorage(state);
   renderDashboard();
-  if(currentDashTab==='history')renderRecentlyDeleted();
+  if(currentDashTab==='reports'&&currentRepSub==='history')renderRecentlyDeleted();
 }
 
 // ── RECENTLY DELETED (gap B phase 1) ─────────────────────────────────────────
@@ -4737,8 +4806,8 @@ function renderDiscViewBody(){
   const livePlates=discShowArchived?plates.filter(p=>!isArchivedPlate(p)):plates;
   const grid=document.getElementById('discsGrid');
   const bulkWrap=document.getElementById('discBulkWrap');
-  const bulkBtn=document.getElementById('discBulkBtn');
   const scanWrap=document.getElementById('discScanWrap');
+  syncDiscViewToggle();
 
   // Licence-scan approval table replaces the cards while open — also with an
   // empty fleet, since scanning is a valid way to add the first vehicles.
@@ -4783,13 +4852,11 @@ function renderDiscViewBody(){
   if(discBulkMode){
     grid.classList.add('hidden');
     bulkWrap.classList.remove('hidden');
-    if(bulkBtn)bulkBtn.innerHTML=svgIcon('layout-grid')+'Card View';
     renderDiscBulk(livePlates); // archived rows are read-only, never in the bulk editor
     return;
   }
   grid.classList.remove('hidden');
   bulkWrap.classList.add('hidden');
-  if(bulkBtn)bulkBtn.innerHTML=svgIcon('list')+'Bulk Edit';
   renderDiscCards(plates);
 }
 
@@ -5146,9 +5213,20 @@ async function saveRenewal(plate,key){
   renderDiscView();updateDiscTabBadge();renderAlertBanner();
 }
 
-function toggleDiscBulk(){
-  discBulkMode=!discBulkMode;
+// Block F: the Cards / Bulk Edit segments set the mode directly instead of
+// flipping it, so the control always shows both options. Same discBulkMode the
+// renderer already reads — view logic unchanged.
+function setDiscBulk(on){
+  if(discBulkMode===on)return;
+  discBulkMode=on;
   renderDiscView();
+}
+
+function syncDiscViewToggle(){
+  const cards=document.getElementById('discViewCards');
+  const bulk=document.getElementById('discViewBulk');
+  if(cards)cards.classList.toggle('active',!discBulkMode);
+  if(bulk)bulk.classList.toggle('active',discBulkMode);
 }
 
 function renderDiscBulk(plates){
@@ -6586,7 +6664,7 @@ async function deleteMaintJob(id){
     }
     logAudit('delete','maintenance_jobs',id,snap);
     await renderMaintTab();
-    if(currentDashTab==='history')renderRecentlyDeleted();
+    if(currentDashTab==='reports'&&currentRepSub==='history')renderRecentlyDeleted();
   }catch(err){
     console.error('[FleetDesk] Job delete error:',err);
     alert('Could not delete the job. Please check your connection and try again.');
@@ -7682,7 +7760,7 @@ async function deleteReading(id){
       _dhRows=_dhRows.filter(r=>r.id!==id);
       renderDriverHistoryList(_dhHasMore);
     }
-    if(currentDashTab==='history')renderRecentlyDeleted();
+    if(currentDashTab==='reports'&&currentRepSub==='history')renderRecentlyDeleted();
   }catch(err){
     console.error('[FleetDesk] Reading delete error:',err);
     alert('Could not delete the reading. Please check your connection and try again.');
