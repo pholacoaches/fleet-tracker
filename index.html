@@ -4017,9 +4017,10 @@ const CL_NOT_STORED_RE=/^\(large value\b/;
 const CL_LABEL_FIELDS=['plate','period','full_name','name','display_name','upload_id','part_name','description'];
 let _clRows=[],_clBusy=false,_clHasMore=false,_clGen=0;
 let _clExpanded=new Set();
-// Person filter. Option values: 'u:<user_id>' (a login in profiles, filtered
-// by user_id), CL_SYSTEM (rows with no user: user_id=is.null), 'n:<name>'
-// (someone with no profile row, filtered by actor_name).
+// Person filter. Option values: 'u:<user_id>' (a login in profiles, or a
+// removed login seen in loaded rows — both filtered by user_id) and
+// CL_SYSTEM (rows with no user: user_id=is.null). Rows without a user_id
+// all fall under CL_SYSTEM, so no filter ever needs actor_name.
 const CL_SYSTEM='sys';
 const CL_SYSTEM_LABEL='Driver app or system';
 let _clProfiles=[];          // [{id,label}] the company's logins (owner-readable via RLS)
@@ -4067,7 +4068,6 @@ function clFilterQuery(){
   const person=document.getElementById('clPerson').value;
   if(person===CL_SYSTEM)q+='&user_id=is.null';
   else if(person.startsWith('u:'))q+=`&user_id=eq.${encodeURIComponent(person.slice(2))}`;
-  else if(person.startsWith('n:'))q+=`&actor_name=eq.${encodeURIComponent(person.slice(2))}`;
   const range=document.getElementById('clRange').value;
   let since=null;
   if(range==='7')since=new Date(Date.now()-7*864e5);
@@ -4121,19 +4121,19 @@ async function loadChangeLogPage(reset){
   }
 }
 
-// Person dropdown = the company's logins (by user_id), then "Driver app or
-// system" (user_id is null), then anyone seen in loaded rows whose user_id
-// has no profile row (e.g. removed logins, by actor_name). The current
-// selection is always kept.
+// Person dropdown = the company's logins, then "Driver app or system"
+// (user_id is null), then removed logins seen in loaded rows (user_id with
+// no profile row, labelled with their newest logged name). All by user_id.
+// The current selection is always kept.
 function clRefreshPeople(){
   const sel=document.getElementById('clPerson');
   const cur=sel.value;
   const profileIds=new Set(_clProfiles.map(p=>p.id));
   const opts=_clProfiles.map(p=>['u:'+p.id,p.label]);
   opts.push([CL_SYSTEM,CL_SYSTEM_LABEL]);
-  const extraNames=[...new Set([..._clSeenUsers].filter(([uid])=>!profileIds.has(uid)).map(([,name])=>name))]
-    .sort((a,b)=>a.localeCompare(b));
-  extraNames.forEach(n=>opts.push(['n:'+n,n]));
+  [..._clSeenUsers].filter(([uid])=>!profileIds.has(uid))
+    .sort((a,b)=>a[1].localeCompare(b[1]))
+    .forEach(([uid,name])=>opts.push(['u:'+uid,name]));
   opts.forEach(([v,l])=>{_clPersonLabels[v]=l;});
   if(cur&&!opts.some(([v])=>v===cur))opts.push([cur,_clPersonLabels[cur]||cur]);
   sel.innerHTML='<option value="">Everyone</option>'
