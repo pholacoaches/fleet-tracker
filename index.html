@@ -1315,7 +1315,6 @@ input[type=file] { display: none; }
       <button class="dash-tab-btn"        data-tab="vehicles"    onclick="switchDashTab('vehicles')"><svg class="icon" aria-hidden="true"><use href="#icon-bus"/></svg>Vehicle Blocks</button>
       <button class="dash-tab-btn"        data-tab="drivers"     onclick="switchDashTab('drivers')"><svg class="icon" aria-hidden="true"><use href="#icon-user"/></svg>Drivers</button>
       <button class="dash-tab-btn"        data-tab="discs"       onclick="switchDashTab('discs')"><svg class="icon" aria-hidden="true"><use href="#icon-certificate"/></svg>Disc Renewal<span class="dash-tab-badge" id="discTabBadge">0</span></button>
-      <button class="dash-tab-btn"        data-tab="trends"      onclick="switchDashTab('trends')"><svg class="icon" aria-hidden="true"><use href="#icon-trending-up"/></svg>Trends</button>
       <button class="dash-tab-btn"        data-tab="history"     onclick="switchDashTab('history')"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg>History</button>
       <button class="dash-tab-btn"        data-tab="tyres"       onclick="switchDashTab('tyres')"><svg class="icon" aria-hidden="true"><use href="#icon-wheel"/></svg>Tyres</button>
       <button class="dash-tab-btn"        data-tab="maint"       onclick="switchDashTab('maint')"><svg class="icon" aria-hidden="true"><use href="#icon-tool"/></svg>Maintenance</button>
@@ -1363,6 +1362,27 @@ input[type=file] { display: none; }
           <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-gas-station"/></svg>Litres by Vehicle</div>
           <div class="bar-chart" id="litresChart"></div>
         </div>
+      </div>
+
+      <!-- Tab consolidation: former Trends tab, now a section of Performance -->
+      <div class="section-header" style="margin-top:26px;">
+        <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-trending-up"/></svg>Trends</div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-trending-up"/></svg>Total Spend Over Time</div>
+          <div class="trend-chart" id="trendChart"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Avg Litres Per Fill Over Time</div>
+          <div class="trend-chart" id="trendLitres"></div>
+        </div>
+      </div>
+      <div class="compare-section" id="compareSection">
+        <div class="section-header">
+          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-chart-bar"/></svg>Period Comparison</div>
+        </div>
+        <div id="compareContent"></div>
       </div>
     </div>
 
@@ -1443,26 +1463,6 @@ input[type=file] { display: none; }
   <div class="disc-bulk-wrap hidden" id="discBulkWrap"></div>
   <div class="disc-scan-wrap hidden" id="discScanWrap"></div>
 </div>
-
-    <!-- TAB 5: TRENDS -->
-    <div class="tab-panel" id="tab-trends">
-      <div class="charts-row">
-        <div class="chart-card">
-          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-trending-up"/></svg>Total Spend Over Time</div>
-          <div class="trend-chart" id="trendChart"></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Avg Litres Per Fill Over Time</div>
-          <div class="trend-chart" id="trendLitres"></div>
-        </div>
-      </div>
-      <div class="compare-section" id="compareSection">
-        <div class="section-header">
-          <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-chart-bar"/></svg>Period Comparison</div>
-        </div>
-        <div id="compareContent"></div>
-      </div>
-    </div>
 
     <!-- TAB 6: HISTORY -->
     <div class="tab-panel" id="tab-history">
