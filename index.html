@@ -639,6 +639,64 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .account-email strong { color:var(--text); }
 .account-email-sub { font-size:11px; color:var(--text3); margin-top:3px; }
 .account-email-sub:empty { display:none; }
+/* Change log (gap A) — Driver History modal pattern, widened */
+.cl-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:10000;
+  align-items:center; justify-content:center; padding:20px;
+}
+.cl-card {
+  background:#fff; border-radius:16px; max-width:1000px; width:100%; height:90vh;
+  display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.45);
+  overflow:hidden; animation:fadeUp 0.25s ease both;
+}
+.cl-header { background:var(--accent); padding:18px 22px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.cl-title { font-size:15px; font-weight:700; color:white; letter-spacing:0.3px; }
+.cl-close {
+  background:rgba(255,255,255,0.2); border:none; border-radius:6px; color:white; font-size:18px;
+  width:28px; height:28px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1;
+}
+.cl-filters { display:flex; gap:8px; flex-wrap:wrap; padding:12px 22px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.cl-search {
+  flex:1; min-width:160px; border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px;
+  font-family:var(--font); font-size:12px; outline:none; color:var(--text); background:var(--surface2);
+}
+.cl-list { overflow-y:auto; padding:6px 22px; flex:1; }
+.cl-row {
+  display:grid; grid-template-columns:130px 120px 140px 130px 1fr; gap:10px;
+  padding:9px 0; border-bottom:1px solid var(--border); font-size:12px; align-items:start;
+}
+.cl-head { font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.6px; position:sticky; top:0; background:#fff; }
+.cl-when { color:var(--text3); white-space:nowrap; }
+.cl-who { font-weight:700; color:var(--text2); overflow-wrap:anywhere; }
+.cl-what { color:var(--text2); }
+.cl-record { font-weight:700; color:var(--accent); overflow-wrap:anywhere; }
+.cl-changes { min-width:0; overflow-wrap:anywhere; }
+.cl-change { line-height:1.5; }
+.cl-field { font-weight:700; color:var(--text2); }
+.cl-arrow { color:var(--text3); }
+.cl-muted { color:var(--text3); font-style:italic; }
+.cl-action { font-weight:700; }
+.cl-action-add, .cl-action-restore { color:var(--green); }
+.cl-action-delete { color:var(--red); }
+.cl-more { background:none; border:none; padding:0; margin-top:2px; font-family:var(--font); font-size:11px; font-weight:700; color:var(--accent); cursor:pointer; }
+.cl-footer { padding:12px 22px; border-top:1px solid var(--border); flex-shrink:0; }
+.cl-more-btn {
+  width:100%; padding:10px; background:var(--accent); color:white; border:none; border-radius:8px;
+  font-family:var(--font); font-size:13px; font-weight:700; cursor:pointer; margin-bottom:8px;
+}
+.cl-footnote { font-size:11px; color:var(--text3); text-align:center; }
+@media (max-width:600px) {
+  .cl-overlay { padding:0; }
+  .cl-card { max-width:none; height:100%; border-radius:0; }
+  .cl-filters, .cl-list, .cl-footer { padding-left:14px; padding-right:14px; }
+  .cl-head { display:none; }
+  .cl-row { grid-template-columns:1fr 1fr; gap:2px 10px; }
+  .cl-when { grid-column:1; }
+  .cl-who { grid-column:2; text-align:right; }
+  .cl-what { grid-column:1; }
+  .cl-record { grid-column:2; text-align:right; }
+  .cl-changes { grid-column:1 / -1; margin-top:4px; }
+}
 .role-pill {
   display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; vertical-align:1px;
   font-size:10px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
@@ -2099,6 +2157,7 @@ function renderAccountIdentity(){
   const pill=document.getElementById('accountRole');
   pill.textContent=PROFILE.role.charAt(0).toUpperCase()+PROFILE.role.slice(1);
   pill.style.display=PROFILE.loaded?'inline-block':'none';
+  document.getElementById('accountChangeLogWrap').style.display=PROFILE.role==='owner'?'block':'none';
 }
 
 function closeAccountPanel(){
@@ -3934,6 +3993,207 @@ function authToken(){
 // ── AUDIT LOG ────────────────────────────────────────────────────────────────
 // Gap A: the app never writes audit_log. A DB trigger records every
 // insert/update/delete (before + after + actor name) on the audited tables.
+
+// ── CHANGE LOG (gap A block 4, Owner only) ───────────────────────────────────
+// Same modal pattern as Driver History: accent header, scrolling list,
+// "Load more" footer with limit/offset paging, busy guard, dedup by id.
+// audit_log SELECT is Owner-only in RLS — a non-owner gets [] (not an error),
+// which is shown as "no access". Person + date filter server-side; the text
+// search runs over the rows already loaded (jsonb/array columns can't be
+// ilike-searched through PostgREST).
+const CHANGE_LOG_PAGE=100;
+const CL_TABLES={
+  vehicle_compliance:'Disc & compliance',fuel_reports:'Fuel report',maintenance_jobs:'Job card',
+  maintenance_parts:'Job card part',odometer_readings:'Odometer reading',vehicles:'Vehicle',
+  drivers:'Driver',tyres:'Tyre',profiles:'User',tenants:'Company settings',
+  vehicle_service:'Service settings',upload_ids:'Statement upload',bus_directory:'Bus directory',
+  compliance_history:'Renewal history'
+};
+const CL_HIDDEN_FIELDS=['id','tenant_id','created_at','updated_at'];
+const CL_ACTIONS={add:'Added',delete:'Deleted',restore:'Restored',edit:'Edited'};
+// Values over 2000 chars are replaced by this marker in the DB trigger
+const CL_NOT_STORED_RE=/^\(large value\b/;
+// Fields tried, in order, to give a record a human label
+const CL_LABEL_FIELDS=['plate','period','full_name','name','display_name','upload_id','part_name','description'];
+let _clRows=[],_clBusy=false,_clHasMore=false,_clGen=0;
+let _clPeople=new Set(),_clNoActor=false,_clExpanded=new Set();
+
+function openChangeLog(){
+  closeAccountPanel();
+  _clPeople=new Set();_clNoActor=false;
+  document.getElementById('clSearch').value='';
+  document.getElementById('clPerson').innerHTML='<option value="">Everyone</option>';
+  document.getElementById('clRange').value='all';
+  document.getElementById('changeLogModal').style.display='flex';
+  loadChangeLogPage(true);
+}
+
+function closeChangeLog(){
+  document.getElementById('changeLogModal').style.display='none';
+  _clGen++; // any in-flight page is discarded
+  _clRows=[];_clExpanded=new Set();
+}
+
+function clFilterQuery(){
+  let q='';
+  const person=document.getElementById('clPerson').value;
+  if(person==='__none__')q+='&actor_name=is.null';
+  else if(person)q+=`&actor_name=eq.${encodeURIComponent(person)}`;
+  const range=document.getElementById('clRange').value;
+  let since=null;
+  if(range==='7')since=new Date(Date.now()-7*864e5);
+  else if(range==='30')since=new Date(Date.now()-30*864e5);
+  else if(range==='year')since=new Date(new Date().getFullYear(),0,1);
+  if(since)q+=`&created_at=gte.${encodeURIComponent(since.toISOString())}`;
+  return q;
+}
+
+function clServerFiltersActive(){
+  return !!document.getElementById('clPerson').value||document.getElementById('clRange').value!=='all';
+}
+
+async function loadChangeLogPage(reset){
+  if(reset){_clGen++;_clRows=[];_clExpanded=new Set();_clBusy=false;}
+  if(_clBusy)return;
+  _clBusy=true;
+  const gen=_clGen;
+  const list=document.getElementById('clList');
+  const btn=document.getElementById('clMoreBtn');
+  btn.disabled=true;btn.textContent='Loading…';
+  if(reset){list.innerHTML='<div class="notif-empty">Loading change log…</div>';btn.style.display='none';document.getElementById('clFootNote').textContent='';}
+  try{
+    const res=await fetch(
+      `${SUPABASE_URL}/rest/v1/audit_log?select=id,created_at,action,table_name,record_id,actor_name,changed_fields,before,after&source=eq.db${clFilterQuery()}&order=created_at.desc,id.desc&limit=${CHANGE_LOG_PAGE}&offset=${_clRows.length}`,
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}}
+    );
+    if(gen!==_clGen)return;
+    if(!res.ok){
+      console.error('[FleetDesk] Change log fetch failed:',res.status,await res.text().catch(()=>''));
+      if(_clRows.length===0)list.innerHTML='<div class="notif-empty">Could not load the change log. Please check your connection and try again.</div>';
+      else alert('Could not load more changes. Please try again.');
+      return;
+    }
+    const page=await res.json();
+    if(gen!==_clGen)return;
+    const seen=new Set(_clRows.map(r=>r.id));
+    const fresh=(Array.isArray(page)?page:[]).filter(r=>!seen.has(r.id)).map(clPrepareRow);
+    _clRows=_clRows.concat(fresh);
+    fresh.forEach(r=>{if(r.actor_name)_clPeople.add(r.actor_name);else _clNoActor=true;});
+    clRefreshPeople();
+    _clHasMore=Array.isArray(page)&&page.length===CHANGE_LOG_PAGE;
+    _clBusy=false; // before render: an empty first page must reach the empty-state text
+    renderChangeLog();
+  }catch(err){
+    if(gen!==_clGen)return;
+    console.error('[FleetDesk] Change log error:',err);
+    if(_clRows.length===0)list.innerHTML='<div class="notif-empty">Could not load the change log. Please check your connection and try again.</div>';
+  }finally{
+    if(gen===_clGen){_clBusy=false;btn.disabled=false;btn.textContent='Load more';}
+  }
+}
+
+// Person dropdown = every actor_name seen so far while the modal is open
+// (PostgREST has no DISTINCT); the current selection is always kept.
+function clRefreshPeople(){
+  const sel=document.getElementById('clPerson');
+  const cur=sel.value;
+  const names=[..._clPeople].sort((a,b)=>a.localeCompare(b));
+  if(cur&&cur!=='__none__'&&!names.includes(cur))names.push(cur);
+  sel.innerHTML='<option value="">Everyone</option>'
+    +names.map(n=>`<option value="${escAttr(n)}">${escapeHtml(n)}</option>`).join('')
+    +((_clNoActor||cur==='__none__')?'<option value="__none__">Unknown</option>':'');
+  sel.value=cur;
+}
+
+function clFieldVisible(f){return !CL_HIDDEN_FIELDS.includes(f);}
+
+function clIsNotStored(v){return typeof v==='string'&&CL_NOT_STORED_RE.test(v);}
+
+function clValueText(v){
+  if(v===null||v===undefined||v==='')return'empty';
+  if(clIsNotStored(v))return'(not stored)';
+  const s=typeof v==='object'?JSON.stringify(v):String(v);
+  return s.length>80?s.slice(0,80)+'…':s;
+}
+
+function clValueHtml(v){
+  const grey=v===null||v===undefined||v===''||clIsNotStored(v);
+  const t=escapeHtml(clValueText(v));
+  return grey?`<span class="cl-muted">${t}</span>`:t;
+}
+
+function clRecordLabel(r){
+  const src=r.after||r.before||{};
+  for(const k of CL_LABEL_FIELDS){
+    const v=src[k];
+    if(v!==null&&v!==undefined&&v!==''&&!clIsNotStored(v)&&typeof v!=='object'){
+      const s=String(v);
+      return s.length>40?s.slice(0,40)+'…':s;
+    }
+  }
+  return r.record_id?String(r.record_id).slice(0,8):'—';
+}
+
+// Pre-compute the display pieces once per row (also feeds the text search)
+function clPrepareRow(r){
+  const fields=r.action==='edit'?(Array.isArray(r.changed_fields)?r.changed_fields:[]).filter(clFieldVisible):[];
+  const who=r.actor_name||'Unknown';
+  const what=CL_TABLES[r.table_name]||r.table_name||'—';
+  const record=clRecordLabel(r);
+  const b=r.before||{},a=r.after||{};
+  const changes=fields.map(f=>({f,b:b[f],a:a[f]}));
+  const text=[who,what,record,CL_ACTIONS[r.action]||r.action,
+    ...changes.map(c=>`${c.f} ${clValueText(c.b)} ${clValueText(c.a)}`)].join(' ').toLowerCase();
+  return{...r,_who:who,_what:what,_record:record,_changes:changes,_text:text};
+}
+
+function clToggleMore(id){
+  if(_clExpanded.has(id))_clExpanded.delete(id);else _clExpanded.add(id);
+  renderChangeLog();
+}
+
+function clChangeHtml(r){
+  if(r.action!=='edit')return`<span class="cl-action cl-action-${escAttr(r.action||'')}">${escapeHtml(CL_ACTIONS[r.action]||r.action||'—')}</span>`;
+  if(r._changes.length===0)return'<span class="cl-muted">Edited</span>';
+  const open=_clExpanded.has(r.id);
+  const shown=open?r._changes:r._changes.slice(0,3);
+  const lines=shown.map(c=>`<div class="cl-change"><span class="cl-field">${escapeHtml(c.f.replace(/_/g,' '))}:</span> ${clValueHtml(c.b)} <span class="cl-arrow">→</span> ${clValueHtml(c.a)}</div>`).join('');
+  const extra=r._changes.length-3;
+  const toggle=extra>0
+    ?`<button type="button" class="cl-more" onclick="clToggleMore(${escAttr(JSON.stringify(r.id))})">${open?'Show less':'+'+extra+' more'}</button>`
+    :'';
+  return lines+toggle;
+}
+
+function renderChangeLog(){
+  const list=document.getElementById('clList');
+  const btn=document.getElementById('clMoreBtn');
+  const note=document.getElementById('clFootNote');
+  if(_clBusy&&_clRows.length===0)return; // first page still loading — keep "Loading…"
+  const term=document.getElementById('clSearch').value.trim().toLowerCase();
+  const rows=term?_clRows.filter(r=>r._text.includes(term)):_clRows;
+  btn.style.display=_clHasMore?'block':'none';
+  if(_clRows.length===0){
+    // [] is what RLS returns to a non-owner — "no access", never an error
+    list.innerHTML=PROFILE.role!=='owner'
+      ?'<div class="notif-empty">Only the company owner can view the change log.</div>'
+      :clServerFiltersActive()
+      ?'<div class="notif-empty">No changes match these filters.</div>'
+      :'<div class="notif-empty">No changes recorded yet.</div>';
+    note.textContent='';
+    return;
+  }
+  note.textContent=(term?`${rows.length} of ${_clRows.length} loaded changes match`:`Showing ${_clRows.length} change${_clRows.length!==1?'s':''}`)+(_clHasMore?' — load more to see older':'');
+  if(rows.length===0){list.innerHTML='<div class="notif-empty">No loaded changes match your search.</div>';return;}
+  list.innerHTML=`<div class="cl-row cl-head"><span>When</span><span>Who</span><span>What</span><span>Record</span><span>Change</span></div>`
+    +rows.map(r=>`<div class="cl-row">
+      <span class="cl-when">${fmtDayMonYear(r.created_at)} ${fmtTimeHM(r.created_at)}</span>
+      <span class="cl-who">${escapeHtml(r._who)}</span>
+      <span class="cl-what">${escapeHtml(r._what)}</span>
+      <span class="cl-record">${escapeHtml(r._record)}</span>
+      <div class="cl-changes">${clChangeHtml(r)}</div>
+    </div>`).join('');
+}
 
 // ── ODOMETER PHOTOS (private bucket, signed URLs) ─────────────────────────────
 const ODO_PHOTO_BUCKET='odometer-photos';
@@ -7507,6 +7767,37 @@ initApp();
     <label class="login-label" style="margin-top:18px;">Sessions</label>
     <div class="login-hint" style="margin-bottom:8px;">Signs you out of FleetDesk on every device and browser, including this one.</div>
     <button type="button" class="btn btn-danger" style="width:100%;" onclick="logoutEverywhere()"><svg class="icon" aria-hidden="true"><use href="#icon-logout"/></svg>Log out everywhere</button>
+    <!-- Gap A: Owner only (role is a UI hint; audit_log RLS is the real gate) -->
+    <div id="accountChangeLogWrap" style="display:none;">
+      <label class="login-label" style="margin-top:18px;">Company</label>
+      <div class="login-hint" style="margin-bottom:8px;">Every add, edit, delete and restore in your company, and who made it.</div>
+      <button type="button" class="btn btn-outline" style="width:100%;" onclick="openChangeLog()"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Change log</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE LOG MODAL (gap A, Owner only) — Driver History pattern, wide -->
+<div id="changeLogModal" class="cl-overlay" onclick="closeChangeLog()">
+  <div class="cl-card" onclick="event.stopPropagation()">
+    <div class="cl-header">
+      <div class="cl-title"><svg class="icon icon-lead" aria-hidden="true"><use href="#icon-list"/></svg>Change log</div>
+      <button type="button" class="cl-close" onclick="closeChangeLog()" aria-label="Close">×</button>
+    </div>
+    <div class="cl-filters">
+      <input type="text" id="clSearch" class="cl-search" placeholder="Search loaded changes…" oninput="renderChangeLog()">
+      <select id="clPerson" class="sort-select" onchange="loadChangeLogPage(true)" aria-label="Person"><option value="">Everyone</option></select>
+      <select id="clRange" class="sort-select" onchange="loadChangeLogPage(true)" aria-label="Date range">
+        <option value="7">Last 7 days</option>
+        <option value="30">Last 30 days</option>
+        <option value="year">This year</option>
+        <option value="all" selected>Everything</option>
+      </select>
+    </div>
+    <div id="clList" class="cl-list"></div>
+    <div class="cl-footer">
+      <button id="clMoreBtn" type="button" class="cl-more-btn" onclick="loadChangeLogPage(false)" style="display:none;">Load more</button>
+      <div id="clFootNote" class="cl-footnote"></div>
+    </div>
   </div>
 </div>
 
