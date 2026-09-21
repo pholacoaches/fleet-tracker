@@ -1682,6 +1682,9 @@ input[type=file] { display: none; }
 <script src="esc.js"></script>
 <script>
 // ── AUTH ──────────────────────────────────────────────────────────────────────
+// accept.html (gap A invite page) writes these same three keys, and removes
+// TENANT_CACHE_KEY below, to sign a new user straight in. If any of these
+// names change, change them in accept.html too.
 const AUTH_TOKEN_KEY='fleet_auth_token';
 const AUTH_REFRESH_KEY='fleet_auth_refresh';
 const AUTH_TIME_KEY='fleet_auth_time';
