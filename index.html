@@ -637,6 +637,71 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:18px; word-break:break-all;
 }
 .account-email strong { color:var(--text); }
+.account-email-sub { font-size:11px; color:var(--text3); margin-top:3px; }
+.account-email-sub:empty { display:none; }
+/* Change log (gap A) — Driver History modal pattern, widened */
+.cl-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:10000;
+  align-items:center; justify-content:center; padding:20px;
+}
+.cl-card {
+  background:#fff; border-radius:16px; max-width:1000px; width:100%; height:90vh;
+  display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.45);
+  overflow:hidden; animation:fadeUp 0.25s ease both;
+}
+.cl-header { background:var(--accent); padding:18px 22px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.cl-title { font-size:15px; font-weight:700; color:white; letter-spacing:0.3px; }
+.cl-close {
+  background:rgba(255,255,255,0.2); border:none; border-radius:6px; color:white; font-size:18px;
+  width:28px; height:28px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1;
+}
+.cl-filters { display:flex; gap:8px; flex-wrap:wrap; padding:12px 22px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.cl-search {
+  flex:1; min-width:160px; border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px;
+  font-family:var(--font); font-size:12px; outline:none; color:var(--text); background:var(--surface2);
+}
+.cl-list { overflow-y:auto; padding:6px 22px; flex:1; }
+.cl-row {
+  display:grid; grid-template-columns:130px 120px 140px 130px 1fr; gap:10px;
+  padding:9px 0; border-bottom:1px solid var(--border); font-size:12px; align-items:start;
+}
+.cl-head { font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.6px; position:sticky; top:0; background:#fff; }
+.cl-when { color:var(--text3); white-space:nowrap; }
+.cl-who { font-weight:700; color:var(--text2); overflow-wrap:anywhere; }
+.cl-what { color:var(--text2); }
+.cl-record { font-weight:700; color:var(--accent); overflow-wrap:anywhere; }
+.cl-changes { min-width:0; overflow-wrap:anywhere; }
+.cl-change { line-height:1.5; }
+.cl-field { font-weight:700; color:var(--text2); }
+.cl-arrow { color:var(--text3); }
+.cl-muted { color:var(--text3); font-style:italic; }
+.cl-action { font-weight:700; }
+.cl-action-add, .cl-action-restore { color:var(--green); }
+.cl-action-delete { color:var(--red); }
+.cl-more { background:none; border:none; padding:0; margin-top:2px; font-family:var(--font); font-size:11px; font-weight:700; color:var(--accent); cursor:pointer; }
+.cl-footer { padding:12px 22px; border-top:1px solid var(--border); flex-shrink:0; }
+.cl-more-btn {
+  width:100%; padding:10px; background:var(--accent); color:white; border:none; border-radius:8px;
+  font-family:var(--font); font-size:13px; font-weight:700; cursor:pointer; margin-bottom:8px;
+}
+.cl-footnote { font-size:11px; color:var(--text3); text-align:center; }
+@media (max-width:600px) {
+  .cl-overlay { padding:0; }
+  .cl-card { max-width:none; height:100%; border-radius:0; }
+  .cl-filters, .cl-list, .cl-footer { padding-left:14px; padding-right:14px; }
+  .cl-head { display:none; }
+  .cl-row { grid-template-columns:1fr 1fr; gap:2px 10px; }
+  .cl-when { grid-column:1; }
+  .cl-who { grid-column:2; text-align:right; }
+  .cl-what { grid-column:1; }
+  .cl-record { grid-column:2; text-align:right; }
+  .cl-changes { grid-column:1 / -1; margin-top:4px; }
+}
+.role-pill {
+  display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; vertical-align:1px;
+  font-size:10px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
+  background:var(--accent-light); color:var(--accent); border:1px solid var(--accent);
+}
 .logout-btn {
   font-size:11px; padding:4px 12px; border:1.5px solid rgba(255,255,255,0.4);
   border-radius:var(--radius-sm); background:transparent; color:rgba(255,255,255,0.85);
@@ -1632,6 +1697,10 @@ const TENANT_CACHE_KEY='fleet_tenant_v1'; // last-known tenant for the active se
 const LEGACY_TENANT_ID='afbde0fd-e952-4064-a3e7-dca1187e8e68';
 const LEGACY_LOCAL_KEYS=['fleet_tracker_v2','fleet_service_v1','fleet_upload_ids_v1','fleet_discs_v2'];
 let TENANT=null; // {id, display_name, tagline, logo_url, hero_image_url, accent_color}
+// Gap A: the signed-in user's own profile row. The role is a UI hint only —
+// RLS enforces it server-side. Never defaults to owner: a failed or missing
+// fetch leaves 'viewer'. `loaded` stays false until the fetch has settled.
+let PROFILE={role:'viewer',full_name:'',loaded:false};
 
 function nsKey(base){return TENANT?base+':'+TENANT.id:base;}
 
@@ -1662,6 +1731,30 @@ async function initTenant(){
   migrateLegacyLocalData();
   reloadTenantState();
   return true;
+}
+
+const PROFILE_ROLES=['owner','manager','viewer'];
+async function loadMyProfile(){
+  PROFILE={role:'viewer',full_name:'',loaded:false};
+  const uid=getAuthUserId();
+  try{
+    if(uid){
+      const res=await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=role,full_name&id=eq.${encodeURIComponent(uid)}`,{
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+      });
+      const rows=res.ok?await res.json():null;
+      if(Array.isArray(rows)&&rows.length===1){
+        const r=rows[0];
+        if(PROFILE_ROLES.includes(r.role))PROFILE.role=r.role;
+        else console.warn('[FleetDesk] profile has unknown role',r.role,'— role defaults to viewer');
+        PROFILE.full_name=typeof r.full_name==='string'?r.full_name.trim():'';
+      }else{
+        console.warn('[FleetDesk] profile fetch returned no row — role defaults to viewer');
+      }
+    }
+  }catch(err){console.warn('[FleetDesk] profile fetch failed — role defaults to viewer',err);}
+  PROFILE.loaded=true;
+  if(document.getElementById('accountModal')?.style.display==='flex')renderAccountIdentity();
 }
 
 function migrateLegacyLocalData(){
@@ -1796,6 +1889,7 @@ async function showDashboard(){
     document.getElementById('loginErr').textContent='Could not load your company profile. Please check your connection and try again.';
     return;
   }
+  loadMyProfile();            // role + name for the Account panel (not awaited — nothing renders from it yet)
   recomputeAllStats();
   renderDashboard();          // fast paint from the local cache
   syncFuelReports();          // then the DB (source of truth) takes over
@@ -2031,8 +2125,8 @@ function getAuthEmail(){
   }catch{return'';}
 }
 
-// Current user's auth uuid (JWT sub claim) — stamped into deleted_by on
-// soft-deletes so Recently deleted can show who removed each item.
+// Current user's auth uuid (JWT sub claim) — used to fetch the user's own
+// profiles row. (deleted_by is stamped by the DB, never by the app.)
 function getAuthUserId(){
   try{
     const token=localStorage.getItem(AUTH_TOKEN_KEY);
@@ -2042,7 +2136,7 @@ function getAuthUserId(){
 }
 
 function openAccountPanel(){
-  document.getElementById('accountEmail').textContent=getAuthEmail()||'Unknown';
+  renderAccountIdentity();
   document.getElementById('accountPw0').value='';
   document.getElementById('accountPw1').value='';
   document.getElementById('accountPw2').value='';
@@ -2051,6 +2145,19 @@ function openAccountPanel(){
   const btn=document.getElementById('accountSaveBtn');
   btn.disabled=false;btn.textContent='Save new password';
   document.getElementById('accountModal').style.display='flex';
+}
+
+// Name (fallback: email) + role pill. The pill stays hidden until the
+// profile fetch has settled, so it never flashes a wrong role.
+function renderAccountIdentity(){
+  const email=getAuthEmail();
+  document.getElementById('accountName').textContent=PROFILE.full_name||email||'Unknown';
+  // Email always visible under a name, so the password form's account is clear
+  document.getElementById('accountEmail').textContent=PROFILE.full_name?email:'';
+  const pill=document.getElementById('accountRole');
+  pill.textContent=PROFILE.role.charAt(0).toUpperCase()+PROFILE.role.slice(1);
+  pill.style.display=PROFILE.loaded?'inline-block':'none';
+  document.getElementById('accountChangeLogWrap').style.display=PROFILE.role==='owner'?'block':'none';
 }
 
 function closeAccountPanel(){
@@ -3292,7 +3399,7 @@ async function deleteReport(i){
     const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?period=eq.${encodeURIComponent(period)}&deleted_at=is.null&select=id,period`,{
       method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify({deleted_at:new Date().toISOString(),deleted_by:getAuthUserId()})
+      body:JSON.stringify({deleted_at:new Date().toISOString()})
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
     // return=representation: 0 rows back = nothing was soft-deleted (RLS block
@@ -3303,10 +3410,6 @@ async function deleteReport(i){
       alert('Update didn\'t save — please try again.');
       return;
     }
-    // Slim before-snapshot on purpose: the full report JSON still lives in the
-    // soft-deleted row itself — copying it into audit_log would double a
-    // multi-hundred-KB blob per delete.
-    logAudit('delete','fuel_reports',rows[0].id,{period,vehicles:r.vehicles.length,uploadedAt:r.uploadedAt});
   }catch(err){
     console.error('[FleetDesk] Report delete failed:',err);
     alert('Could not delete the report. Please check your connection and try again.');
@@ -3325,6 +3428,7 @@ async function deleteReport(i){
 // History-tab section listing soft-deleted readings, maintenance jobs and fuel
 // reports (100 most recent each), with per-item Restore. Rows come straight
 // from the three tables (deleted_at=not.is.null) — RLS keeps it tenant-scoped.
+// Gap A: "by" is deleted_by_name, stamped by the DB on soft-delete.
 let rdRows=[],rdFilter='all';
 const RD_TYPES={
   odometer_readings:{label:'Reading',badge:'pending'},
@@ -3340,22 +3444,22 @@ async function renderRecentlyDeleted(){
     const headers={'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()};
     const q='deleted_at=not.is.null&order=deleted_at.desc&limit=100';
     const[rRes,jRes,fRes]=await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=id,plate,odometer,driver_name,created_at,deleted_at,deleted_by&${q}`,{headers}),
-      fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?select=id,plate,category,description,date_in,total_cost,deleted_at,deleted_by&${q}`,{headers}),
-      fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?select=id,period,deleted_at,deleted_by&${q}`,{headers})
+      fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?select=id,plate,odometer,driver_name,created_at,deleted_at,deleted_by_name&${q}`,{headers}),
+      fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?select=id,plate,category,description,date_in,total_cost,deleted_at,deleted_by_name&${q}`,{headers}),
+      fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?select=id,period,deleted_at,deleted_by_name&${q}`,{headers})
     ]);
     if(!rRes.ok||!jRes.ok||!fRes.ok)throw new Error(`HTTP ${rRes.status}/${jRes.status}/${fRes.status}`);
     const[readings,jobs,reports]=await Promise.all([rRes.json(),jRes.json(),fRes.json()]);
     rdRows=[
-      ...readings.map(r=>({type:'odometer_readings',id:r.id,deleted_at:r.deleted_at,deleted_by:r.deleted_by,
+      ...readings.map(r=>({type:'odometer_readings',id:r.id,deleted_at:r.deleted_at,deleted_by_name:r.deleted_by_name,
         label:`${r.plate||'—'} · ${r.odometer?Number(r.odometer).toLocaleString('en-US')+' km':'—'} · ${r.driver_name||'—'}`,
         sub:`submitted ${fmtDayMonYear(r.created_at)}`})),
-      ...jobs.map(j=>({type:'maintenance_jobs',id:j.id,deleted_at:j.deleted_at,deleted_by:j.deleted_by,
+      ...jobs.map(j=>({type:'maintenance_jobs',id:j.id,deleted_at:j.deleted_at,deleted_by_name:j.deleted_by_name,
         // fmtRand, not fmtTotalR: this label is escaped as plain text, and
         // fmtTotalR returns responsive <span> markup (sv-desk/sv-phone).
         label:`${j.plate||'—'} · ${(MAINT_CATEGORIES[j.category]||MAINT_CATEGORIES.other).label}${j.total_cost?' · '+fmtRand(j.total_cost):''}`,
         sub:`${j.description?String(j.description).slice(0,60):''} · in ${fmtDayMonYear(j.date_in)}`})),
-      ...reports.map(f=>({type:'fuel_reports',id:f.id,deleted_at:f.deleted_at,deleted_by:f.deleted_by,
+      ...reports.map(f=>({type:'fuel_reports',id:f.id,deleted_at:f.deleted_at,deleted_by_name:f.deleted_by_name,
         label:`${f.period} fuel report`,sub:''}))
     ].sort((a,b)=>new Date(b.deleted_at)-new Date(a.deleted_at));
     renderRdList();
@@ -3380,10 +3484,9 @@ function renderRdList(){
     list.innerHTML='<div class="notif-empty">Nothing in Recently Deleted.</div>';
     return;
   }
-  const me=getAuthUserId();
   list.innerHTML=rows.map(r=>{
     const t=RD_TYPES[r.type];
-    const who=r.deleted_by?(r.deleted_by===me?(getAuthEmail()||'you'):'another user'):'—';
+    const who=(typeof r.deleted_by_name==='string'&&r.deleted_by_name.trim())||'Unknown';
     return`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap;">
       <span class="sub-badge ${t.badge}" style="flex-shrink:0;">${t.label}</span>
       <div style="flex:1;min-width:180px;">
@@ -3395,7 +3498,8 @@ function renderRdList(){
   }).join('');
 }
 
-// Restore = clear deleted_at + deleted_by. Guarded on deleted_at=not.is.null:
+// Restore = clear deleted_at (the DB owns deleted_by / deleted_by_name).
+// Guarded on deleted_at=not.is.null:
 // restoring a row someone already restored fails loudly instead of silently
 // re-stamping. Then the affected view refetches from the DB.
 async function restoreDeleted(table,id){
@@ -3404,7 +3508,7 @@ async function restoreDeleted(table,id){
     const res=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}&deleted_at=not.is.null&select=id`,{
       method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify({deleted_at:null,deleted_by:null})
+      body:JSON.stringify({deleted_at:null})
     });
     if(!res.ok){
       console.error('[FleetDesk] Restore failed:',table,res.status,await res.text().catch(()=>''));
@@ -3418,7 +3522,6 @@ async function restoreDeleted(table,id){
       renderRecentlyDeleted();
       return;
     }
-    logAudit('restore',table,id,null);
     if(table==='odometer_readings')await fetchSubmissions();
     if(table==='maintenance_jobs')await renderMaintTab();
     if(table==='fuel_reports'){
@@ -3694,7 +3797,7 @@ async function clearAllData(){
     const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?deleted_at=is.null&select=id,period`,{
       method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify({deleted_at:new Date().toISOString(),deleted_by:getAuthUserId()})
+      body:JSON.stringify({deleted_at:new Date().toISOString()})
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
     // return=representation: 0 rows back = the DB soft-deleted nothing (RLS
@@ -3705,9 +3808,6 @@ async function clearAllData(){
       alert('Update didn\'t save — please try again.');
       return;
     }
-    // Gap B phase 1: one audit row per report cleared (slim snapshot — the
-    // report JSON survives in the soft-deleted row).
-    rows.forEach(row=>logAudit('delete','fuel_reports',row.id,{period:row.period,via:'clear_all_data'}));
   }catch(err){
     alert('⚠️ Could not clear the cloud data — nothing has been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.');
     return;
@@ -3890,29 +3990,258 @@ function authToken(){
   return t;
 }
 
-// ── AUDIT LOG (gap B phase 1) ─────────────────────────────────────────────────
-// Single writer for the audit_log table: every add/edit/delete/restore of
-// readings, maintenance jobs and fuel reports goes through here. tenant_id,
-// user_id and created_at are stamped by DB defaults — the app sends only the
-// event itself. Callers do NOT await this: a failed audit write must never
-// block the user's action, so failures go to console + Sentry only.
-// Reading ADDs are logged by a DB trigger on odometer_readings — never call
-// this for a driver submission, it would double up.
-async function logAudit(action,tableName,recordId,before){
-  let status=0;
+// ── AUDIT LOG ────────────────────────────────────────────────────────────────
+// Gap A: the app never writes audit_log. A DB trigger records every
+// insert/update/delete (before + after + actor name) on the audited tables.
+
+// ── CHANGE LOG (gap A block 4, Owner only) ───────────────────────────────────
+// Same modal pattern as Driver History: accent header, scrolling list,
+// "Load more" footer with limit/offset paging, busy guard, dedup by id.
+// audit_log SELECT is Owner-only in RLS — a non-owner gets [] (not an error),
+// which is shown as "no access". Person + date filter server-side; the text
+// search runs over the rows already loaded (jsonb/array columns can't be
+// ilike-searched through PostgREST).
+const CHANGE_LOG_PAGE=100;
+const CL_TABLES={
+  vehicle_compliance:'Disc & compliance',fuel_reports:'Fuel report',maintenance_jobs:'Job card',
+  maintenance_parts:'Job card part',odometer_readings:'Odometer reading',vehicles:'Vehicle',
+  drivers:'Driver',tyres:'Tyre',profiles:'User',tenants:'Company settings',
+  vehicle_service:'Service settings',upload_ids:'Statement upload',bus_directory:'Bus directory',
+  compliance_history:'Renewal history'
+};
+const CL_HIDDEN_FIELDS=['id','tenant_id','created_at','updated_at'];
+const CL_ACTIONS={add:'Added',delete:'Deleted',restore:'Restored',edit:'Edited'};
+// Values over 2000 chars are replaced by this marker in the DB trigger
+const CL_NOT_STORED_RE=/^\(large value\b/;
+// Fields tried, in order, to give a record a human label
+const CL_LABEL_FIELDS=['plate','period','full_name','name','display_name','upload_id','part_name','description'];
+let _clRows=[],_clBusy=false,_clHasMore=false,_clGen=0;
+let _clExpanded=new Set();
+// Person filter. Option values: 'u:<user_id>' (a login in profiles, or a
+// removed login seen in loaded rows — both filtered by user_id) and
+// CL_SYSTEM (rows with no user: user_id=is.null). Rows without a user_id
+// all fall under CL_SYSTEM, so no filter ever needs actor_name.
+const CL_SYSTEM='sys';
+const CL_SYSTEM_LABEL='Driver app or system';
+let _clProfiles=[];          // [{id,label}] the company's logins (owner-readable via RLS)
+let _clSeenUsers=new Map();  // user_id -> actor_name, from loaded rows
+let _clPersonLabels={};      // option value -> label, so a selection survives a refresh
+
+function openChangeLog(){
+  closeAccountPanel();
+  _clProfiles=[];_clSeenUsers=new Map();_clPersonLabels={};
+  document.getElementById('clSearch').value='';
+  document.getElementById('clPerson').innerHTML='<option value="">Everyone</option>';
+  clRefreshPeople();
+  document.getElementById('clRange').value='all';
+  document.getElementById('changeLogModal').style.display='flex';
+  clLoadPeople();
+  loadChangeLogPage(true);
+}
+
+// Person list source: the company's profiles. [] means "no access" (or no
+// other logins) — never an error; the dropdown then relies on names seen in
+// loaded rows. The label is the login's CURRENT name (email if unnamed); the
+// filter is by user_id, so rows saved under an older name are still found.
+async function clLoadPeople(){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/audit_log`,{
-      method:'POST',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify({action,table_name:tableName,record_id:recordId,before:before||null})
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,full_name,email&order=full_name`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
-    status=res.status;
-    // return=representation: 0 rows back = nothing was written (204 lies)
-    const rows=res.ok?await res.json().catch(()=>null):null;
-    if(res.ok&&Array.isArray(rows)&&rows.length>0)return;
-  }catch{}
-  console.error('[FleetDesk] audit_log write failed:',action,tableName,recordId,status);
-  try{window.FleetDesk&&FleetDesk.reportError&&FleetDesk.reportError('audit_log write failed',{action,table:tableName,status});}catch{}
+    if(!res.ok){console.warn('[FleetDesk] Change log people fetch failed:',res.status);return;}
+    const rows=await res.json();
+    if(!Array.isArray(rows))return;
+    _clProfiles=rows.filter(p=>p&&p.id).map(p=>({id:p.id,
+      label:(typeof p.full_name==='string'&&p.full_name.trim())||(typeof p.email==='string'&&p.email.trim())||'Unnamed login'}));
+    clRefreshPeople();
+  }catch(err){console.warn('[FleetDesk] Change log people fetch error:',err);}
+}
+
+function closeChangeLog(){
+  document.getElementById('changeLogModal').style.display='none';
+  _clGen++; // any in-flight page is discarded
+  _clRows=[];_clExpanded=new Set();
+}
+
+function clFilterQuery(){
+  let q='';
+  const person=document.getElementById('clPerson').value;
+  if(person===CL_SYSTEM)q+='&user_id=is.null';
+  else if(person.startsWith('u:'))q+=`&user_id=eq.${encodeURIComponent(person.slice(2))}`;
+  const range=document.getElementById('clRange').value;
+  let since=null;
+  if(range==='7')since=new Date(Date.now()-7*864e5);
+  else if(range==='30')since=new Date(Date.now()-30*864e5);
+  else if(range==='year')since=new Date(new Date().getFullYear(),0,1);
+  if(since)q+=`&created_at=gte.${encodeURIComponent(since.toISOString())}`;
+  return q;
+}
+
+function clServerFiltersActive(){
+  return !!document.getElementById('clPerson').value||document.getElementById('clRange').value!=='all';
+}
+
+async function loadChangeLogPage(reset){
+  if(reset){_clGen++;_clRows=[];_clExpanded=new Set();_clBusy=false;}
+  if(_clBusy)return;
+  _clBusy=true;
+  const gen=_clGen;
+  const list=document.getElementById('clList');
+  const btn=document.getElementById('clMoreBtn');
+  btn.disabled=true;btn.textContent='Loading…';
+  if(reset){list.innerHTML='<div class="notif-empty">Loading change log…</div>';btn.style.display='none';document.getElementById('clFootNote').textContent='';}
+  try{
+    const res=await fetch(
+      `${SUPABASE_URL}/rest/v1/audit_log?select=id,created_at,action,table_name,record_id,user_id,actor_name,changed_fields,before,after&source=eq.db${clFilterQuery()}&order=created_at.desc,id.desc&limit=${CHANGE_LOG_PAGE}&offset=${_clRows.length}`,
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}}
+    );
+    if(gen!==_clGen)return;
+    if(!res.ok){
+      console.error('[FleetDesk] Change log fetch failed:',res.status,await res.text().catch(()=>''));
+      if(_clRows.length===0)list.innerHTML='<div class="notif-empty">Could not load the change log. Please check your connection and try again.</div>';
+      else alert('Could not load more changes. Please try again.');
+      return;
+    }
+    const page=await res.json();
+    if(gen!==_clGen)return;
+    const seen=new Set(_clRows.map(r=>r.id));
+    const fresh=(Array.isArray(page)?page:[]).filter(r=>!seen.has(r.id)).map(clPrepareRow);
+    _clRows=_clRows.concat(fresh);
+    fresh.forEach(r=>{if(r.user_id&&r.actor_name&&!_clSeenUsers.has(r.user_id))_clSeenUsers.set(r.user_id,r.actor_name);});
+    clRefreshPeople();
+    _clHasMore=Array.isArray(page)&&page.length===CHANGE_LOG_PAGE;
+    _clBusy=false; // before render: an empty first page must reach the empty-state text
+    renderChangeLog();
+  }catch(err){
+    if(gen!==_clGen)return;
+    console.error('[FleetDesk] Change log error:',err);
+    if(_clRows.length===0)list.innerHTML='<div class="notif-empty">Could not load the change log. Please check your connection and try again.</div>';
+  }finally{
+    if(gen===_clGen){_clBusy=false;btn.disabled=false;btn.textContent='Load more';}
+  }
+}
+
+// Person dropdown = the company's logins, then "Driver app or system"
+// (user_id is null), then removed logins seen in loaded rows (user_id with
+// no profile row, labelled with their newest logged name). All by user_id.
+// The current selection is always kept.
+function clRefreshPeople(){
+  const sel=document.getElementById('clPerson');
+  const cur=sel.value;
+  const profileIds=new Set(_clProfiles.map(p=>p.id));
+  const opts=_clProfiles.map(p=>['u:'+p.id,p.label]);
+  opts.push([CL_SYSTEM,CL_SYSTEM_LABEL]);
+  [..._clSeenUsers].filter(([uid])=>!profileIds.has(uid))
+    .sort((a,b)=>a[1].localeCompare(b[1]))
+    .forEach(([uid,name])=>opts.push(['u:'+uid,name]));
+  opts.forEach(([v,l])=>{_clPersonLabels[v]=l;});
+  if(cur&&!opts.some(([v])=>v===cur))opts.push([cur,_clPersonLabels[cur]||cur]);
+  sel.innerHTML='<option value="">Everyone</option>'
+    +opts.map(([v,l])=>`<option value="${escAttr(v)}">${escapeHtml(l)}</option>`).join('');
+  sel.value=cur;
+}
+
+function clFieldVisible(f){return !CL_HIDDEN_FIELDS.includes(f);}
+
+function clIsNotStored(v){return typeof v==='string'&&CL_NOT_STORED_RE.test(v);}
+
+// Dates / timestamps in the app's own format (fmtDayMonYear + fmtTimeHM);
+// anything else — or anything that fails to parse — is returned untouched.
+const CL_DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
+const CL_TS_RE=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+function clDateText(v){
+  if(typeof v!=='string')return null;
+  if(CL_DATE_RE.test(v)){const t=fmtDayMonYear(v);return t==='—'?null:t;}
+  if(CL_TS_RE.test(v)&&!isNaN(new Date(v)))return`${fmtDayMonYear(v)} ${fmtTimeHM(v)}`;
+  return null;
+}
+
+function clValueText(v){
+  if(v===null||v===undefined||v==='')return'empty';
+  if(clIsNotStored(v))return'(not stored)';
+  const d=clDateText(v);
+  if(d)return d;
+  const s=typeof v==='object'?JSON.stringify(v):String(v);
+  return s.length>80?s.slice(0,80)+'…':s;
+}
+
+function clValueHtml(v){
+  const grey=v===null||v===undefined||v===''||clIsNotStored(v);
+  const t=escapeHtml(clValueText(v));
+  return grey?`<span class="cl-muted">${t}</span>`:t;
+}
+
+function clRecordLabel(r){
+  const src=r.after||r.before||{};
+  for(const k of CL_LABEL_FIELDS){
+    const v=src[k];
+    if(v!==null&&v!==undefined&&v!==''&&!clIsNotStored(v)&&typeof v!=='object'){
+      const s=String(v);
+      return s.length>40?s.slice(0,40)+'…':s;
+    }
+  }
+  return r.record_id?String(r.record_id).slice(0,8):'—';
+}
+
+// Pre-compute the display pieces once per row (also feeds the text search)
+function clPrepareRow(r){
+  const fields=r.action==='edit'?(Array.isArray(r.changed_fields)?r.changed_fields:[]).filter(clFieldVisible):[];
+  const who=r.actor_name||'Unknown';
+  const what=CL_TABLES[r.table_name]||r.table_name||'—';
+  const record=clRecordLabel(r);
+  const b=r.before||{},a=r.after||{};
+  const changes=fields.map(f=>({f,b:b[f],a:a[f]}));
+  const text=[who,what,record,CL_ACTIONS[r.action]||r.action,
+    ...changes.map(c=>`${c.f} ${clValueText(c.b)} ${clValueText(c.a)}`)].join(' ').toLowerCase();
+  return{...r,_who:who,_what:what,_record:record,_changes:changes,_text:text};
+}
+
+function clToggleMore(id){
+  if(_clExpanded.has(id))_clExpanded.delete(id);else _clExpanded.add(id);
+  renderChangeLog();
+}
+
+function clChangeHtml(r){
+  if(r.action!=='edit')return`<span class="cl-action cl-action-${escAttr(r.action||'')}">${escapeHtml(CL_ACTIONS[r.action]||r.action||'—')}</span>`;
+  if(r._changes.length===0)return'<span class="cl-muted">Edited</span>';
+  const open=_clExpanded.has(r.id);
+  const shown=open?r._changes:r._changes.slice(0,3);
+  const lines=shown.map(c=>`<div class="cl-change"><span class="cl-field">${escapeHtml(c.f.replace(/_/g,' '))}:</span> ${clValueHtml(c.b)} <span class="cl-arrow">→</span> ${clValueHtml(c.a)}</div>`).join('');
+  const extra=r._changes.length-3;
+  const toggle=extra>0
+    ?`<button type="button" class="cl-more" onclick="clToggleMore(${escAttr(JSON.stringify(r.id))})">${open?'Show less':'+'+extra+' more'}</button>`
+    :'';
+  return lines+toggle;
+}
+
+function renderChangeLog(){
+  const list=document.getElementById('clList');
+  const btn=document.getElementById('clMoreBtn');
+  const note=document.getElementById('clFootNote');
+  if(_clBusy&&_clRows.length===0)return; // first page still loading — keep "Loading…"
+  const term=document.getElementById('clSearch').value.trim().toLowerCase();
+  const rows=term?_clRows.filter(r=>r._text.includes(term)):_clRows;
+  btn.style.display=_clHasMore?'block':'none';
+  if(_clRows.length===0){
+    // [] is what RLS returns to a non-owner — "no access", never an error
+    list.innerHTML=PROFILE.role!=='owner'
+      ?'<div class="notif-empty">Only the company owner can view the change log.</div>'
+      :clServerFiltersActive()
+      ?'<div class="notif-empty">No changes match these filters.</div>'
+      :'<div class="notif-empty">No changes recorded yet.</div>';
+    note.textContent='';
+    return;
+  }
+  note.textContent=(term?`${rows.length} of ${_clRows.length} loaded changes match`:`Showing ${_clRows.length} change${_clRows.length!==1?'s':''}`)+(_clHasMore?' — load more to see older':'');
+  if(rows.length===0){list.innerHTML='<div class="notif-empty">No loaded changes match your search.</div>';return;}
+  list.innerHTML=`<div class="cl-row cl-head"><span>When</span><span>Who</span><span>What</span><span>Record</span><span>Change</span></div>`
+    +rows.map(r=>`<div class="cl-row">
+      <span class="cl-when">${fmtDayMonYear(r.created_at)} ${fmtTimeHM(r.created_at)}</span>
+      <span class="cl-who">${escapeHtml(r._who)}</span>
+      <span class="cl-what">${escapeHtml(r._what)}</span>
+      <span class="cl-record">${escapeHtml(r._record)}</span>
+      <div class="cl-changes">${clChangeHtml(r)}</div>
+    </div>`).join('');
 }
 
 // ── ODOMETER PHOTOS (private bucket, signed URLs) ─────────────────────────────
@@ -6593,7 +6922,6 @@ async function submitMaintJob(){
       btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+'Save Job';
       return;
     }
-    logAudit('add','maintenance_jobs',jobId,null);
     if(parts.length>0){
       const pRes=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_parts`,{
         method:'POST',
@@ -6613,8 +6941,6 @@ async function submitMaintJob(){
 }
 
 async function markJobDone(id){
-  const _before=maintJobs.find(j=>j.id===id);
-  const _beforeSnap=_before?{..._before}:null;
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}&select=id`,{
       method:'PATCH',
@@ -6632,7 +6958,6 @@ async function markJobDone(id){
       alert('Update didn\'t save — please try again.');
       return;
     }
-    logAudit('edit','maintenance_jobs',id,_beforeSnap);
     await renderMaintTab();
   }catch{alert('Could not update the job. Please check your connection and try again.');}
 }
@@ -6643,12 +6968,11 @@ async function deleteMaintJob(id){
   const job=maintJobs.find(j=>j.id===id);
   const label=job?`${job.plate} — ${(MAINT_CATEGORIES[job.category]||MAINT_CATEGORIES.other).label}, ${fmtDayMonYear(job.date_in)}`:'this job';
   if(!confirm(`Delete this maintenance job (${label})?\n\nIt moves to Recently deleted (History tab) and can be restored from there.`))return;
-  const snap=job?{...job}:null;
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}&deleted_at=is.null&select=id`,{
       method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify({deleted_at:new Date().toISOString(),deleted_by:getAuthUserId()})
+      body:JSON.stringify({deleted_at:new Date().toISOString()})
     });
     if(!res.ok){
       console.error('[FleetDesk] Job delete failed:',res.status,await res.text().catch(()=>''));
@@ -6662,7 +6986,6 @@ async function deleteMaintJob(id){
       alert('Delete didn\'t save — please try again.');
       return;
     }
-    logAudit('delete','maintenance_jobs',id,snap);
     await renderMaintTab();
     if(currentDashTab==='reports'&&currentRepSub==='history')renderRecentlyDeleted();
   }catch(err){
@@ -7479,7 +7802,7 @@ initApp();
       <button type="button" class="account-close" onclick="closeAccountPanel()" aria-label="Close">✕</button>
     </div>
     <label class="login-label">Signed in as</label>
-    <div class="account-email"><strong id="accountEmail">—</strong></div>
+    <div class="account-email"><strong id="accountName">—</strong><span class="role-pill" id="accountRole" style="display:none;"></span><div class="account-email-sub" id="accountEmail"></div></div>
     <label class="login-label" for="accountPw0">Current password</label>
     <input class="login-input" type="password" id="accountPw0" placeholder="••••••••" autocomplete="current-password">
     <label class="login-label" for="accountPw1">New password</label>
@@ -7493,6 +7816,37 @@ initApp();
     <label class="login-label" style="margin-top:18px;">Sessions</label>
     <div class="login-hint" style="margin-bottom:8px;">Signs you out of FleetDesk on every device and browser, including this one.</div>
     <button type="button" class="btn btn-danger" style="width:100%;" onclick="logoutEverywhere()"><svg class="icon" aria-hidden="true"><use href="#icon-logout"/></svg>Log out everywhere</button>
+    <!-- Gap A: Owner only (role is a UI hint; audit_log RLS is the real gate) -->
+    <div id="accountChangeLogWrap" style="display:none;">
+      <label class="login-label" style="margin-top:18px;">Company</label>
+      <div class="login-hint" style="margin-bottom:8px;">Every add, edit, delete and restore in your company, and who made it.</div>
+      <button type="button" class="btn btn-outline" style="width:100%;" onclick="openChangeLog()"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Change log</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE LOG MODAL (gap A, Owner only) — Driver History pattern, wide -->
+<div id="changeLogModal" class="cl-overlay" onclick="closeChangeLog()">
+  <div class="cl-card" onclick="event.stopPropagation()">
+    <div class="cl-header">
+      <div class="cl-title"><svg class="icon icon-lead" aria-hidden="true"><use href="#icon-list"/></svg>Change log</div>
+      <button type="button" class="cl-close" onclick="closeChangeLog()" aria-label="Close">×</button>
+    </div>
+    <div class="cl-filters">
+      <input type="text" id="clSearch" class="cl-search" placeholder="Search loaded changes…" oninput="renderChangeLog()">
+      <select id="clPerson" class="sort-select" onchange="loadChangeLogPage(true)" aria-label="Person"><option value="">Everyone</option></select>
+      <select id="clRange" class="sort-select" onchange="loadChangeLogPage(true)" aria-label="Date range">
+        <option value="7">Last 7 days</option>
+        <option value="30">Last 30 days</option>
+        <option value="year">This year</option>
+        <option value="all" selected>Everything</option>
+      </select>
+    </div>
+    <div id="clList" class="cl-list"></div>
+    <div class="cl-footer">
+      <button id="clMoreBtn" type="button" class="cl-more-btn" onclick="loadChangeLogPage(false)" style="display:none;">Load more</button>
+      <div id="clFootNote" class="cl-footnote"></div>
+    </div>
   </div>
 </div>
 
@@ -7674,10 +8028,6 @@ function closeSubmissionModal(){
 }
 
 async function updateSubmissionStatus(id,status){
-  // Audit before-snapshot: the row as the app knows it, captured BEFORE the
-  // local mutations below flip its status.
-  const _before=notifData.find(n=>n.id===id)||pendingData.find(n=>n.id===id)||approvedData.find(n=>n.id===id)||null;
-  const _beforeSnap=_before?{..._before}:null;
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}&select=id`,{
       method:'PATCH',
@@ -7697,7 +8047,6 @@ async function updateSubmissionStatus(id,status){
       alert('Update didn\'t save — please try again.');
       return false;
     }
-    logAudit('edit','odometer_readings',id,_beforeSnap);
     const item=notifData.find(n=>n.id===id);
     if(item)item.status=status;
     // Keep the split arrays in sync: the record leaves the pending set, and an
@@ -7720,18 +8069,17 @@ async function updateSubmissionStatus(id,status){
 }
 
 // Gap B phase 1: admin soft-delete of a reading. The row keeps living in the
-// DB (deleted_at + deleted_by stamped); every reading query filters it out and
+// DB (deleted_at set; deleted_by + deleted_by_name stamped by the DB); every reading query filters it out and
 // the History tab's Recently deleted section can restore it.
 async function deleteReading(id){
   const rec=notifData.find(n=>n.id===id)||pendingData.find(n=>n.id===id)||approvedData.find(n=>n.id===id)||_dhRows.find(r=>r.id===id)||null;
   const label=rec?`${rec.plate||'—'}, ${rec.odometer?Number(rec.odometer).toLocaleString('en-US')+' km':'—'}`:'this reading';
   if(!confirm(`Delete this odometer reading (${label})?\n\nIt moves to Recently deleted (History tab) and can be restored from there.`))return;
-  const snap=rec?{...rec}:null;
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}&deleted_at=is.null&select=id`,{
       method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify({deleted_at:new Date().toISOString(),deleted_by:getAuthUserId()})
+      body:JSON.stringify({deleted_at:new Date().toISOString()})
     });
     if(!res.ok){
       console.error('[FleetDesk] Reading delete failed:',res.status,await res.text().catch(()=>''));
@@ -7746,7 +8094,6 @@ async function deleteReading(id){
       alert('Delete didn\'t save — please try again.');
       return;
     }
-    logAudit('delete','odometer_readings',id,snap);
     notifData=notifData.filter(n=>n.id!==id);
     pendingData=pendingData.filter(n=>n.id!==id);
     approvedData=approvedData.filter(n=>n.id!==id);
