@@ -4017,15 +4017,35 @@ const CL_NOT_STORED_RE=/^\(large value\b/;
 const CL_LABEL_FIELDS=['plate','period','full_name','name','display_name','upload_id','part_name','description'];
 let _clRows=[],_clBusy=false,_clHasMore=false,_clGen=0;
 let _clPeople=new Set(),_clNoActor=false,_clExpanded=new Set();
+let _clProfileNames=[]; // the company's logins (owner-readable via RLS)
 
 function openChangeLog(){
   closeAccountPanel();
-  _clPeople=new Set();_clNoActor=false;
+  _clPeople=new Set();_clNoActor=false;_clProfileNames=[];
   document.getElementById('clSearch').value='';
   document.getElementById('clPerson').innerHTML='<option value="">Everyone</option>';
   document.getElementById('clRange').value='all';
   document.getElementById('changeLogModal').style.display='flex';
+  clLoadPeople();
   loadChangeLogPage(true);
+}
+
+// Person list source: the company's profiles. [] means "no access" (or no
+// other logins) — never an error; the dropdown then relies on names seen in
+// loaded rows. actor_name is full_name at change time, so the option value
+// is full_name (email when a login has no name).
+async function clLoadPeople(){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=full_name,email&order=full_name`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
+    });
+    if(!res.ok){console.warn('[FleetDesk] Change log people fetch failed:',res.status);return;}
+    const rows=await res.json();
+    if(!Array.isArray(rows))return;
+    const names=rows.map(p=>(typeof p.full_name==='string'&&p.full_name.trim())||(typeof p.email==='string'&&p.email.trim())||'').filter(Boolean);
+    _clProfileNames=[...new Set(names)];
+    clRefreshPeople();
+  }catch(err){console.warn('[FleetDesk] Change log people fetch error:',err);}
 }
 
 function closeChangeLog(){
@@ -4092,12 +4112,14 @@ async function loadChangeLogPage(reset){
   }
 }
 
-// Person dropdown = every actor_name seen so far while the modal is open
-// (PostgREST has no DISTINCT); the current selection is always kept.
+// Person dropdown = the company's logins first, then any other actor_name
+// seen in loaded rows (e.g. "Driver app or system", people since removed).
+// The current selection is always kept.
 function clRefreshPeople(){
   const sel=document.getElementById('clPerson');
   const cur=sel.value;
-  const names=[..._clPeople].sort((a,b)=>a.localeCompare(b));
+  const extra=[..._clPeople].filter(n=>!_clProfileNames.includes(n)).sort((a,b)=>a.localeCompare(b));
+  const names=[..._clProfileNames,...extra];
   if(cur&&cur!=='__none__'&&!names.includes(cur))names.push(cur);
   sel.innerHTML='<option value="">Everyone</option>'
     +names.map(n=>`<option value="${escAttr(n)}">${escapeHtml(n)}</option>`).join('')
