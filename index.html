@@ -1069,6 +1069,9 @@ input[type=file] { display: none; }
   #sec-discs .section-actions > #discFilter,
   #sec-discs .section-actions > .disc-show-archived { grid-column:1 / -1; width:100%; }
   #sec-discs .section-actions > .btn { justify-content:center; width:100%; white-space:nowrap; }
+  /* Block F: the Cards / Bulk Edit segments take a full row and split it. */
+  #sec-discs .section-actions > .view-toggle { grid-column:1 / -1; width:100%; }
+  #sec-discs .section-actions > .view-toggle .view-btn { flex:1; justify-content:center; }
 
   /* Overview stat cards sit two per row (~157px each); the 24px
      "R468,139.52" needed 158px and was clipped by the card's overflow:hidden.
@@ -1470,7 +1473,10 @@ input[type=file] { display: none; }
             <label class="disc-show-archived hidden" id="discShowArchivedWrap" title="Archived vehicles are out of service; nothing is deleted">
               <input type="checkbox" id="discShowArchivedCb" onchange="discShowArchived=this.checked;renderDiscView()"> Show archived (<span id="discArchivedCount">0</span>)
             </label>
-            <button class="btn btn-outline" onclick="toggleDiscBulk()" id="discBulkBtn" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Bulk Edit</button>
+            <div class="view-toggle" role="group" aria-label="Disc view">
+              <button class="view-btn active" id="discViewCards" onclick="setDiscBulk(false)"><svg class="icon" aria-hidden="true"><use href="#icon-layout-grid"/></svg>Cards</button>
+              <button class="view-btn" id="discViewBulk" onclick="setDiscBulk(true)"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Bulk Edit</button>
+            </div>
             <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-download"/></svg>45-Day CSV</button>
             <button class="btn btn-outline" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Vehicle</button>
             <!-- Compliance photo-scan Stage 1: multi-select, no capture attribute so
@@ -4800,8 +4806,8 @@ function renderDiscViewBody(){
   const livePlates=discShowArchived?plates.filter(p=>!isArchivedPlate(p)):plates;
   const grid=document.getElementById('discsGrid');
   const bulkWrap=document.getElementById('discBulkWrap');
-  const bulkBtn=document.getElementById('discBulkBtn');
   const scanWrap=document.getElementById('discScanWrap');
+  syncDiscViewToggle();
 
   // Licence-scan approval table replaces the cards while open — also with an
   // empty fleet, since scanning is a valid way to add the first vehicles.
@@ -4846,13 +4852,11 @@ function renderDiscViewBody(){
   if(discBulkMode){
     grid.classList.add('hidden');
     bulkWrap.classList.remove('hidden');
-    if(bulkBtn)bulkBtn.innerHTML=svgIcon('layout-grid')+'Card View';
     renderDiscBulk(livePlates); // archived rows are read-only, never in the bulk editor
     return;
   }
   grid.classList.remove('hidden');
   bulkWrap.classList.add('hidden');
-  if(bulkBtn)bulkBtn.innerHTML=svgIcon('list')+'Bulk Edit';
   renderDiscCards(plates);
 }
 
@@ -5209,9 +5213,20 @@ async function saveRenewal(plate,key){
   renderDiscView();updateDiscTabBadge();renderAlertBanner();
 }
 
-function toggleDiscBulk(){
-  discBulkMode=!discBulkMode;
+// Block F: the Cards / Bulk Edit segments set the mode directly instead of
+// flipping it, so the control always shows both options. Same discBulkMode the
+// renderer already reads — view logic unchanged.
+function setDiscBulk(on){
+  if(discBulkMode===on)return;
+  discBulkMode=on;
   renderDiscView();
+}
+
+function syncDiscViewToggle(){
+  const cards=document.getElementById('discViewCards');
+  const bulk=document.getElementById('discViewBulk');
+  if(cards)cards.classList.toggle('active',!discBulkMode);
+  if(bulk)bulk.classList.toggle('active',discBulkMode);
 }
 
 function renderDiscBulk(plates){
