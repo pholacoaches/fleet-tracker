@@ -637,6 +637,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:18px; word-break:break-all;
 }
 .account-email strong { color:var(--text); }
+.role-pill {
+  display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; vertical-align:1px;
+  font-size:10px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
+  background:var(--accent-light); color:var(--accent); border:1px solid var(--accent);
+}
 .logout-btn {
   font-size:11px; padding:4px 12px; border:1.5px solid rgba(255,255,255,0.4);
   border-radius:var(--radius-sm); background:transparent; color:rgba(255,255,255,0.85);
@@ -1632,6 +1637,10 @@ const TENANT_CACHE_KEY='fleet_tenant_v1'; // last-known tenant for the active se
 const LEGACY_TENANT_ID='afbde0fd-e952-4064-a3e7-dca1187e8e68';
 const LEGACY_LOCAL_KEYS=['fleet_tracker_v2','fleet_service_v1','fleet_upload_ids_v1','fleet_discs_v2'];
 let TENANT=null; // {id, display_name, tagline, logo_url, hero_image_url, accent_color}
+// Gap A: the signed-in user's own profile row. The role is a UI hint only —
+// RLS enforces it server-side. Never defaults to owner: a failed or missing
+// fetch leaves 'viewer'. `loaded` stays false until the fetch has settled.
+let PROFILE={role:'viewer',full_name:'',loaded:false};
 
 function nsKey(base){return TENANT?base+':'+TENANT.id:base;}
 
@@ -1662,6 +1671,29 @@ async function initTenant(){
   migrateLegacyLocalData();
   reloadTenantState();
   return true;
+}
+
+const PROFILE_ROLES=['owner','manager','viewer'];
+async function loadMyProfile(){
+  PROFILE={role:'viewer',full_name:'',loaded:false};
+  const uid=getAuthUserId();
+  try{
+    if(uid){
+      const res=await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=role,full_name&id=eq.${encodeURIComponent(uid)}`,{
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+      });
+      const rows=res.ok?await res.json():null;
+      if(Array.isArray(rows)&&rows.length===1){
+        const r=rows[0];
+        if(PROFILE_ROLES.includes(r.role))PROFILE.role=r.role;
+        PROFILE.full_name=typeof r.full_name==='string'?r.full_name.trim():'';
+      }else{
+        console.warn('[FleetDesk] profile fetch returned no row — role defaults to viewer');
+      }
+    }
+  }catch(err){console.warn('[FleetDesk] profile fetch failed — role defaults to viewer',err);}
+  PROFILE.loaded=true;
+  if(document.getElementById('accountModal')?.style.display==='flex')renderAccountIdentity();
 }
 
 function migrateLegacyLocalData(){
@@ -1796,6 +1828,7 @@ async function showDashboard(){
     document.getElementById('loginErr').textContent='Could not load your company profile. Please check your connection and try again.';
     return;
   }
+  loadMyProfile();            // role + name for the Account panel (not awaited — nothing renders from it yet)
   recomputeAllStats();
   renderDashboard();          // fast paint from the local cache
   syncFuelReports();          // then the DB (source of truth) takes over
@@ -2042,7 +2075,7 @@ function getAuthUserId(){
 }
 
 function openAccountPanel(){
-  document.getElementById('accountEmail').textContent=getAuthEmail()||'Unknown';
+  renderAccountIdentity();
   document.getElementById('accountPw0').value='';
   document.getElementById('accountPw1').value='';
   document.getElementById('accountPw2').value='';
@@ -2051,6 +2084,15 @@ function openAccountPanel(){
   const btn=document.getElementById('accountSaveBtn');
   btn.disabled=false;btn.textContent='Save new password';
   document.getElementById('accountModal').style.display='flex';
+}
+
+// Name (fallback: email) + role pill. The pill stays hidden until the
+// profile fetch has settled, so it never flashes a wrong role.
+function renderAccountIdentity(){
+  document.getElementById('accountName').textContent=PROFILE.full_name||getAuthEmail()||'Unknown';
+  const pill=document.getElementById('accountRole');
+  pill.textContent=PROFILE.role.charAt(0).toUpperCase()+PROFILE.role.slice(1);
+  pill.style.display=PROFILE.loaded?'inline-block':'none';
 }
 
 function closeAccountPanel(){
@@ -7479,7 +7521,7 @@ initApp();
       <button type="button" class="account-close" onclick="closeAccountPanel()" aria-label="Close">✕</button>
     </div>
     <label class="login-label">Signed in as</label>
-    <div class="account-email"><strong id="accountEmail">—</strong></div>
+    <div class="account-email"><strong id="accountName">—</strong><span class="role-pill" id="accountRole" style="display:none;"></span></div>
     <label class="login-label" for="accountPw0">Current password</label>
     <input class="login-input" type="password" id="accountPw0" placeholder="••••••••" autocomplete="current-password">
     <label class="login-label" for="accountPw1">New password</label>
