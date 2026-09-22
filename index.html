@@ -249,6 +249,35 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .alert-banner .icon { width:13px; height:13px; margin-right:3px; vertical-align:-2px; }
 .alert-banner .alert-banner-lead { width:18px; height:18px; margin-right:0; }
 
+/* MANAGER ACTIVITY (Owner only) — same card look as .stat-card */
+.ma-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px 20px; box-shadow: var(--shadow); position: relative; overflow: hidden; margin-bottom: 20px;
+}
+.ma-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--accent); }
+.ma-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.ma-head .stat-label { margin-bottom: 0; }
+.ma-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; }
+.ma-since { font-size: 11px; color: var(--text3); flex-basis: 100%; }
+.ma-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; color: var(--text); }
+.ma-row .icon { width: 15px; height: 15px; flex-shrink: 0; }
+.ma-name { font-weight: 600; min-width: 130px; }
+.ma-count { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 24px; }
+.ma-actors { flex: 1; color: var(--text2); min-width: 0; overflow-wrap: anywhere; }
+.ma-row.ma-red .icon, .ma-row.ma-red .ma-count { color: var(--red); }
+.ma-row.ma-amber .icon, .ma-row.ma-amber .ma-count { color: var(--amber); }
+.ma-row.ma-zero { color: var(--text3); }
+.ma-row.ma-zero .icon, .ma-row.ma-zero .ma-count, .ma-row.ma-zero .ma-actors { color: var(--text3); }
+.ma-view { flex-shrink: 0; padding: 4px 12px; }
+.ma-foot .btn { justify-content: center; }
+.ma-foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 10px; border-top: 1px solid var(--border); }
+@media (max-width: 600px) {
+  .ma-row { flex-wrap: wrap; }
+  .ma-name { min-width: 0; }
+  .ma-actors { flex-basis: 100%; order: 3; }
+  .ma-foot .btn { flex: 1; }
+}
+
 /* STATS */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
 .stat-card {
@@ -1433,6 +1462,7 @@ body.role-write [data-role="readonly"] { display: none !important; }
 
     <!-- TAB 1: OVERVIEW -->
     <div class="tab-panel active" id="tab-overview">
+      <div id="mgrActivity" class="ma-card hidden" data-role="owner"></div>
       <div id="alertBanner" class="hidden"></div>
       <div class="stats-grid" id="statsGrid"></div>
     </div>
@@ -1813,6 +1843,9 @@ function applyRoleUI(){
   // Cloud Backups skips its fetch until the role is known — load it now if
   // the Reports tab is already open
   if(isOwner()&&currentDashTab==='reports')renderBackupsList();
+  // Manager activity (Owner only) waits for the role too — this is its
+  // "dashboard load" fetch. Non-owners: fetchManagerActivity just hides it.
+  if(currentDashTab==='overview')fetchManagerActivity();
   if(document.getElementById('accountModal')?.style.display==='flex')renderAccountIdentity();
 }
 
@@ -2321,6 +2354,7 @@ function switchDashTab(tab){
   currentDashTab=tab;
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
   document.querySelectorAll('.dash-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  if(tab==='overview')fetchManagerActivity();
   if(tab==='cpk')renderCpkTab();
   if(tab==='drivers')renderDriversTab();
   if(tab==='vehicles')openVehiclesTab();
@@ -4063,6 +4097,116 @@ function authToken(){
 // ── AUDIT LOG ────────────────────────────────────────────────────────────────
 // Gap A: the app never writes audit_log. A DB trigger records every
 // insert/update/delete (before + after + actor name) on the audited tables.
+
+// ── MANAGER ACTIVITY (Owner only, top of Overview) ───────────────────────────
+// get_manager_activity summarises audit_log since the owner last pressed
+// "Mark as seen": {since, until, total, categories:[{category,count,ids,actors}]}.
+// Categories with 0 are absent. The RPC refuses non-owners (42501), so the
+// card is hidden on any failure — console + error monitoring, no alert.
+// Console test: renderManagerActivity({test:true,...sample...}) — test:true
+// makes "Mark as seen" only hide the card, never call the DB.
+const MA_CATS=[
+  {key:'deletes',label:'Deletes',icon:'trash',cls:'ma-red'},
+  {key:'money_edits',label:'Money edits',icon:'coin',cls:'ma-amber'},
+  {key:'restores',label:'Restores',icon:'arrow-back-up',cls:''},
+  {key:'readings_approved',label:'Readings approved',icon:'circle-check',cls:''},
+  {key:'other',label:'Other changes',icon:'pencil',cls:''}
+];
+let _maData=null,_maGen=0;
+
+function hideManagerActivity(){
+  _maData=null;
+  const el=document.getElementById('mgrActivity');
+  if(el){el.classList.add('hidden');el.innerHTML='';}
+}
+
+async function fetchManagerActivity(){
+  const gen=++_maGen;
+  if(!isOwner()){hideManagerActivity();return;}
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_manager_activity`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json'},
+      body:'{}'
+    });
+    if(gen!==_maGen)return;
+    if(!res.ok){
+      console.error('[FleetDesk] Manager activity fetch failed:',res.status,await res.text().catch(()=>''));
+      try{FleetDesk.reportError('get_manager_activity failed',{endpoint:'/rest/v1/rpc/get_manager_activity',status:res.status});}catch{}
+      hideManagerActivity();return;
+    }
+    const data=await res.json();
+    if(gen!==_maGen)return;
+    renderManagerActivity(data);
+  }catch(err){
+    if(gen!==_maGen)return;
+    console.error('[FleetDesk] Manager activity error:',err);
+    try{FleetDesk.reportError('get_manager_activity error',{endpoint:'/rest/v1/rpc/get_manager_activity'});}catch{}
+    hideManagerActivity();
+  }
+}
+
+function fmtSADateTime(iso){
+  const d=new Date(iso);
+  if(!iso||isNaN(d))return '';
+  return d.toLocaleString('en-ZA',{timeZone:'Africa/Johannesburg',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+}
+
+function renderManagerActivity(data){
+  const el=document.getElementById('mgrActivity');
+  if(!el)return;
+  const total=Number(data&&data.total)||0;
+  if(!data||total<=0){hideManagerActivity();return;}
+  const byKey={};
+  (Array.isArray(data.categories)?data.categories:[]).forEach(c=>{if(c&&c.category)byKey[c.category]=c;});
+  _maData={since:data.since,until:data.until,byKey,test:data.test===true};
+  const since=fmtSADateTime(data.since);
+  const rows=MA_CATS.map(cat=>{
+    const c=byKey[cat.key];
+    const n=Number(c&&c.count)||0;
+    if(n<=0)return`<div class="ma-row ma-zero">${svgIcon(cat.icon)}<span class="ma-name">${cat.label}</span><span class="ma-count">0</span><span class="ma-actors"></span></div>`;
+    const actors=(Array.isArray(c.actors)?c.actors:[]).map(a=>`${escapeHtml(a&&a.name||'Unknown')} (${Number(a&&a.count)||0})`).join(', ');
+    return`<div class="ma-row ${cat.cls}">${svgIcon(cat.icon)}<span class="ma-name">${cat.label}</span><span class="ma-count">${n}</span><span class="ma-actors">${actors?'— '+actors:''}</span><button type="button" class="btn btn-outline ma-view" onclick="viewManagerActivity('${cat.key}')">View</button></div>`;
+  }).join('');
+  el.innerHTML=`<div class="ma-head"><div class="stat-label">Manager activity</div><span class="ma-badge">${total>99?'99+':total}</span><div class="ma-since">Since you last looked${since?' · '+escapeHtml(since):''}</div></div>
+${rows}
+<div class="ma-foot"><button type="button" class="btn btn-outline" onclick="openChangeLog()">${svgIcon('list')}Open full Change log</button><button type="button" class="btn btn-primary" id="maSeenBtn" onclick="markManagerActivitySeen()">${svgIcon('check')}Mark as seen</button></div>`;
+  el.classList.remove('hidden');
+}
+
+// Block 1: View opens the full Change log (block 2 filters it to the category)
+function viewManagerActivity(key){
+  openChangeLog();
+}
+
+async function markManagerActivitySeen(){
+  if(!guardOwner())return;
+  if(!_maData||!_maData.until)return;
+  if(_maData.test){hideManagerActivity();return;} // console sample: never touch the DB
+  const btn=document.getElementById('maSeenBtn');
+  if(btn)btn.disabled=true;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/mark_activity_seen`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json'},
+      body:JSON.stringify({p_at:_maData.until})
+    });
+    if(!res.ok){
+      markDenied(res.status);
+      console.error('[FleetDesk] mark_activity_seen failed:',res.status,await res.text().catch(()=>''));
+      try{FleetDesk.reportError('mark_activity_seen failed',{endpoint:'/rest/v1/rpc/mark_activity_seen',status:res.status});}catch{}
+      alert(failMsg('Could not mark as seen. Please check your connection and try again.'));
+      if(btn)btn.disabled=false;
+      return;
+    }
+    _maGen++; // drop any fetch still in flight
+    hideManagerActivity();
+  }catch(err){
+    console.error('[FleetDesk] mark_activity_seen error:',err);
+    alert('Could not mark as seen. Please check your connection and try again.');
+    if(btn)btn.disabled=false;
+  }
+}
 
 // ── CHANGE LOG (gap A block 4, Owner only) ───────────────────────────────────
 // Same modal pattern as Driver History: accent header, scrolling list,
