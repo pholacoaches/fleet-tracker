@@ -1105,6 +1105,16 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .hs-lbl { font-size:9px; color:rgba(255,255,255,0.5); text-transform:uppercase; letter-spacing:1.2px; margin-top:2px; }
 .hs-actions { display:flex; align-items:center; justify-content:flex-end; padding:0 8px; }
 
+/* TALLER HERO (wide screens only). Full width as before; height grows with
+   screen width from the old fixed 320px up to 560px. The photo is anchored
+   a little below centre for every tenant (tenant photos only set
+   background-image inline). Content wrapper is height:100% + flex-centred,
+   so text and buttons stay vertically centred. Phones keep 320px. */
+@media (min-width: 601px) {
+  #heroHeader { height:clamp(320px, 26vw, 560px); }
+  #heroHeader .hero-bg { background-position:center 55%; }
+}
+
 .hidden { display: none !important; }
 input[type=file] { display: none; }
 /* PHONE LAYOUT (mobile-layout, 2026-09-06). Everything in here is phone-only;
