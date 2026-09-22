@@ -1105,18 +1105,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .hs-lbl { font-size:9px; color:rgba(255,255,255,0.5); text-transform:uppercase; letter-spacing:1.2px; margin-top:2px; }
 .hs-actions { display:flex; align-items:center; justify-content:flex-end; padding:0 8px; }
 
-/* BOXED HERO (wide screens only). Hero + blue stats bar form one rounded
-   card, lined up with .main's content edge (1320px max minus 2x24px
-   padding). The bar stays sticky: its parent is still #appContent. The
-   hero drops its bottom corners only while the bar is shown (JS sets
-   display:block inline). Phones keep the full-width hero. */
-@media (min-width: 601px) {
-  #heroHeader, #heroStatsStrip { width:calc(100% - 48px); max-width:1272px; margin-left:auto; margin-right:auto; }
-  #heroHeader { margin-top:16px; border-radius:12px; }
-  #appContent:has(#heroStatsStrip[style*="block"]) #heroHeader { border-radius:12px 12px 0 0; }
-  #heroStatsStrip { border-radius:0 0 12px 12px; }
-}
-
 .hidden { display: none !important; }
 input[type=file] { display: none; }
 /* PHONE LAYOUT (mobile-layout, 2026-09-06). Everything in here is phone-only;
