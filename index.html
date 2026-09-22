@@ -7,7 +7,7 @@
      non-allowlisted network targets. Google Fonts entries serve the report
      window (about:blank inherits this CSP). frame-ancestors can't be set via
      meta — accepted GitHub Pages limitation. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://wlwwzbyuchsonwugqhww.supabase.co; connect-src 'self' https://wlwwzbyuchsonwugqhww.supabase.co https://fleet-proxy.gjtucker83.workers.dev https://o4512041337618432.ingest.de.sentry.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://wlwwzbyuchsonwugqhww.supabase.co; connect-src 'self' https://wlwwzbyuchsonwugqhww.supabase.co https://fleet-proxy.gjtucker83.workers.dev https://fleet-proxy-dev.gjtucker83.workers.dev https://o4512041337618432.ingest.de.sentry.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FleetDesk</title>
 <link rel="icon" type="image/svg+xml" href="fleetdesk-icon-final.svg">
@@ -1736,6 +1736,13 @@ body.role-write [data-role="readonly"] { display: none !important; }
 
 <script src="esc.js"></script>
 <script>
+// Pick the Worker per environment — same rule as driver.html. Localhost gets
+// fleet-proxy-dev (its CORS allowlist includes localhost 8377/8787);
+// everything else gets production fleet-proxy.
+const WORKER_URL=(/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname)||location.protocol==='file:')
+  ?'https://fleet-proxy-dev.gjtucker83.workers.dev'
+  :'https://fleet-proxy.gjtucker83.workers.dev';
+
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 // accept.html (gap A invite page) writes these same three keys, and removes
 // TENANT_CACHE_KEY below, to sign a new user straight in. If any of these
@@ -3156,7 +3163,7 @@ Important rules:
 
   // Audit fix #1: the Worker only serves signed-in users on /ai/dashboard and
   // pins model + max_tokens itself, so only the messages are sent.
-  const response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/ai/dashboard',{
+  const response=await fetch(`${WORKER_URL}/ai/dashboard`,{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
     body:JSON.stringify({
@@ -6090,7 +6097,7 @@ async function processScanRow(row){
 async function readLicenceWithAI(base64){
   let response;
   try{
-    response=await fetch('https://fleet-proxy.gjtucker83.workers.dev/ai/compliance',{
+    response=await fetch(`${WORKER_URL}/ai/compliance`,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
       body:JSON.stringify({
