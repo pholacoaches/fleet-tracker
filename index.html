@@ -50,6 +50,11 @@
   --green-border: #B2F2BB;
   /* icon-pass C block 2: flag-alert odometer highlight */
   --gold: #FFD700;
+  /* Soft blue band behind the period strip and sub-tab bars. Fixed, not
+     tenant-accented; the active pill still uses --accent. */
+  --strip-bg: #DCEBFA;
+  --strip-border: #B2D0F0;
+  --strip-text: #1F4F7E;
   --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
   --shadow-lg: 0 4px 20px rgba(0,0,0,0.10);
   --radius: 10px;
@@ -224,10 +229,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 /* PERIOD TABS */
 .dash-header { display: flex; align-items: center; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 .dash-title { font-size: 20px; font-weight: 700; color: var(--text); }
-.period-tabs { display: flex; gap: 4px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 3px; justify-content: center; width: 100%; }
+.period-tabs { display: flex; gap: 4px; background: var(--strip-bg); border: 1.5px solid var(--strip-border); border-radius: var(--radius-sm); padding: 3px; justify-content: center; width: 100%; }
 .period-tab {
   padding: 5px 13px; border-radius: 4px; cursor: pointer; font-size: 11px;
-  font-weight: 600; color: var(--text2); border: none; background: transparent;
+  font-weight: 600; color: var(--strip-text); border: none; background: transparent;
   font-family: var(--font); transition: all 0.15s; letter-spacing: 0.3px;
 }
 .period-tab.active { background: var(--accent); color: white; }
@@ -460,17 +465,17 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 /* flow-root, not block: the sub-tab band is the panel's first child, so with a
    plain block its top margin would collapse out through the panel. */
 .tab-panel.active { display:flow-root; }
-/* Sub-tabs: same light grey band as the dashboard period selector, so the
+/* Sub-tabs: same soft blue band as the dashboard period selector, so the
    in-panel switch reads as existing app furniture rather than something new. */
 .sub-tabs {
   display:flex; gap:4px; flex-wrap:wrap; justify-content:center; width:100%;
-  background:var(--surface2); border:1.5px solid var(--border);
+  background:var(--strip-bg); border:1.5px solid var(--strip-border);
   border-radius:var(--radius-sm); padding:4px; margin:26px 0 52px;
 }
 .sub-tab-btn {
   display:flex; align-items:center; gap:7px; padding:7px 16px;
   font-family:var(--font); font-size:13px; font-weight:700;
-  color:var(--text2); background:transparent;
+  color:var(--strip-text); background:transparent;
   border:none; border-radius:4px;
   cursor:pointer; white-space:nowrap; transition:all 0.15s;
 }
@@ -1099,6 +1104,16 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .hs-num { font-family:var(--font-mono); font-size:24px; font-weight:700; color:white; }
 .hs-lbl { font-size:9px; color:rgba(255,255,255,0.5); text-transform:uppercase; letter-spacing:1.2px; margin-top:2px; }
 .hs-actions { display:flex; align-items:center; justify-content:flex-end; padding:0 8px; }
+
+/* TALLER HERO (wide screens only). Full width as before; height grows with
+   screen width from the old fixed 320px up to 560px. The photo is anchored
+   a little below centre for every tenant (tenant photos only set
+   background-image inline). Content wrapper is height:100% + flex-centred,
+   so text and buttons stay vertically centred. Phones keep 320px. */
+@media (min-width: 601px) {
+  #heroHeader { height:clamp(320px, 26vw, 560px); }
+  #heroHeader .hero-bg { background-position:center 55%; }
+}
 
 .hidden { display: none !important; }
 input[type=file] { display: none; }
