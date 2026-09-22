@@ -1197,7 +1197,8 @@ input[type=file] { display: none; }
 /* Roles: write controls stay hidden until applyRoleUI() puts role-write /
    role-owner on <body>. UI only — RLS is the real boundary. */
 body:not(.role-write) [data-role="write"],
-body:not(.role-owner) [data-role="owner"] { display: none !important; }
+body:not(.role-owner) [data-role="owner"],
+body.role-write [data-role="readonly"] { display: none !important; }
 </style>
 <!-- Self-hosted SheetJS 0.20.3 (CVE-2023-30533 + CVE-2024-22363 patched) from cdn.sheetjs.com — npm/jsdelivr stop at vulnerable 0.18.5 -->
 <script src="xlsx.full.min.js"></script>
@@ -1400,8 +1401,10 @@ body:not(.role-owner) [data-role="owner"] { display: none !important; }
 
   <!-- EMPTY STATE -->
   <div class="empty-state" id="emptyState">
-    <div class="empty-title">No Reports Uploaded Yet</div>
-    <div class="empty-sub">Upload your fuel supplier statement (PDF or Excel) and the dashboard will build automatically — vehicle blocks, spend analysis, odometer checks, and fuel consumption all in one place.</div>
+    <div class="empty-title" data-role="readonly">No data yet</div>
+    <div class="empty-sub" data-role="readonly">Nothing has been added for your company yet.</div>
+    <div class="empty-title" data-role="write">No Reports Uploaded Yet</div>
+    <div class="empty-sub" data-role="write">Upload your fuel supplier statement (PDF or Excel) and the dashboard will build automatically — vehicle blocks, spend analysis, odometer checks, and fuel consumption all in one place.</div>
     <div class="drop-zone" id="dropZone" data-role="write" onclick="document.getElementById('fileInput').click()">
       <div style="font-size:32px">📄</div>
       <div style="font-weight:700;margin-top:10px;font-size:14px;">Click to upload or drag & drop your file here</div>
@@ -1783,6 +1786,18 @@ async function loadMyProfile(){
 function canWrite(){return PROFILE.loaded&&(PROFILE.role==='owner'||PROFILE.role==='manager');}
 function isOwner(){return PROFILE.loaded&&PROFILE.role==='owner';}
 
+// Roles block B: second layer behind the hidden controls. Every write entry
+// point starts with `if(!guardWrite())return;` (or guardOwner). Both also reset
+// writeDenied, which the save paths set when the DB refused the write (401/403,
+// or a return=representation write that matched 0 rows) so the failure alert
+// can say "permission" instead of "check your connection".
+const PERM_MSG="You don't have permission to do that. Ask your company owner.";
+let writeDenied=false;
+function guardWrite(){writeDenied=false;if(canWrite())return true;alert(PERM_MSG);return false;}
+function guardOwner(){writeDenied=false;if(isOwner())return true;alert(PERM_MSG);return false;}
+function markDenied(status){if(status===401||status===403)writeDenied=true;}
+function failMsg(msg){return writeDenied?PERM_MSG:msg;}
+
 // Shows/hides every data-role control via the body classes. Safe to call any
 // time — console test: PROFILE.role='viewer'; applyRoleUI()
 function applyRoleUI(){
@@ -1795,6 +1810,9 @@ function applyRoleUI(){
     scanRows=[];
     renderDiscView();
   }
+  // Cloud Backups skips its fetch until the role is known — load it now if
+  // the Reports tab is already open
+  if(isOwner()&&currentDashTab==='reports')renderBackupsList();
   if(document.getElementById('accountModal')?.style.display==='flex')renderAccountIdentity();
 }
 
@@ -2520,11 +2538,11 @@ async function upsertVehicleServiceToDb(plate,rec){
     // updated_at sent explicitly — vehicle_service has no touch trigger
     body:JSON.stringify({plate,last_service_odo:rec.lastServiceOdo,service_interval:rec.interval,updated_at:new Date().toISOString()})
   });
-  if(!res.ok)throw new Error('HTTP '+res.status+' — '+await res.text().catch(()=>''));
+  if(!res.ok){markDenied(res.status);throw new Error('HTTP '+res.status+' — '+await res.text().catch(()=>''));}
   // return=representation: 0 rows back = the DB saved nothing (RLS block) —
   // that is a failure, never a success (204 lies).
   const rows=await res.json();
-  if(!Array.isArray(rows)||rows.length===0)throw new Error('no row returned');
+  if(!Array.isArray(rows)||rows.length===0){writeDenied=true;throw new Error('no row returned');}
 }
 
 // One-time per tenant: push local-only service settings up to the DB. A plate
@@ -2587,10 +2605,12 @@ async function syncVehicleService(){
 }
 
 function editVehicleService(plate){
+  if(!guardOwner())return;
   const form=document.getElementById('vsf-'+plateDomId(plate));
   if(form)form.classList.toggle('open');
 }
 async function saveVehicleService(plate){
+  if(!guardOwner())return;
   const id=plateDomId(plate);
   const odo=parseInt(document.getElementById('vs-odo-'+id)?.value,10);
   const interval=parseInt(document.getElementById('vs-int-'+id)?.value,10);
@@ -2600,7 +2620,7 @@ async function saveVehicleService(plate){
     await upsertVehicleServiceToDb(plate,rec);
   }catch(err){
     console.error('[FleetDesk] Vehicle service save failed:',err);
-    alert('⚠️ Could not save to the cloud — nothing was changed.\n\nPlease check your connection and try again.');
+    alert(failMsg('⚠️ Could not save to the cloud — nothing was changed.\n\nPlease check your connection and try again.'));
     return;
   }
   serviceData[plate]=rec;
@@ -2836,6 +2856,7 @@ function finaliseAndSave(reportData,newEngenIds,newFreightIds){
 }
 
 function handleFileUpload(event){
+  if(!guardWrite())return;
   const file=event.target.files[0];
   if(!file)return;
   event.target.value='';
@@ -3432,6 +3453,7 @@ function renderHistory(){
 // Soft-deletes one period (UPDATE deleted_at — never a real DELETE). Gap B
 // phase 1: restorable from the History tab's Recently Deleted section.
 async function deleteReport(i){
+  if(!guardWrite())return;
   const r=state.reports[i];
   if(!r)return;
   const period=reportPeriod(r);
@@ -3442,18 +3464,18 @@ async function deleteReport(i){
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({deleted_at:new Date().toISOString()})
     });
-    if(!res.ok)throw new Error('HTTP '+res.status);
+    if(!res.ok){markDenied(res.status);throw new Error('HTTP '+res.status);}
     // return=representation: 0 rows back = nothing was soft-deleted (RLS block
     // or row gone) — do NOT touch local state, the report must stay visible.
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
       console.error('[FleetDesk] Report delete matched no rows for period',period);
-      alert('Update didn\'t save — please try again.');
+      alert(PERM_MSG);
       return;
     }
   }catch(err){
     console.error('[FleetDesk] Report delete failed:',err);
-    alert('Could not delete the report. Please check your connection and try again.');
+    alert(failMsg('Could not delete the report. Please check your connection and try again.'));
     return;
   }
   clearPeriodDirty(period);
@@ -3544,6 +3566,7 @@ function renderRdList(){
 // restoring a row someone already restored fails loudly instead of silently
 // re-stamping. Then the affected view refetches from the DB.
 async function restoreDeleted(table,id){
+  if(!guardWrite())return;
   if(!RD_TYPES[table])return;
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}&deleted_at=not.is.null&select=id`,{
@@ -3552,8 +3575,9 @@ async function restoreDeleted(table,id){
       body:JSON.stringify({deleted_at:null})
     });
     if(!res.ok){
+      markDenied(res.status);
       console.error('[FleetDesk] Restore failed:',table,res.status,await res.text().catch(()=>''));
-      alert('Could not restore the item. Please check your connection and try again.');
+      alert(failMsg('Could not restore the item. Please check your connection and try again.'));
       return;
     }
     const rows=await res.json();
@@ -3574,7 +3598,7 @@ async function restoreDeleted(table,id){
     renderRecentlyDeleted();
   }catch(err){
     console.error('[FleetDesk] Restore error:',err);
-    alert('Could not restore the item. Please check your connection and try again.');
+    alert(failMsg('Could not restore the item. Please check your connection and try again.'));
   }
 }
 
@@ -3779,13 +3803,15 @@ async function uploadBackupToSupabase(json){
     body:json
   });
   if(!res.ok){
-    let detail='';try{detail=(await res.json()).message||'';}catch{}
+    let detail='',code='';try{const j=await res.json();detail=j.message||'';code=String(j.statusCode||'');}catch{}
+    markDenied(code==='403'?403:res.status); // Storage may report an RLS refusal as 400 + statusCode 403
     throw new Error(`HTTP ${res.status}${detail?' — '+detail:''}`);
   }
   return filename;
 }
 
 async function clearAllData(){
+  if(!guardOwner())return;
   // Build #4b: typed confirmation, then a SOFT delete of every report in the
   // DB (deleted_at=now()) — restorable by support, never a real DELETE.
   const who=TENANT?.display_name||'your company';
@@ -3813,7 +3839,7 @@ async function clearAllData(){
   try{
     cloudName=await uploadBackupToSupabase(json);
   }catch(err){
-    alert('⚠️ Cloud backup failed — your data has NOT been cleared.\n\n'+(err.message||err)+'\n\n(The local JSON file was still downloaded. Please try again, or keep that file safe.)');
+    alert(failMsg('⚠️ Cloud backup failed — your data has NOT been cleared.\n\n'+(err.message||err)+'\n\n(The local JSON file was still downloaded. Please try again, or keep that file safe.)'));
     return;
   }
   // 3) Delete the tenant's dedup ids — after a clear, re-uploading the old
@@ -3826,11 +3852,11 @@ async function clearAllData(){
       method:'DELETE',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Prefer':'return=representation'}
     });
-    if(!delRes.ok)throw new Error('HTTP '+delRes.status);
+    if(!delRes.ok){markDenied(delRes.status);throw new Error('HTTP '+delRes.status);}
     const gone=await delRes.json();
-    if((backupIds.engen.length+backupIds.freight.length)>0&&(!Array.isArray(gone)||gone.length===0))throw new Error('no rows deleted');
+    if((backupIds.engen.length+backupIds.freight.length)>0&&(!Array.isArray(gone)||gone.length===0)){writeDenied=true;throw new Error('no rows deleted');}
   }catch(err){
-    alert('⚠️ Could not clear the upload history in the cloud — the reports have NOT been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.');
+    alert(failMsg('⚠️ Could not clear the upload history in the cloud — the reports have NOT been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.'));
     return;
   }
   // 4) Soft-delete every live report in the DB — must also succeed first
@@ -3840,7 +3866,7 @@ async function clearAllData(){
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({deleted_at:new Date().toISOString()})
     });
-    if(!res.ok)throw new Error('HTTP '+res.status);
+    if(!res.ok){markDenied(res.status);throw new Error('HTTP '+res.status);}
     // return=representation: 0 rows back = the DB soft-deleted nothing (RLS
     // block, or no live rows) — stop here, local cache stays untouched.
     const rows=await res.json();
@@ -3850,7 +3876,7 @@ async function clearAllData(){
       return;
     }
   }catch(err){
-    alert('⚠️ Could not clear the cloud data — nothing has been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.');
+    alert(failMsg('⚠️ Could not clear the cloud data — nothing has been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.'));
     return;
   }
   // 5) All good — clear the local cache
@@ -3894,6 +3920,7 @@ async function listSupabaseBackups(){
 
 // Pull a single backup from Supabase and save it to the user's computer.
 async function downloadBackupFromSupabase(objectPath){
+  if(!guardOwner())return;
   try{
     const encoded=objectPath.split('/').map(encodeURIComponent).join('/');
     const res=await fetch(`${SUPABASE_URL}/storage/v1/object/${BACKUPS_BUCKET}/${encoded}`,{
@@ -3921,6 +3948,7 @@ function prettyBackupDate(name){
 async function renderBackupsList(){
   const el=document.getElementById('backupsList');
   if(!el)return;
+  if(!isOwner())return; // owner-only bucket: no background fetch for other roles
   el.innerHTML='<p class="backups-empty">Loading cloud backups…</p>';
   try{
     const items=await listSupabaseBackups();
@@ -3966,6 +3994,7 @@ document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('dragleave',e=>e.preventDefault());
 document.addEventListener('drop',function(e){
   e.preventDefault(); e.stopPropagation();
+  if(!guardWrite())return;
   const files=e.dataTransfer.files;
   if(!files||files.length===0)return;
   const file=files[0];
@@ -4650,12 +4679,12 @@ function renderNotifPanel(){
     // ones keep Approve/Flag beside it.
     const delBtn=`<button class="notif-action-btn" data-role="write" title="Delete reading" onclick="deleteReading(${escapeHtml(JSON.stringify(n.id))})" style="flex:0 0 auto;padding:5px 10px;background:transparent;color:var(--red);border:1.5px solid var(--red);border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('trash')}</button>`;
     const actionBtns=(!n.status||n.status==='pending')
-      ?`<div style="display:flex;gap:6px;margin-top:8px;">
+      ?`<div data-role="write" style="display:flex;gap:6px;margin-top:8px;">
           <button class="notif-action-btn" data-role="write" onclick="approveNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--green);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('circle-check')}Approve</button>
           <button class="notif-action-btn" data-role="write" onclick="rejectNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--red);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('flag')}Flag</button>
           ${delBtn}
         </div>`
-      :`<div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">${delBtn}</div>`;
+      :`<div data-role="write" style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">${delBtn}</div>`;
     return`<div class="notif-item">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">
         <span class="notif-item-plate">${escapeHtml(n.plate)}</span>
@@ -4942,7 +4971,7 @@ async function upsertCompliance(rows){
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
       body:JSON.stringify(rows)
     });
-    if(!res.ok)console.error('[FleetDesk] Compliance save failed:',res.status,await res.text());
+    if(!res.ok){markDenied(res.status);console.error('[FleetDesk] Compliance save failed:',res.status,await res.text());}
     return res.ok;
   }catch(err){console.error('[FleetDesk] Compliance save error:',err);return false;}
 }
@@ -4964,9 +4993,10 @@ async function patchVehicleActive(plate,active){
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({active})
     });
-    if(!res.ok){console.error('[FleetDesk] vehicles.active update failed:',res.status,await res.text());return false;}
+    if(!res.ok){markDenied(res.status);console.error('[FleetDesk] vehicles.active update failed:',res.status,await res.text());return false;}
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
+      writeDenied=true;
       console.error('[FleetDesk] vehicles.active update matched no row for',raw);
       FleetDesk.reportError('vehicles.active PATCH matched no row',{endpoint:'/rest/v1/vehicles',status:res.status}); // plate deliberately not sent
       return false;
@@ -5063,12 +5093,14 @@ function renderAlertBanner(){
 }
 
 function toggleComplianceEdit(plate){
+  if(!guardWrite())return;
   const id=plateDomId(plate);
   const form=document.getElementById('cef-'+id);
   if(form)form.classList.toggle('open');
 }
 
 async function saveComplianceEdit(plate){
+  if(!guardWrite())return;
   const id=plateDomId(plate);
   const g=f=>{const el=document.getElementById('ce-'+f+'-'+id);return el?el.value.trim():'';};
   const num=v=>v&&!isNaN(parseFloat(v))?parseFloat(v):null;
@@ -5091,7 +5123,7 @@ async function saveComplianceEdit(plate){
     complianceData[plate]={...(complianceData[plate]||{}),...row};
     renderDiscView();updateDiscTabBadge();renderAlertBanner();
   }else{
-    alert('Could not save. Please check your connection and try again.');
+    alert(failMsg('Could not save. Please check your connection and try again.'));
   }
 }
 
@@ -5099,6 +5131,7 @@ async function saveComplianceEdit(plate){
 //  openRenewForm / saveRenewal below renderDiscCards.)
 
 async function addComplianceVehicle(){
+  if(!guardWrite())return;
   const plate=(prompt('Vehicle registration / plate:')||'').trim().toUpperCase();
   if(!plate)return;
   if(complianceData[plate]){alert('That vehicle is already in the list.');return;}
@@ -5106,7 +5139,7 @@ async function addComplianceVehicle(){
     complianceData[plate]={plate};
     renderDiscView();
   }else{
-    alert('Could not add the vehicle. Please try again.');
+    alert(failMsg('Could not add the vehicle. Please try again.'));
   }
 }
 
@@ -5428,13 +5461,14 @@ function discCardHtml(v,vi){
 // Flag only — any stored date stays in the row (hidden by the chip), so the
 // choice is reversible from the card or the edit form.
 async function setNotRequired(plate,key,flag){
+  if(!guardWrite())return;
   const item=COMP_ITEMS.find(i=>i.key===key);
   if(!item)return;
   // Change 2: the minus icon is easy to hit by mistake, so flagging asks
   // first. Undo ("Mark required") does not — it only brings alerts back.
   if(flag&&!confirm(`Mark the ${item.label} for ${plate} as not required?\n\nIt will stop counting towards alerts. Any saved date is kept, and you can undo this from the card or Edit Details.`))return;
   const row={plate,[item.nrField]:!!flag};
-  if(!await upsertCompliance([row])){alert('Could not save. Please check your connection and try again.');return;}
+  if(!await upsertCompliance([row])){alert(failMsg('Could not save. Please check your connection and try again.'));return;}
   complianceData[plate]={...(complianceData[plate]||{}),...row};
   renderDiscView();updateDiscTabBadge();renderAlertBanner();
 }
@@ -5450,6 +5484,7 @@ async function setNotRequired(plate,key,flag){
 // mid-flight is refused and the clicked button is disabled until it settles.
 const compBusyPlates=new Set();
 async function archiveComplianceVehicle(plate,btn){
+  if(!guardWrite())return;
   if(compBusyPlates.has(plate))return;
   const retry=isArchivedPlate(plate); // already archived → vehicles PATCH failed earlier, just retry it
   if(!retry){
@@ -5465,7 +5500,7 @@ async function archiveComplianceVehicle(plate,btn){
   compBusyPlates.delete(plate);
   if(!r.ok){
     if(btn){btn.disabled=false;btn.innerHTML=label;}
-    alert(`Could not archive ${plate}. Please check your connection and try again.`);
+    alert(failMsg(`Could not archive ${plate}. Please check your connection and try again.`));
     return;
   }
   if(r.vehicleFailed)alert(`${plate} is archived, but drivers can still see it in the driver app. Its card shows a Retry.`);
@@ -5473,6 +5508,7 @@ async function archiveComplianceVehicle(plate,btn){
 }
 
 async function restoreComplianceVehicle(plate,btn){
+  if(!guardWrite())return;
   if(compBusyPlates.has(plate))return;
   compBusyPlates.add(plate);
   const label=btn?btn.innerHTML:''; // innerHTML: the label may carry an SVG icon later
@@ -5481,7 +5517,7 @@ async function restoreComplianceVehicle(plate,btn){
   compBusyPlates.delete(plate);
   if(!r.ok){
     if(btn){btn.disabled=false;btn.innerHTML=label;}
-    alert(`Could not restore ${plate}. Please check your connection and try again.`);
+    alert(failMsg(`Could not restore ${plate}. Please check your connection and try again.`));
     return;
   }
   if(r.vehicleFailed)alert(`${plate} is restored, but drivers cannot see it in the driver app yet. Its card shows a Retry.`);
@@ -5491,6 +5527,7 @@ async function restoreComplianceVehicle(plate,btn){
 // Retry strip action: re-run only the vehicles PATCH, toward the compliance
 // state (archived → inactive, not archived → active).
 async function retryDriverAppSync(plate,btn){
+  if(!guardWrite())return;
   if(compBusyPlates.has(plate))return;
   compBusyPlates.add(plate);
   if(btn){btn.disabled=true;btn.textContent='Retrying…';}
@@ -5498,7 +5535,7 @@ async function retryDriverAppSync(plate,btn){
   compBusyPlates.delete(plate);
   if(!ok){
     if(btn){btn.disabled=false;btn.innerHTML=svgIcon('refresh')+'Retry';}
-    alert(`The driver app still could not be updated for ${plate}. Please check your connection and try again.`);
+    alert(failMsg(`The driver app still could not be updated for ${plate}. Please check your connection and try again.`));
     return;
   }
   renderDiscView();
@@ -5510,6 +5547,7 @@ async function retryDriverAppSync(plate,btn){
 // or edited. Saving writes the expiry (+ cost / number) and appends a
 // compliance_history row — the table's first real use.
 function openRenewForm(plate,key){
+  if(!guardWrite())return;
   const item=COMP_ITEMS.find(i=>i.key===key);
   const rec=complianceData[plate]||{plate};
   const id=plateDomId(plate);
@@ -5545,6 +5583,7 @@ function closeRenewForm(plate){
 }
 
 async function saveRenewal(plate,key){
+  if(!guardWrite())return;
   const item=COMP_ITEMS.find(i=>i.key===key);
   const id=plateDomId(plate);
   const g=f=>{const el=document.getElementById('rf-'+f+'-'+id);return el?el.value.trim():'';};
@@ -5567,7 +5606,7 @@ async function saveRenewal(plate,key){
   if(btn){btn.disabled=true;btn.textContent='Saving…';}
   if(!await upsertCompliance([row])){
     if(btn){btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+'Save renewal';}
-    say('Could not save. Please check your connection and try again.',true);
+    say(failMsg('Could not save. Please check your connection and try again.'),true);
     return;
   }
   complianceData[plate]={...(complianceData[plate]||{}),...row};
@@ -5587,6 +5626,7 @@ async function saveRenewal(plate,key){
 // flipping it, so the control always shows both options. Same discBulkMode the
 // renderer already reads — view logic unchanged.
 function setDiscBulk(on){
+  if(on&&!guardWrite())return;
   if(discBulkMode===on)return;
   discBulkMode=on;
   renderDiscView();
@@ -5626,6 +5666,7 @@ function renderDiscBulk(plates){
 }
 
 async function saveDiscBulk(){
+  if(!guardWrite())return;
   const btn=document.getElementById('discBulkSaveBtn');
   btn.disabled=true;btn.textContent='Saving...';
   const rows=[...document.querySelectorAll('#discBulkWrap tbody tr')].map(tr=>{
@@ -5644,7 +5685,7 @@ async function saveDiscBulk(){
   });
   const ok=await upsertCompliance(rows);
   btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+'Save All';
-  if(!ok){alert('Could not save. Please check your connection and try again.');return;}
+  if(!ok){alert(failMsg('Could not save. Please check your connection and try again.'));return;}
   rows.forEach(r=>complianceData[r.plate]={...(complianceData[r.plate]||{}),...r});
   discBulkMode=false;
   renderDiscView();updateDiscTabBadge();renderAlertBanner();
@@ -5761,6 +5802,7 @@ function blankScanFields(){const f={};SCAN_FIELDS.forEach(d=>f[d.key]='');return
 
 // File-input handler. A second selection while the panel is open appends.
 function startLicenceScan(event){
+  if(!guardWrite())return;
   const files=[...(event.target.files||[])];
   event.target.value='';
   if(files.length===0)return;
@@ -5894,6 +5936,7 @@ function applyScanResult(row,res){
 }
 
 function retryScanRow(id){
+  if(!guardWrite())return;
   const row=scanRows.find(r=>r.id===id);
   if(!row||row.status==='reading'||row.status==='waiting')return;
   row.status='queued';row.note='';updateScanRow(row);
@@ -5904,6 +5947,7 @@ function retryScanRow(id){
 // refresh the thumbnail, and re-send it. Any read result is discarded — the
 // row starts over from the rotated image.
 async function rotateScanRow(id){
+  if(!guardWrite())return;
   const row=scanRows.find(r=>r.id===id);
   if(!row||!row.blob||row.status==='reading'||row.status==='waiting'||row.status==='saved')return;
   row.status='reading';row.note='Rotating…';updateScanRow(row);
@@ -6099,6 +6143,7 @@ function closeLicenceScan(){
 // existing on_conflict=tenant_id,plate upsert — so a scanned plate updates the
 // existing vehicle and a value the AI could not read never blanks a stored one.
 async function saveLicenceScan(){
+  if(!guardWrite())return;
   const rows=scanRows.filter(r=>r.selected&&r.status==='done');
   if(rows.length===0)return;
   const problems=[];
@@ -6145,7 +6190,7 @@ async function saveLicenceScan(){
   const summary=[];
   if(restored.length)summary.push(`${restored.join(', ')} restored and updated — back in service.`);
   if(driverAppFailed.length)summary.push(`${driverAppFailed.join(', ')} restored, but drivers cannot see ${driverAppFailed.length===1?'it':'them'} in the driver app yet. The card shows a Retry.`);
-  if(failed.length)summary.push(`Saved ${rows.length-failed.length} of ${rows.length}. Could not save: ${failed.join(', ')}. Check your connection and try again.`);
+  if(failed.length)summary.push(`Saved ${rows.length-failed.length} of ${rows.length}. Could not save: ${failed.join(', ')}. ${writeDenied?PERM_MSG:'Check your connection and try again.'}`);
   if(summary.length)alert(summary.join('\n\n'));
   if(failed.length){
     updateScanSaveBtn();
@@ -6305,6 +6350,7 @@ async function fetchLatestOdoForPlate(plate){
 }
 
 async function toggleAddTyreForm(){
+  if(!guardWrite())return;
   const form=document.getElementById('tyreAddForm');
   if(!form)return;
   const opening=!form.classList.contains('open');
@@ -6351,6 +6397,7 @@ async function uploadTyreInvoice(plate){
 }
 
 async function submitTyre(){
+  if(!guardWrite())return;
   const errEl=document.getElementById('tyreFormErr');
   const btn=document.getElementById('tfSaveBtn');
   errEl.classList.remove('show');
@@ -6831,6 +6878,7 @@ function addMaintPartRow(){
 }
 
 async function toggleAddJobForm(){
+  if(!guardWrite())return;
   const form=document.getElementById('maintAddForm');
   if(!form)return;
   const opening=!form.classList.contains('open');
@@ -6872,6 +6920,7 @@ async function uploadMaintInvoice(plate){
 }
 
 async function submitMaintJob(){
+  if(!guardWrite())return;
   const errEl=document.getElementById('maintFormErr');
   const btn=document.getElementById('mfSaveBtn');
   errEl.classList.remove('show');
@@ -6982,6 +7031,7 @@ async function submitMaintJob(){
 }
 
 async function markJobDone(id){
+  if(!guardWrite())return;
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/maintenance_jobs?id=eq.${id}&select=id`,{
       method:'PATCH',
@@ -6989,14 +7039,15 @@ async function markJobDone(id){
       body:JSON.stringify({date_out:new Date().toISOString().slice(0,10),status:'done'})
     });
     if(!res.ok){
-      alert('Could not update the job. Please try again.');
+      markDenied(res.status);
+      alert(failMsg('Could not update the job. Please try again.'));
       return;
     }
     // return=representation: 0 rows back = the job row wasn't updated
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
       console.error('[FleetDesk] markJobDone matched no row for id',id);
-      alert('Update didn\'t save — please try again.');
+      alert(PERM_MSG);
       return;
     }
     await renderMaintTab();
@@ -7006,6 +7057,7 @@ async function markJobDone(id){
 // Gap B phase 1: admin soft-delete of a maintenance job. Parts rows stay put —
 // they are keyed to the job and come back with it on restore.
 async function deleteMaintJob(id){
+  if(!guardWrite())return;
   const job=maintJobs.find(j=>j.id===id);
   const label=job?`${job.plate} — ${(MAINT_CATEGORIES[job.category]||MAINT_CATEGORIES.other).label}, ${fmtDayMonYear(job.date_in)}`:'this job';
   if(!confirm(`Delete this maintenance job (${label})?\n\nIt moves to Recently deleted (History tab) and can be restored from there.`))return;
@@ -7016,15 +7068,16 @@ async function deleteMaintJob(id){
       body:JSON.stringify({deleted_at:new Date().toISOString()})
     });
     if(!res.ok){
+      markDenied(res.status);
       console.error('[FleetDesk] Job delete failed:',res.status,await res.text().catch(()=>''));
-      alert('Could not delete the job. Please check your connection and try again.');
+      alert(failMsg('Could not delete the job. Please check your connection and try again.'));
       return;
     }
     // return=representation: 0 rows back = nothing was soft-deleted
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
       console.error('[FleetDesk] Job delete matched no row for id',id);
-      alert('Delete didn\'t save — please try again.');
+      alert(PERM_MSG);
       return;
     }
     await renderMaintTab();
@@ -7162,7 +7215,7 @@ async function openDriverHistory(id){
   if(!d)return;
   _dhCode=d.personal_code;
   _dhRows=[];
-  document.getElementById('dhTitle').innerHTML=`${svgIcon('book','icon-lead')}${escapeHtml(d.name)} — ${escapeHtml(d.personal_code)}`;
+  document.getElementById('dhTitle').innerHTML=`${svgIcon('book','icon-lead')}${escapeHtml(d.name)}${canWrite()?' — '+escapeHtml(d.personal_code):''}`; // code hidden from viewers
   document.getElementById('dhList').innerHTML='<div class="notif-empty">Loading history…</div>';
   document.getElementById('dhMoreBtn').style.display='none';
   document.getElementById('dhFootNote').textContent='';
@@ -7274,6 +7327,7 @@ function driverLink(code){
 }
 
 async function copyDriverLink(code,btn){
+  if(!guardWrite())return;
   const link=driverLink(code);
   try{
     await navigator.clipboard.writeText(link);
@@ -7286,6 +7340,7 @@ async function copyDriverLink(code,btn){
 }
 
 function openDriverForm(mode){
+  if(!guardWrite())return;
   const form=document.getElementById('driverForm');
   if(driverFormMode===mode&&form.classList.contains('open')){closeDriverForm();return;}
   driverFormMode=mode;
@@ -7320,6 +7375,7 @@ function closeDriverForm(){
 }
 
 async function submitDriver(){
+  if(!guardWrite())return;
   const errEl=document.getElementById('driverFormErr');
   const btn=document.getElementById('dfSaveBtn');
   errEl.classList.remove('show');
@@ -7379,6 +7435,7 @@ async function submitDriver(){
 // production URL (not location.href — the dashboard may be opened from localhost)
 const DRIVER_LINK_BASE='https://pholacoaches.github.io/fleet-tracker/driver.html?d=';
 async function copyLaunchList(btn){
+  if(!guardWrite())return;
   await fetchDrivers();
   const active=driversData.filter(d=>d.active);
   if(active.length===0){alert('No active drivers to copy yet. Add drivers first.');return;}
@@ -7394,18 +7451,19 @@ async function copyLaunchList(btn){
 }
 
 async function toggleDriverActive(id,makeActive){
+  if(!guardWrite())return;
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${id}&select=id`,{
       method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({active:makeActive==='true'||makeActive===true})
     });
-    if(!res.ok){alert('Could not update the driver. Please try again.');return;}
+    if(!res.ok){markDenied(res.status);alert(failMsg('Could not update the driver. Please try again.'));return;}
     // return=representation: 0 rows back = the driver row wasn't updated
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
       console.error('[FleetDesk] toggleDriverActive matched no row for id',id);
-      alert('Update didn\'t save — please try again.');
+      alert(PERM_MSG);
       return;
     }
     if(driverFormMode&&driverFormMode!=='add')closeDriverForm();
@@ -7929,7 +7987,7 @@ initApp();
       <div id="popupNoPhoto" style="display:none;background:#FFF9DB;border:2px solid #E67700;border-radius:8px;padding:10px 12px;font-size:12px;color:#E67700;font-weight:700;margin-bottom:16px;line-height:1.6;"><svg class="icon icon-lead" aria-hidden="true"><use href="#icon-camera"/></svg><strong>No photo</strong> — this reading was submitted without a photo (it never reached the server). Please confirm the km with the driver.</div>
       <div id="popupNotes" style="display:none;background:var(--amber-light);border:1px solid #FFE066;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:16px;"></div>
       <div id="popupTime" style="font-size:11px;color:var(--text3);margin-bottom:18px;"></div>
-      <div style="display:flex;gap:10px;">
+      <div data-role="write" style="display:flex;gap:10px;">
         <button id="popupApproveBtn" class="popup-action-btn" data-role="write" onclick="approveSubmission()" style="flex:1;padding:12px;background:var(--green);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;"><svg class="icon" aria-hidden="true"><use href="#icon-circle-check"/></svg>Approve</button>
         <button id="popupFlagBtn" class="popup-action-btn" data-role="write" onclick="flagSubmission()" style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;"><svg class="icon" aria-hidden="true"><use href="#icon-flag"/></svg>Flag</button>
       </div>
@@ -8069,6 +8127,7 @@ function closeSubmissionModal(){
 }
 
 async function updateSubmissionStatus(id,status){
+  if(!guardWrite())return;
   try{
     const res=await fetch(`${SUPABASE_URL}/rest/v1/odometer_readings?id=eq.${id}&select=id`,{
       method:'PATCH',
@@ -8076,8 +8135,9 @@ async function updateSubmissionStatus(id,status){
       body:JSON.stringify({status})
     });
     if(!res.ok){
+      markDenied(res.status);
       console.error('[FleetDesk] Status update failed:',res.status,await res.text());
-      alert('Could not save the status update. Please check your connection and try again.');
+      alert(failMsg('Could not save the status update. Please check your connection and try again.'));
       return false;
     }
     // return=representation: 0 rows back = the reading wasn't updated — bail
@@ -8085,7 +8145,7 @@ async function updateSubmissionStatus(id,status){
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
       console.error('[FleetDesk] Status update matched no row for id',id);
-      alert('Update didn\'t save — please try again.');
+      alert(PERM_MSG);
       return false;
     }
     const item=notifData.find(n=>n.id===id);
@@ -8113,6 +8173,7 @@ async function updateSubmissionStatus(id,status){
 // DB (deleted_at set; deleted_by + deleted_by_name stamped by the DB); every reading query filters it out and
 // the History tab's Recently deleted section can restore it.
 async function deleteReading(id){
+  if(!guardWrite())return;
   const rec=notifData.find(n=>n.id===id)||pendingData.find(n=>n.id===id)||approvedData.find(n=>n.id===id)||_dhRows.find(r=>r.id===id)||null;
   const label=rec?`${rec.plate||'—'}, ${rec.odometer?Number(rec.odometer).toLocaleString('en-US')+' km':'—'}`:'this reading';
   if(!confirm(`Delete this odometer reading (${label})?\n\nIt moves to Recently deleted (History tab) and can be restored from there.`))return;
@@ -8123,8 +8184,9 @@ async function deleteReading(id){
       body:JSON.stringify({deleted_at:new Date().toISOString()})
     });
     if(!res.ok){
+      markDenied(res.status);
       console.error('[FleetDesk] Reading delete failed:',res.status,await res.text().catch(()=>''));
-      alert('Could not delete the reading. Please check your connection and try again.');
+      alert(failMsg('Could not delete the reading. Please check your connection and try again.'));
       return;
     }
     // return=representation: 0 rows back = nothing was soft-deleted (already
@@ -8132,7 +8194,7 @@ async function deleteReading(id){
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
       console.error('[FleetDesk] Reading delete matched no row for id',id);
-      alert('Delete didn\'t save — please try again.');
+      alert(PERM_MSG);
       return;
     }
     notifData=notifData.filter(n=>n.id!==id);
