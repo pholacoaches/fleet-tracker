@@ -1194,6 +1194,10 @@ input[type=file] { display: none; }
   .sub-panel { display: block !important; }
   .vehicle-card { break-inside: avoid; }
 }
+/* Roles: write controls stay hidden until applyRoleUI() puts role-write /
+   role-owner on <body>. UI only — RLS is the real boundary. */
+body:not(.role-write) [data-role="write"],
+body:not(.role-owner) [data-role="owner"] { display: none !important; }
 </style>
 <!-- Self-hosted SheetJS 0.20.3 (CVE-2023-30533 + CVE-2024-22363 patched) from cdn.sheetjs.com — npm/jsdelivr stop at vulnerable 0.18.5 -->
 <script src="xlsx.full.min.js"></script>
@@ -1348,9 +1352,9 @@ input[type=file] { display: none; }
     <div class="hero-title">Fleet<span>Desk</span></div>
     <div class="hero-sub" id="heroSubBrand" style="margin-top:8px;">&nbsp;</div>
     <div style="display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;align-items:center;justify-content:center;">
-      <button class="hero-upload-btn primary" onclick="document.getElementById('fileInput').click()"><svg class="icon" aria-hidden="true"><use href="#icon-upload"/></svg>Upload Report</button>
+      <button class="hero-upload-btn primary" data-role="write" onclick="document.getElementById('fileInput').click()"><svg class="icon" aria-hidden="true"><use href="#icon-upload"/></svg>Upload Report</button>
       <button class="hero-upload-btn subtle" onclick="exportCSV()"><svg class="icon" aria-hidden="true"><use href="#icon-download"/></svg>Export CSV</button>
-      <button class="hero-upload-btn danger" onclick="clearAllData()"><svg class="icon" aria-hidden="true"><use href="#icon-trash"/></svg>Clear Data</button>
+      <button class="hero-upload-btn danger" data-role="owner" onclick="clearAllData()"><svg class="icon" aria-hidden="true"><use href="#icon-trash"/></svg>Clear Data</button>
     </div>
   </div>
 </div>
@@ -1398,7 +1402,7 @@ input[type=file] { display: none; }
   <div class="empty-state" id="emptyState">
     <div class="empty-title">No Reports Uploaded Yet</div>
     <div class="empty-sub">Upload your fuel supplier statement (PDF or Excel) and the dashboard will build automatically — vehicle blocks, spend analysis, odometer checks, and fuel consumption all in one place.</div>
-    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <div class="drop-zone" id="dropZone" data-role="write" onclick="document.getElementById('fileInput').click()">
       <div style="font-size:32px">📄</div>
       <div style="font-weight:700;margin-top:10px;font-size:14px;">Click to upload or drag & drop your file here</div>
       <div class="drop-zone-text">PDF or Excel fuel statement</div>
@@ -1555,14 +1559,14 @@ input[type=file] { display: none; }
             </label>
             <div class="view-toggle" role="group" aria-label="Disc view">
               <button class="view-btn active" id="discViewCards" onclick="setDiscBulk(false)"><svg class="icon" aria-hidden="true"><use href="#icon-layout-grid"/></svg>Cards</button>
-              <button class="view-btn" id="discViewBulk" onclick="setDiscBulk(true)"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Bulk Edit</button>
+              <button class="view-btn" id="discViewBulk" data-role="write" onclick="setDiscBulk(true)"><svg class="icon" aria-hidden="true"><use href="#icon-list"/></svg>Bulk Edit</button>
             </div>
             <button class="btn btn-outline" onclick="exportComplianceCSV()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-download"/></svg>45-Day CSV</button>
-            <button class="btn btn-outline" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Vehicle</button>
+            <button class="btn btn-outline" data-role="write" onclick="addComplianceVehicle()" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Vehicle</button>
             <!-- Compliance photo-scan Stage 1: multi-select, no capture attribute so
                  desktop gets a file picker and phones still offer the camera. -->
             <input type="file" id="discScanInput" accept="image/*" multiple style="display:none;" onchange="startLicenceScan(event)">
-            <button class="btn btn-outline" onclick="document.getElementById('discScanInput').click()" id="discScanBtn" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-camera"/></svg>Scan Licences</button>
+            <button class="btn btn-outline" data-role="write" onclick="document.getElementById('discScanInput').click()" id="discScanBtn" style="font-size:11px;padding:6px 12px;"><svg class="icon" aria-hidden="true"><use href="#icon-camera"/></svg>Scan Licences</button>
           </div>
         </div>
         <div class="disc-summary-strip" id="discSummaryStrip"></div>
@@ -1578,12 +1582,12 @@ input[type=file] { display: none; }
         <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-user"/></svg>Drivers</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Driver profiles, personal codes and licence tracking</div>
         <div class="section-actions">
-          <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="copyLaunchList(this)" id="launchListBtn"><svg class="icon" aria-hidden="true"><use href="#icon-copy"/></svg>Copy launch list</button>
-          <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="openDriverForm('add')"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Driver</button>
+          <button class="btn btn-outline" data-role="write" style="font-size:11px;padding:6px 12px;" onclick="copyLaunchList(this)" id="launchListBtn"><svg class="icon" aria-hidden="true"><use href="#icon-copy"/></svg>Copy launch list</button>
+          <button class="btn hero-upload-btn" data-role="write" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="openDriverForm('add')"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Add Driver</button>
         </div>
       </div>
       <div id="driverWatchdog"></div>
-      <div class="tyre-add-form" id="driverForm"></div>
+      <div class="tyre-add-form" data-role="write" id="driverForm"></div>
       <div id="driversList"><p class="tyre-empty">Loading drivers...</p></div>
     </div>
 
@@ -1660,11 +1664,11 @@ input[type=file] { display: none; }
         <span class="rep-hint">Opens in a new browser tab — use your browser's “Save as PDF” to download or print.</span>
       </div>
 
-      <div class="section-header" style="margin-top:34px;">
+      <div class="section-header" data-role="owner" style="margin-top:34px;">
         <div class="section-title"><svg class="icon" aria-hidden="true"><use href="#icon-cloud"/></svg>Cloud Backups</div>
         <div style="font-size:12px;color:var(--text3);margin-left:8px;">Automatic JSON snapshots saved to Supabase when you clear data — newest first</div>
       </div>
-      <div class="rep-panel">
+      <div class="rep-panel" data-role="owner">
         <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
           <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="renderBackupsList()"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"/></svg>Refresh</button>
         </div>
@@ -1772,6 +1776,25 @@ async function loadMyProfile(){
     }
   }catch(err){console.warn('[FleetDesk] profile fetch failed — role defaults to viewer',err);}
   PROFILE.loaded=true;
+  applyRoleUI(); // also refreshes the Account panel if it is open
+}
+
+// Roles: UI hints only (RLS enforces the real rules). Not loaded = viewer.
+function canWrite(){return PROFILE.loaded&&(PROFILE.role==='owner'||PROFILE.role==='manager');}
+function isOwner(){return PROFILE.loaded&&PROFILE.role==='owner';}
+
+// Shows/hides every data-role control via the body classes. Safe to call any
+// time — console test: PROFILE.role='viewer'; applyRoleUI()
+function applyRoleUI(){
+  document.body.classList.toggle('role-write',canWrite());
+  document.body.classList.toggle('role-owner',isOwner());
+  // Bulk edit / scan are edit modes — drop back to cards if no longer allowed
+  if(!canWrite()&&(discBulkMode||discScanMode)){
+    discBulkMode=false;discScanMode=false;
+    scanRows.forEach(r=>{if(r.blobUrl)URL.revokeObjectURL(r.blobUrl);});
+    scanRows=[];
+    renderDiscView();
+  }
   if(document.getElementById('accountModal')?.style.display==='flex')renderAccountIdentity();
 }
 
@@ -1907,7 +1930,7 @@ async function showDashboard(){
     document.getElementById('loginErr').textContent='Could not load your company profile. Please check your connection and try again.';
     return;
   }
-  loadMyProfile();            // role + name for the Account panel (not awaited — nothing renders from it yet)
+  loadMyProfile();            // role + name; not awaited — write controls stay hidden until applyRoleUI() runs
   recomputeAllStats();
   renderDashboard();          // fast paint from the local cache
   syncFuelReports();          // then the DB (source of truth) takes over
@@ -3299,7 +3322,7 @@ function renderVehicleBlock(v,vi){
   let svcHeaderClass='';
   let svcRowHtml='';
   if(!svc||!svc.lastServiceOdo||!svc.interval){
-    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">${svgIcon('tool')}Service:</span><span class="vc-service-val" style="color:var(--text3);font-style:italic;">Not set up</span></div><button class="vc-svc-btn" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">${svgIcon('plus')}Set up service</button></div>`;
+    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">${svgIcon('tool')}Service:</span><span class="vc-service-val" style="color:var(--text3);font-style:italic;">Not set up</span></div><button class="vc-svc-btn" data-role="owner" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">${svgIcon('plus')}Set up service</button></div>`;
   }else{
     const kmUsed=currentOdo?currentOdo-svc.lastServiceOdo:0;
     const kmRemaining=svc.interval-kmUsed;
@@ -3308,9 +3331,9 @@ function renderVehicleBlock(v,vi){
     else if(kmRemaining<=500){svcHeaderClass='svc-urgent';valClass='sv-red';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
     else if(kmRemaining<=2000){svcHeaderClass='svc-warn';valClass='sv-yellow';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
     else{valClass='sv-green';svcText=`${kmRemaining.toLocaleString('en-US')} km remaining`;}
-    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">${svgIcon('tool')}Service:</span><span class="vc-service-val ${valClass}">${svcText}</span></div><button class="vc-svc-btn" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">${svgIcon('pencil')}Edit</button></div>`;
+    svcRowHtml=`<div class="vc-service-row"><div class="vc-service-info"><span class="vc-service-label">${svgIcon('tool')}Service:</span><span class="vc-service-val ${valClass}">${svcText}</span></div><button class="vc-svc-btn" data-role="owner" onclick="editVehicleService(${escAttr(JSON.stringify(plate))})">${svgIcon('pencil')}Edit</button></div>`;
   }
-  svcRowHtml+=`<div class="vc-service-form" id="vsf-${id}"><div class="vsf-row"><div><label>Last service odometer (km)</label><input type="number" id="vs-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000"></div><div><label>Service interval (km)</label><input type="number" id="vs-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000"></div></div><button class="vsf-save" onclick="saveVehicleService(${escAttr(JSON.stringify(plate))})">Save</button></div>`;
+  svcRowHtml+=`<div class="vc-service-form" data-role="owner" id="vsf-${id}"><div class="vsf-row"><div><label>Last service odometer (km)</label><input type="number" id="vs-odo-${id}" value="${svc&&svc.lastServiceOdo||''}" placeholder="e.g. 145000"></div><div><label>Service interval (km)</label><input type="number" id="vs-int-${id}" value="${svc&&svc.interval||''}" placeholder="e.g. 10000"></div></div><button class="vsf-save" onclick="saveVehicleService(${escAttr(JSON.stringify(plate))})">Save</button></div>`;
 
   const badges=[];
   if(v.readingsOnly)badges.push('<span class="badge badge-comp">Readings only</span>');
@@ -3402,7 +3425,7 @@ function renderTrendChart(elId,points,unit,color){
 function renderHistory(){
   document.getElementById('historyGrid').innerHTML=state.reports.map((r,i)=>{
     const total=r.vehicles.reduce((s,v)=>s+v.totalAmount,0);
-    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">${svgIcon('x')}</button><div class="history-period">${escapeHtml(fmtPeriod(r.scheduleDate)||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles· ${fmtDayMonYear(r.uploadedAt)}</div><div class="history-amount">${fmtTotalR(total)}</div></div>`;
+    return`<div class="history-card ${i===activeReportIndex?'active':''}" onclick="switchReport(${i})"><button class="history-del" data-role="write" title="Delete this report" onclick="event.stopPropagation();deleteReport(${i})">${svgIcon('x')}</button><div class="history-period">${escapeHtml(fmtPeriod(r.scheduleDate)||'Report '+(i+1))}</div><div class="history-meta">${r.vehicles.length} vehicles· ${fmtDayMonYear(r.uploadedAt)}</div><div class="history-amount">${fmtTotalR(total)}</div></div>`;
   }).join('');
 }
 
@@ -3511,7 +3534,7 @@ function renderRdList(){
         <div style="font-weight:700;color:var(--text2);">${escapeHtml(r.label)}</div>
         <div style="color:var(--text3);font-size:11px;">${r.sub?escapeHtml(r.sub)+' · ':''}deleted ${fmtDayMonYear(r.deleted_at)} ${fmtTimeHM(r.deleted_at)} by ${escapeHtml(who)}</div>
       </div>
-      <button onclick="restoreDeleted('${r.type}',${escapeHtml(JSON.stringify(r.id))})" style="flex-shrink:0;padding:6px 14px;background:var(--green);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('circle-check')}Restore</button>
+      <button data-role="write" onclick="restoreDeleted('${r.type}',${escapeHtml(JSON.stringify(r.id))})" style="flex-shrink:0;padding:6px 14px;background:var(--green);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('circle-check')}Restore</button>
     </div>`;
   }).join('');
 }
@@ -3966,7 +3989,7 @@ function showErrorBanner(msg){
         <div style="font-size:13px;font-weight:700;color:#C92A2A;margin-bottom:6px;">Upload Failed</div>
         <div style="font-size:12px;color:#862e2e;line-height:1.6;white-space:pre-line;">${escapeHtml(msg)}</div>
         <div style="display:flex;gap:8px;margin-top:12px;">
-          <button onclick="document.getElementById('fileInput').click();document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:var(--accent);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">Try Again</button>
+          <button data-role="write" onclick="document.getElementById('fileInput').click();document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:var(--accent);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">Try Again</button>
           <button onclick="document.getElementById('uploadErrorBanner').remove();" style="padding:7px 16px;background:transparent;border:1.5px solid #CED4DA;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;color:#495057;">Dismiss</button>
         </div>
       </div>
@@ -4625,11 +4648,11 @@ function renderNotifPanel(){
       :'';
     // Gap B phase 1: every reading gets a Delete (soft-delete) button; pending
     // ones keep Approve/Flag beside it.
-    const delBtn=`<button class="notif-action-btn" title="Delete reading" onclick="deleteReading(${escapeHtml(JSON.stringify(n.id))})" style="flex:0 0 auto;padding:5px 10px;background:transparent;color:var(--red);border:1.5px solid var(--red);border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('trash')}</button>`;
+    const delBtn=`<button class="notif-action-btn" data-role="write" title="Delete reading" onclick="deleteReading(${escapeHtml(JSON.stringify(n.id))})" style="flex:0 0 auto;padding:5px 10px;background:transparent;color:var(--red);border:1.5px solid var(--red);border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('trash')}</button>`;
     const actionBtns=(!n.status||n.status==='pending')
       ?`<div style="display:flex;gap:6px;margin-top:8px;">
-          <button class="notif-action-btn" onclick="approveNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--green);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('circle-check')}Approve</button>
-          <button class="notif-action-btn" onclick="rejectNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--red);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('flag')}Flag</button>
+          <button class="notif-action-btn" data-role="write" onclick="approveNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--green);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('circle-check')}Approve</button>
+          <button class="notif-action-btn" data-role="write" onclick="rejectNotifItem(${escapeHtml(JSON.stringify(n.id))})" style="flex:1;padding:5px 0;background:var(--red);color:white;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;">${svgIcon('flag')}Flag</button>
           ${delBtn}
         </div>`
       :`<div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">${delBtn}</div>`;
@@ -5285,7 +5308,7 @@ function toggleDiscExpand(plate){
 // on normal and archived cards alike.
 function discSyncStripHtml(plate,pj){
   const sync=driverAppMismatch(plate);
-  return sync?`<div class="disc-sync-strip"><span>${svgIcon('alert-triangle')}${sync==='visible'?'Drivers can still see this vehicle in the driver app.':'Drivers cannot see this vehicle in the driver app yet.'}</span><button class="disc-edit-btn" onclick="retryDriverAppSync(${pj},this)">${svgIcon('refresh')}Retry</button></div>`:'';
+  return sync?`<div class="disc-sync-strip"><span>${svgIcon('alert-triangle')}${sync==='visible'?'Drivers can still see this vehicle in the driver app.':'Drivers cannot see this vehicle in the driver app yet.'}</span><button class="disc-edit-btn" data-role="write" onclick="retryDriverAppSync(${pj},this)">${svgIcon('refresh')}Retry</button></div>`:'';
 }
 
 // Collapsed all-valid row: tick, plate, one line of text, chevron. A real
@@ -5320,7 +5343,7 @@ function discArchivedCardHtml(v,vi){
       ${rec.make_model?`<div class="disc-info-row" style="margin-top:4px;"><span class="disc-info-label">Make / Model</span><span class="disc-info-val">${escapeHtml(rec.make_model)}</span></div>`:''}
     </div>
     ${discSyncStripHtml(plate,pj)}
-    <div class="disc-card-footer"><button class="disc-edit-btn disc-archive-btn" onclick="archiveComplianceVehicle(${pj},this)" title="Re-run the archive">${svgIcon('archive')}Archive</button><button class="disc-edit-btn" onclick="restoreComplianceVehicle(${pj},this)">${svgIcon('arrow-back-up')}Restore</button></div>
+    <div class="disc-card-footer"><button class="disc-edit-btn disc-archive-btn" data-role="write" onclick="archiveComplianceVehicle(${pj},this)" title="Re-run the archive">${svgIcon('archive')}Archive</button><button class="disc-edit-btn" data-role="write" onclick="restoreComplianceVehicle(${pj},this)">${svgIcon('arrow-back-up')}Restore</button></div>
   </div>`;
 }
 
@@ -5350,7 +5373,7 @@ function discCardHtml(v,vi){
       // setNotRequired (which now confirms before flagging).
       const needs=COMP_ALERT_TIERS.includes(st.status)||st.status==='unknown';
       const actions=needs
-        ?`<button class="comp-icon-btn cib-renew" onclick="openRenewForm(${pj},'${it.key}')" aria-label="Mark renewed" title="Mark renewed">${svgIcon('check')}</button><button class="comp-icon-btn cib-nr" onclick="setNotRequired(${pj},'${it.key}',true)" aria-label="Mark not required" title="Mark not required">${svgIcon('minus')}</button>`
+        ?`<button class="comp-icon-btn cib-renew" data-role="write" onclick="openRenewForm(${pj},'${it.key}')" aria-label="Mark renewed" title="Mark renewed">${svgIcon('check')}</button><button class="comp-icon-btn cib-nr" data-role="write" onclick="setNotRequired(${pj},'${it.key}',true)" aria-label="Mark not required" title="Mark not required">${svgIcon('minus')}</button>`
         :nr?`<button class="comp-nr-link" onclick="setNotRequired(${pj},'${it.key}',false)" title="Mark this item as required for this vehicle">Mark required</button>`:'';
       const illegal=st.status==='overdue'?`<div class="comp-illegal">${svgIcon('ban')}Not road-legal — this vehicle may not legally be operated until the ${escapeHtml(it.label.toLowerCase())} is renewed.</div>`:'';
       return`<div class="comp-row">
@@ -5376,7 +5399,7 @@ function discCardHtml(v,vi){
       </div>
       <div class="disc-renew-form" id="crf-${id}"></div>
       ${syncStrip}
-      <div class="disc-card-footer"><button class="disc-edit-btn disc-archive-btn" onclick="archiveComplianceVehicle(${pj},this)" title="Take this vehicle out of service — it leaves the list but nothing is deleted">${svgIcon('archive')}Archive</button><button class="disc-edit-btn" onclick="toggleComplianceEdit(${pj})">${svgIcon('pencil')}Edit Details</button></div>
+      <div class="disc-card-footer"><button class="disc-edit-btn disc-archive-btn" data-role="write" onclick="archiveComplianceVehicle(${pj},this)" title="Take this vehicle out of service — it leaves the list but nothing is deleted">${svgIcon('archive')}Archive</button><button class="disc-edit-btn" data-role="write" onclick="toggleComplianceEdit(${pj})">${svgIcon('pencil')}Edit Details</button></div>
       <div class="disc-edit-form" id="cef-${id}">
         <div class="def-row">
           <div><label>Make / Model</label><input type="text" id="ce-make-${id}" value="${escapeHtml(rec.make_model||'')}" placeholder="e.g. Yutong ZK6122H"></div>
@@ -5396,7 +5419,7 @@ function discCardHtml(v,vi){
           <div><label>Op. Licence Cost (R)</label><input type="number" id="ce-ocost-${id}" min="0" step="0.01" value="${escAttr(rec.operating_licence_cost||'')}"></div>
         </div>
         <div><label>Notes</label><input type="text" id="ce-notes-${id}" value="${escapeHtml(rec.notes||'')}" placeholder="Optional"></div>
-        <button class="def-save" onclick="saveComplianceEdit(${pj})">${svgIcon('device-floppy')}Save</button>
+        <button class="def-save" data-role="write" onclick="saveComplianceEdit(${pj})">${svgIcon('device-floppy')}Save</button>
       </div>
     </div>`;
 }
@@ -5508,7 +5531,7 @@ function openRenewForm(plate,key){
     </div>
     <div><label>Notes</label><input type="text" id="rf-notes-${id}" placeholder="Optional — e.g. receipt number, testing station"></div>
     <div class="drf-actions">
-      <button class="def-save" id="rf-save-${id}" onclick="saveRenewal(${pj},'${item.key}')">${svgIcon('device-floppy')}Save renewal</button>
+      <button class="def-save" data-role="write" id="rf-save-${id}" onclick="saveRenewal(${pj},'${item.key}')">${svgIcon('device-floppy')}Save renewal</button>
       <button class="disc-edit-btn" onclick="closeRenewForm(${pj})">Cancel</button>
       <span class="drf-msg" id="rf-msg-${id}"></span>
     </div>`;
@@ -5582,7 +5605,7 @@ function renderDiscBulk(plates){
   document.getElementById('discBulkWrap').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
       <div style="font-size:12px;color:var(--text3);">Tab through the fields and click Save All when done. Blank fields are left unchanged for existing vehicles.</div>
-      <button class="def-save" onclick="saveDiscBulk()" id="discBulkSaveBtn">${svgIcon('device-floppy')}Save All</button>
+      <button class="def-save" data-role="write" onclick="saveDiscBulk()" id="discBulkSaveBtn">${svgIcon('device-floppy')}Save All</button>
     </div>
     <table class="disc-bulk-table">
       <thead><tr><th>Plate</th><th>Make / Model</th><th>Disc Expiry</th><th>Disc No.</th><th>COF Expiry</th><th>Op. Lic. Expiry</th><th>Op. Lic. No.</th></tr></thead>
@@ -5929,8 +5952,8 @@ function scanStatusHtml(row){
   const idj=escAttr(JSON.stringify(row.id));
   // ↻ Rotate is offered wherever a re-send makes sense and a compressed photo
   // exists (a queued/reading row has neither yet; a saved row is finished).
-  const rotate=row.blob?`<button class="scan-retry" onclick="rotateScanRow(${idj})" title="Turn the photo 90° and read it again">${svgIcon('rotate-clockwise')}Rotate</button>`:'';
-  const retry=`<button class="scan-retry" onclick="retryScanRow(${idj})">${svgIcon('refresh')}Retry</button>${rotate}`;
+  const rotate=row.blob?`<button class="scan-retry" data-role="write" onclick="rotateScanRow(${idj})" title="Turn the photo 90° and read it again">${svgIcon('rotate-clockwise')}Rotate</button>`:'';
+  const retry=`<button class="scan-retry" data-role="write" onclick="retryScanRow(${idj})">${svgIcon('refresh')}Retry</button>${rotate}`;
   // Change 5: in-progress states are plain words; warnings, results and the
   // archived match carry a sprite icon.
   switch(row.status){
@@ -5997,7 +6020,7 @@ function renderScanTable(){
       <div class="disc-scan-hint" id="discScanHint"></div>
       <div class="disc-scan-actions">
         <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="document.getElementById('discScanInput').click()">${svgIcon('camera')}Add photos</button>
-        <button class="def-save" id="discScanSaveBtn" onclick="saveLicenceScan()">${svgIcon('device-floppy')}Save selected</button>
+        <button class="def-save" data-role="write" id="discScanSaveBtn" onclick="saveLicenceScan()">${svgIcon('device-floppy')}Save selected</button>
         <button class="btn btn-outline" style="font-size:11px;padding:6px 12px;" onclick="closeLicenceScan()">${svgIcon('x')}Close</button>
       </div>
     </div>
@@ -6223,7 +6246,7 @@ function renderTyreVehiclePanel(){
     <div class="section-header">
       <div class="section-title" style="font-size:15px;">${svgIcon('bus')}${escapeHtml(plate)} — ${tyres.length} tyre${tyres.length!==1?'s':''} fitted</div>
       <div class="section-actions">
-        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddTyreForm()">${svgIcon('plus')}Add Tyre</button>
+        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" data-role="write" onclick="toggleAddTyreForm()">${svgIcon('plus')}Add Tyre</button>
       </div>
     </div>
     ${cards}
@@ -6250,7 +6273,7 @@ function renderTyreVehiclePanel(){
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <label class="tf-file-btn" for="tf-invoice">${svgIcon('paperclip')}<span id="tfInvoiceLabel">Attach invoice — photo or PDF (optional)</span></label>
         <input type="file" id="tf-invoice" accept="image/*,application/pdf,.pdf" onchange="tyreInvoiceChosen(this)">
-        <button class="def-save" id="tfSaveBtn" onclick="submitTyre()">${svgIcon('device-floppy')}Save Tyre</button>
+        <button class="def-save" data-role="write" id="tfSaveBtn" onclick="submitTyre()">${svgIcon('device-floppy')}Save Tyre</button>
         <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="toggleAddTyreForm()">Cancel</button>
       </div>
     </div>`;
@@ -6724,8 +6747,8 @@ function renderMaintJobCard(j,i){
     <div class="maint-job-footer">
       <span>${j.invoice_url?invoiceLinkHtml(j.invoice_url,'View Invoice'):''}</span>
       <span style="display:inline-flex;gap:8px;align-items:center;">
-        ${open?`<button class="def-save" style="background:var(--green);" onclick="markJobDone('${j.id}')">${svgIcon('circle-check')}Back in service</button>`:''}
-        <button class="def-save" title="Delete job" style="background:transparent;color:var(--red);border:1.5px solid var(--red);" onclick="deleteMaintJob('${j.id}')">${svgIcon('trash')}Delete</button>
+        ${open?`<button class="def-save" data-role="write" style="background:var(--green);" onclick="markJobDone('${j.id}')">${svgIcon('circle-check')}Back in service</button>`:''}
+        <button class="def-save" data-role="write" title="Delete job" style="background:transparent;color:var(--red);border:1.5px solid var(--red);" onclick="deleteMaintJob('${j.id}')">${svgIcon('trash')}Delete</button>
       </span>
     </div>
   </div>`;
@@ -6751,7 +6774,7 @@ function renderMaintVehiclePanel(){
     <div class="section-header" style="margin-top:6px;">
       <div class="section-title" style="font-size:15px;">${svgIcon('bus')}${escapeHtml(plate)} — ${jobs.length} job${jobs.length!==1?'s':''}${totalSpend>0?' · '+fmtTotalR(totalSpend)+' total':''}</div>
       <div class="section-actions">
-        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" onclick="toggleAddJobForm()">${svgIcon('plus')}Add Job</button>
+        <button class="btn hero-upload-btn" style="padding:8px 18px;font-size:12px;box-shadow:var(--shadow);" data-role="write" onclick="toggleAddJobForm()">${svgIcon('plus')}Add Job</button>
       </div>
     </div>
     ${flagsHtml}
@@ -6782,7 +6805,7 @@ function renderMaintVehiclePanel(){
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <label class="tf-file-btn" for="mf-invoice">${svgIcon('paperclip')}<span id="mfInvoiceLabel">Attach invoice — photo or PDF (optional)</span></label>
         <input type="file" id="mf-invoice" accept="image/*,application/pdf,.pdf" onchange="maintInvoiceChosen(this)">
-        <button class="def-save" id="mfSaveBtn" onclick="submitMaintJob()">${svgIcon('device-floppy')}Save Job</button>
+        <button class="def-save" data-role="write" id="mfSaveBtn" onclick="submitMaintJob()">${svgIcon('device-floppy')}Save Job</button>
         <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="toggleAddJobForm()">Cancel</button>
       </div>
     </div>`;
@@ -7045,17 +7068,17 @@ async function renderDriversTab(){
   // Active drivers first (A–Z from the fetch), deactivated greyed out at the bottom
   const sorted=[...driversData.filter(d=>d.active),...driversData.filter(d=>!d.active)];
   el.innerHTML=`<div class="drivers-table-wrap"><table class="drivers-table">
-    <thead><tr><th>Name</th><th>Phone</th><th>Code</th><th>Licence Expiry</th><th>PrDP Expiry</th><th>Personal Link</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Phone</th><th data-role="write">Code</th><th>Licence Expiry</th><th>PrDP Expiry</th><th data-role="write">Personal Link</th><th>Status</th><th data-role="write"></th></tr></thead>
     <tbody>${sorted.map(d=>`
       <tr class="${d.active?'':'driver-row-inactive'}">
         <td style="font-weight:700;"><span onclick="openDriverHistory('${d.id}')" title="View submission history" style="cursor:pointer;color:var(--accent);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">${escapeHtml(d.name)}</span></td>
         <td>${d.phone?escapeHtml(d.phone):'<span class="drv-exp-blank">—</span>'}</td>
-        <td><span class="drv-code">${escapeHtml(d.personal_code)}</span></td>
+        <td data-role="write"><span class="drv-code">${escapeHtml(d.personal_code)}</span></td>
         <td>${driverExpiryCell(d.licence_expiry)}</td>
         <td>${driverExpiryCell(d.prdp_expiry)}</td>
-        <td>${d.active?`<span class="drv-link"><code>driver.html?d=${escapeHtml(d.personal_code)}</code><button class="drv-copy-btn" title="Copy link for WhatsApp" onclick="copyDriverLink('${escapeHtml(d.personal_code)}',this)">${svgIcon('copy')}</button></span>`:'<span class="drv-exp-blank">—</span>'}</td>
+        <td data-role="write">${d.active?`<span class="drv-link"><code>driver.html?d=${escapeHtml(d.personal_code)}</code><button class="drv-copy-btn" title="Copy link for WhatsApp" onclick="copyDriverLink('${escapeHtml(d.personal_code)}',this)">${svgIcon('copy')}</button></span>`:'<span class="drv-exp-blank">—</span>'}</td>
         <td><span class="drv-badge ${d.active?'on':'off'}">${d.active?'Active':'Deactivated'}</span></td>
-        <td style="white-space:nowrap;">
+        <td data-role="write" style="white-space:nowrap;">
           <button class="drv-action-btn" onclick="openDriverForm('${d.id}')">${svgIcon('pencil')}Edit</button>
           <button class="drv-action-btn" onclick="toggleDriverActive('${d.id}',${d.active?'false':'true'})">${d.active?'Deactivate':'Reactivate'}</button>
         </td>
@@ -7201,7 +7224,7 @@ function renderDriverHistoryList(hasMore){
       <span style="font-weight:700;letter-spacing:0.5px;color:var(--accent);">${escapeHtml(r.plate||'—')}</span>
       <span style="font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;">${r.odometer?r.odometer.toLocaleString('en-US')+' km':'—'}</span>
       ${badge}${unverifiedBadge}
-      <button title="Delete reading" onclick="deleteReading(${escapeHtml(JSON.stringify(r.id))})" style="background:transparent;border:none;color:var(--red);cursor:pointer;padding:2px;display:inline-flex;flex-shrink:0;">${svgIcon('trash')}</button>
+      <button data-role="write" title="Delete reading" onclick="deleteReading(${escapeHtml(JSON.stringify(r.id))})" style="background:transparent;border:none;color:var(--red);cursor:pointer;padding:2px;display:inline-flex;flex-shrink:0;">${svgIcon('trash')}</button>
     </div>`;
   }).join('');
   btn.style.display=hasMore?'block':'none';
@@ -7281,7 +7304,7 @@ function openDriverForm(mode){
     </div>
     ${editing?'':'<div style="font-size:11px;color:var(--text3);margin-bottom:14px;">A personal code (e.g. THA-4827) is generated automatically when you save. Licence and PrDP expiry dates can be added afterwards via Edit.</div>'}
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <button class="def-save" id="dfSaveBtn" onclick="submitDriver()">${svgIcon('device-floppy')}${editing?'Save Changes':'Save Driver'}</button>
+      <button class="def-save" data-role="write" id="dfSaveBtn" onclick="submitDriver()">${svgIcon('device-floppy')}${editing?'Save Changes':'Save Driver'}</button>
       <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="closeDriverForm()">Cancel</button>
     </div>`;
   form.classList.add('open');
@@ -7907,8 +7930,8 @@ initApp();
       <div id="popupNotes" style="display:none;background:var(--amber-light);border:1px solid #FFE066;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:16px;"></div>
       <div id="popupTime" style="font-size:11px;color:var(--text3);margin-bottom:18px;"></div>
       <div style="display:flex;gap:10px;">
-        <button id="popupApproveBtn" class="popup-action-btn" onclick="approveSubmission()" style="flex:1;padding:12px;background:var(--green);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;"><svg class="icon" aria-hidden="true"><use href="#icon-circle-check"/></svg>Approve</button>
-        <button id="popupFlagBtn" class="popup-action-btn" onclick="flagSubmission()" style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;"><svg class="icon" aria-hidden="true"><use href="#icon-flag"/></svg>Flag</button>
+        <button id="popupApproveBtn" class="popup-action-btn" data-role="write" onclick="approveSubmission()" style="flex:1;padding:12px;background:var(--green);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;"><svg class="icon" aria-hidden="true"><use href="#icon-circle-check"/></svg>Approve</button>
+        <button id="popupFlagBtn" class="popup-action-btn" data-role="write" onclick="flagSubmission()" style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;"><svg class="icon" aria-hidden="true"><use href="#icon-flag"/></svg>Flag</button>
       </div>
     </div>
     <!-- BATCH SUBMISSIONS VIEW — whole view is clickable and opens the bell panel -->
