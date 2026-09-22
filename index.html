@@ -3470,7 +3470,7 @@ async function deleteReport(i){
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
       console.error('[FleetDesk] Report delete matched no rows for period',period);
-      alert(PERM_MSG);
+      alert('Nothing changed — it may already have been deleted.');
       return;
     }
   }catch(err){
@@ -7077,7 +7077,7 @@ async function deleteMaintJob(id){
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
       console.error('[FleetDesk] Job delete matched no row for id',id);
-      alert(PERM_MSG);
+      alert('Nothing changed — it may already have been deleted.');
       return;
     }
     await renderMaintTab();
@@ -8194,7 +8194,7 @@ async function deleteReading(id){
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
       console.error('[FleetDesk] Reading delete matched no row for id',id);
-      alert(PERM_MSG);
+      alert('Nothing changed — it may already have been deleted.');
       return;
     }
     notifData=notifData.filter(n=>n.id!==id);
