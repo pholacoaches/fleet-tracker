@@ -36,6 +36,21 @@
  *                        "no photo" submission (option 3, 2026-09-15):
  *                        photo_path/ai_odometer null, photo_verified false.
  *
+ *   Gap A step 4a (2026-09-21) — company user admin, OWNER ONLY. Need the
+ *   secret key, so they live here, not in the app:
+ *
+ *   POST /users/invite   { email, full_name, role: 'manager'|'viewer' }.
+ *                        Creates the login (admin generate_link, type
+ *                        invite) + the profile row in the CALLER's tenant.
+ *                        Returns { invite_url, expires_at } — a link to OUR
+ *                        accept.html carrying the one-time hashed_token plus
+ *                        display-only inviter name, company name and role;
+ *                        nothing is spent until the invitee presses Save there.
+ *   POST /users/remove   { user_id }. Deletes the login of someone in the
+ *                        caller's own tenant (profile row cascades).
+ *                        Role changes are NOT here — the app does them
+ *                        directly under RLS (gap A 4b).
+ *
  *   GET /health          Uptime probe for UptimeRobot (gap F, 2026-09-18):
  *                        200 + {ok, release}. No auth, no secrets, no
  *                        database or upstream call.
@@ -72,9 +87,11 @@
  *   CF_VERSION_METADATA binding — Cloudflare's own version id → Sentry release
  *   SENTRY_TEST_KEY     secret — enables GET /monitor/test (see "Monitoring")
  *   SUPABASE_SECRET_KEY secret — Supabase sb_secret_… key (P1). Used for the
- *                                photo upload, the reading INSERT and (when
- *                                set) the driver_page_init RPC. Dashboard
- *                                only, never `wrangler secret put`.
+ *                                photo upload, the reading INSERT, (when
+ *                                set) the driver_page_init RPC, and every
+ *                                /users/* call (required there — no anon
+ *                                fallback). Dashboard only, never
+ *                                `wrangler secret put`.
  *   PHOTO_TOKEN_KEY     secret — random HMAC key for the P1 photo token.
  *                                Dashboard only, never `wrangler secret put`.
  *   PHOTO_RETENTION_DRY_RUN
@@ -275,6 +292,8 @@ const ROUTE_TAGS = {
   '/driver/init': 'driver-init',
   '/driver/photo': 'driver-photo',
   '/driver/submit': 'driver-submit',
+  '/users/invite': 'users-invite',
+  '/users/remove': 'users-remove',
 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEST_ERROR_MESSAGE = 'FleetDesk Worker monitoring test — this error is deliberate';
@@ -1095,6 +1114,280 @@ async function handleCompliance(request, env, cors) {
   });
 }
 
+// ── User admin: /users/invite + /users/remove (gap A step 4a, 2026-09-21) ────
+// Owner-only. The caller is ALWAYS re-identified here: their token is verified
+// with Supabase Auth, then their own profile row (role + tenant) is read with
+// the secret key. Nothing the browser says about who it is, its role or its
+// tenant is trusted — the body only names the person being invited/removed.
+// Every change is recorded in audit_log by database triggers; no logging here.
+// The secret key and every token Supabase returns stay inside this Worker.
+const MAX_BODY_USERS = 8 * 1024;
+const INVITE_ROLES = ['manager', 'viewer']; // 'owner' can never be invited
+const INVITE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const INVITE_EMAIL_MAX = 254;
+const FULL_NAME_MAX = 100;
+// Must equal Supabase → Authentication → Emails → "Email OTP Expiration"
+// (the invite link's lifetime). Only used to tell the owner when the link
+// stops working; Supabase itself enforces the real expiry.
+const INVITE_LINK_TTL_S = 86400;
+// The app page the invite link opens, per allowed Origin. The origin is only
+// ever taken from the Worker's own ALLOWED_ORIGINS list (checked again in
+// inviteAppUrl) — never from the body or any other header. Origins not listed
+// here (the dev localhost ones) serve the app from the root.
+const APP_PATH_BY_ORIGIN = { 'https://pholacoaches.github.io': '/fleet-tracker/' };
+// ── EMAIL SWITCH ── Invites are delivered by LINK only: the owner copies the
+// link and sends it however they like (WhatsApp, SMS, email). Supabase's
+// built-in mailer sends ~2 emails an hour and is not for production. To send
+// invite emails later: configure custom SMTP in Supabase, then add the send
+// at the marked spot in handleUsersInvite and set this to true.
+const INVITE_EMAIL_ENABLED = false;
+const USERS_UNAVAILABLE = 'Could not reach the login service. Please try again.';
+
+function adminHeaders(env, extra) {
+  return { apikey: env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`, ...extra };
+}
+
+// Shared start of both routes: token → verified user → per-user throttle →
+// the caller's own profile (secret key) → role must be exactly 'owner'.
+// Returns { user, tenantId, fullName } or { fail }.
+async function ownerPrelude(request, env, cors) {
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!token) return { fail: jsonError(cors, 401, 'authentication_error', 'Please log in again.') };
+
+  const user = await verifySupabaseUser(env, token);
+  if (!user) return { fail: jsonError(cors, 401, 'authentication_error', 'Your session is not valid. Please log in again.') };
+
+  if (await rateLimited(env, 'DASHBOARD_USER_LIMIT', user.id)) return { fail: rateLimitResponse(cors, 'DASHBOARD_USER_LIMIT') };
+
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role,tenant_id,full_name`,
+    { headers: adminHeaders(env) }
+  );
+  if (!res.ok) {
+    reportMessage(`caller profile read failed ${res.status}`, 'error', { upstream: 'supabase', http_status: res.status });
+    return { fail: jsonError(cors, 502, 'api_error', USERS_UNAVAILABLE) };
+  }
+  const rows = await res.json();
+  const me = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+  if (!me || me.role !== 'owner' || typeof me.tenant_id !== 'string' || !UUID_RE.test(me.tenant_id)) {
+    return { fail: jsonError(cors, 403, 'permission_error', 'Only the company owner can manage users.') };
+  }
+  Sentry.setTag('tenant', me.tenant_id);
+  const fullName = typeof me.full_name === 'string' ? me.full_name.trim() : '';
+  return { user, tenantId: me.tenant_id, fullName };
+}
+
+// The caller's company name for the invite link (display only). Secret key,
+// but filtered to the tenant ownerPrelude already proved is the caller's.
+// Returns the name, '' when the row has none, or null when the read failed.
+async function tenantDisplayName(env, tenantId) {
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/tenants?id=eq.${encodeURIComponent(tenantId)}&select=display_name,name`,
+    { headers: adminHeaders(env) }
+  );
+  if (!res.ok) {
+    reportMessage(`tenant name read failed ${res.status}`, 'error', { upstream: 'supabase', http_status: res.status });
+    return null;
+  }
+  const rows = await res.json().catch(() => null);
+  const t = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+  if (!t) return null;
+  const pick = (v) => (typeof v === 'string' ? v.trim() : '');
+  return pick(t.display_name) || pick(t.name);
+}
+
+// The invite link's base: the caller's Origin, re-checked against this
+// environment's allowlist, plus the app path for that origin.
+function inviteAppUrl(env, origin) {
+  if (!origin || !allowedOrigins(env).has(origin)) return null;
+  return origin + (APP_PATH_BY_ORIGIN[origin] || '/');
+}
+
+// Exact-match lookup of an existing login by email. The admin list's
+// `filter` is a substring match, so the result is compared exactly here.
+// Returns true / false, or null when the lookup itself failed.
+async function authUserExists(env, email) {
+  const res = await fetch(
+    `${env.SUPABASE_URL}/auth/v1/admin/users?filter=${encodeURIComponent(email)}&page=1&per_page=1000`,
+    { headers: adminHeaders(env) }
+  );
+  if (!res.ok) {
+    reportMessage(`admin user lookup failed ${res.status}`, 'error', { upstream: 'supabase', http_status: res.status });
+    return null;
+  }
+  const data = await res.json().catch(() => null);
+  const users = data && Array.isArray(data.users) ? data.users : null;
+  if (!users) return null;
+  return users.some((u) => u && typeof u.email === 'string' && u.email.toLowerCase() === email);
+}
+
+async function deleteAuthUser(env, userId) {
+  return fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    headers: adminHeaders(env),
+  });
+}
+
+// ── Route: POST /users/invite ────────────────────────────────────────────────
+async function handleUsersInvite(request, env, cors, origin) {
+  const pre = await ownerPrelude(request, env, cors);
+  if (pre.fail) return pre.fail;
+
+  const { body, error } = await readJsonBody(request, MAX_BODY_USERS);
+  if (error) return jsonError(cors, 400, 'invalid_request_error', error);
+
+  const email = typeof (body && body.email) === 'string' ? body.email.trim().toLowerCase() : '';
+  if (!email || email.length > INVITE_EMAIL_MAX || !INVITE_EMAIL_RE.test(email)) {
+    return jsonError(cors, 400, 'invalid_request_error', 'Please enter a valid email address.');
+  }
+  // Control characters stripped; an empty name is stored as null.
+  const rawName = typeof (body && body.full_name) === 'string' ? body.full_name.replace(/[\u0000-\u001f\u007f]/g, '').trim() : '';
+  if (rawName.length > FULL_NAME_MAX) return jsonError(cors, 400, 'invalid_request_error', `Name must be ${FULL_NAME_MAX} characters or fewer.`);
+  const fullName = rawName || null;
+  const role = body && body.role;
+  if (!INVITE_ROLES.includes(role)) return jsonError(cors, 400, 'invalid_request_error', 'Role must be manager or viewer.');
+
+  const appUrl = inviteAppUrl(env, origin);
+  if (!appUrl) return jsonError(cors, 403, 'permission_error', 'Origin not allowed.');
+
+  // The accept page shows who sent the invite and for which company; both
+  // come from the database, never the body. No stand-in text: an owner with
+  // no name, or a company with no name, cannot send an invite.
+  if (!pre.fullName) return jsonError(cors, 400, 'invalid_request_error', 'Your profile has no name yet, so the invite cannot say who it is from.');
+  const companyName = await tenantDisplayName(env, pre.tenantId);
+  if (companyName === null) return jsonError(cors, 502, 'api_error', USERS_UNAVAILABLE);
+  if (!companyName) return jsonError(cors, 400, 'invalid_request_error', 'Your company has no name yet, so the invite cannot say which company it is for.');
+
+  // generate_link on an address that already has a pending (unconfirmed)
+  // invite would silently re-issue THAT user's token — so any existing login
+  // is refused up front, before Supabase is asked to create anything.
+  const exists = await authUserExists(env, email);
+  if (exists === null) return jsonError(cors, 502, 'api_error', USERS_UNAVAILABLE);
+  if (exists) return jsonError(cors, 409, 'invalid_request_error', 'That email already has a FleetDesk login.');
+
+  // EMAIL SWITCH (see INVITE_EMAIL_ENABLED): when email delivery is set up,
+  // the send goes here instead of generate_link. Off until then.
+  if (INVITE_EMAIL_ENABLED) return jsonError(cors, 501, 'api_error', 'Invite emails are not set up yet.');
+
+  // No redirect_to: the Supabase action_link (which would need the redirect
+  // allow-list) is never used. Only hashed_token leaves this call.
+  const startedAt = Date.now();
+  const linkRes = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/generate_link`, {
+    method: 'POST',
+    headers: adminHeaders(env, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ type: 'invite', email }),
+  });
+  const link = await linkRes.json().catch(() => null);
+  if (!linkRes.ok || !link) {
+    const code = link && (link.error_code || link.code);
+    if (linkRes.status === 422 && code === 'email_exists') {
+      return jsonError(cors, 409, 'invalid_request_error', 'That email already has a FleetDesk login.');
+    }
+    reportMessage(`generate_link failed ${linkRes.status}`, 'error', { upstream: 'supabase', http_status: linkRes.status });
+    return jsonError(cors, 502, 'api_error', 'Could not create the invite. Please try again.');
+  }
+  // GoTrue's REST reply is the user object with the link fields at the top
+  // level; supabase-js nests them under properties/user. Accept both.
+  const props = link.properties && typeof link.properties === 'object' ? link.properties : link;
+  const newUser = link.user && typeof link.user === 'object' ? link.user : link;
+  const newId = newUser.id;
+  const hashedToken = props.hashed_token;
+  if (typeof newId !== 'string' || !UUID_RE.test(newId) || typeof hashedToken !== 'string' || !hashedToken) {
+    reportMessage('generate_link reply unrecognised', 'error', { upstream: 'supabase' });
+    return jsonError(cors, 502, 'api_error', 'Could not create the invite. Please try again.');
+  }
+  // Belt and braces for the pre-check above: a login created before this
+  // call started was NOT made by us — never attach it or delete it.
+  const createdAt = Date.parse(newUser.created_at || '');
+  if (!Number.isNaN(createdAt) && createdAt < startedAt - 60 * 1000) {
+    return jsonError(cors, 409, 'invalid_request_error', 'That email already has a FleetDesk login.');
+  }
+
+  // Profile row with the secret key — tenant is the CALLER's, from ownerPrelude.
+  // Project rule: return=representation + a row check (204 lies).
+  let inserted = false;
+  try {
+    const pRes = await fetch(`${env.SUPABASE_URL}/rest/v1/profiles`, {
+      method: 'POST',
+      headers: adminHeaders(env, { 'Content-Type': 'application/json', Prefer: 'return=representation' }),
+      body: JSON.stringify({ id: newId, tenant_id: pre.tenantId, email, full_name: fullName, role }),
+    });
+    const rows = pRes.ok ? await pRes.json().catch(() => null) : null;
+    inserted = Array.isArray(rows) && rows.length === 1;
+    if (!inserted) reportMessage(`profile insert failed ${pRes.status}`, 'error', { upstream: 'supabase', http_status: pRes.status });
+  } catch {
+    inserted = false;
+    reportMessage('profile insert unreachable', 'error', { upstream: 'supabase' });
+  }
+  if (!inserted) {
+    // Never leave a half-made account: remove the login just created.
+    try {
+      const d = await deleteAuthUser(env, newId);
+      if (!d.ok) reportMessage(`invite rollback failed ${d.status}`, 'error', { upstream: 'supabase', http_status: d.status });
+    } catch {
+      reportMessage('invite rollback unreachable', 'error', { upstream: 'supabase' });
+    }
+    return jsonError(cors, 502, 'api_error', 'Could not create the invite. Please try again.');
+  }
+
+  // The token rides in the #fragment: browsers never send it to the web
+  // server or in a Referer, and link previewers cannot spend it (it is only
+  // used by the page's Save button). email, inviter, company and role are for
+  // display only — the token alone decides which login is activated, and the
+  // role that counts is the profile row written above.
+  const fragment = new URLSearchParams({
+    token_hash: hashedToken, email, inviter: pre.fullName, company: companyName, role,
+  }).toString();
+  return jsonOk(cors, {
+    invite_url: `${appUrl}accept.html#${fragment}`,
+    expires_at: new Date(startedAt + INVITE_LINK_TTL_S * 1000).toISOString(),
+  });
+}
+
+// ── Route: POST /users/remove ────────────────────────────────────────────────
+// Deletes the auth user; the profile row cascades away. The last-owner
+// trigger cannot fire from here in normal use (the caller is an owner of the
+// same tenant and cannot remove themselves), but any refusal Supabase gives is
+// passed on rather than swallowed.
+async function handleUsersRemove(request, env, cors) {
+  const pre = await ownerPrelude(request, env, cors);
+  if (pre.fail) return pre.fail;
+
+  const { body, error } = await readJsonBody(request, MAX_BODY_USERS);
+  if (error) return jsonError(cors, 400, 'invalid_request_error', error);
+
+  const target = typeof (body && body.user_id) === 'string' ? body.user_id.trim().toLowerCase() : '';
+  if (!UUID_RE.test(target)) return jsonError(cors, 400, 'invalid_request_error', 'Missing or invalid user.');
+  if (target === String(pre.user.id).toLowerCase()) {
+    return jsonError(cors, 400, 'invalid_request_error', 'You cannot remove yourself.');
+  }
+
+  // Must be in the caller's own tenant. Someone in another company gets the
+  // same answer as someone who does not exist.
+  const lookup = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(target)}&tenant_id=eq.${encodeURIComponent(pre.tenantId)}&select=id`,
+    { headers: adminHeaders(env) }
+  );
+  if (!lookup.ok) {
+    reportMessage(`target profile read failed ${lookup.status}`, 'error', { upstream: 'supabase', http_status: lookup.status });
+    return jsonError(cors, 502, 'api_error', USERS_UNAVAILABLE);
+  }
+  const rows = await lookup.json().catch(() => null);
+  if (!Array.isArray(rows) || rows.length !== 1) {
+    return jsonError(cors, 404, 'not_found_error', 'That person is not in your company.');
+  }
+
+  const del = await deleteAuthUser(env, target);
+  if (!del.ok) {
+    const e = await del.json().catch(() => null);
+    const msg = e && typeof (e.msg || e.message) === 'string' ? String(e.msg || e.message).slice(0, 200) : '';
+    reportMessage(`remove user failed ${del.status}`, 'error', { upstream: 'supabase', http_status: del.status });
+    return jsonError(cors, del.status >= 500 ? 502 : 409, 'api_error', msg ? `Could not remove this person: ${msg}` : 'Could not remove this person. Please try again.');
+  }
+  return jsonOk(cors, { ok: true });
+}
+
 // ── Content whitelisting ─────────────────────────────────────────────────────
 const BASE64_RE = /^[A-Za-z0-9+/=\r\n]+$/;
 
@@ -1392,10 +1685,11 @@ const handler = {
     if (path === '/health') return handleHealth(request, env);
 
     const driverLike = path === '/driver/init' || path === '/driver/photo' || path === '/driver/submit';
-    const known = path === '/ai/dashboard' || path === '/ai/compliance' || driverLike;
-    // Both signed-in routes share the dashboard throttles (same identity);
+    const usersLike = path === '/users/invite' || path === '/users/remove';
+    const known = path === '/ai/dashboard' || path === '/ai/compliance' || driverLike || usersLike;
+    // Every signed-in route shares the dashboard throttles (same identity);
     // every driver-code route shares the driver throttles.
-    const dashboardLike = path === '/ai/dashboard' || path === '/ai/compliance';
+    const dashboardLike = path === '/ai/dashboard' || path === '/ai/compliance' || usersLike;
 
     // {} unless the Origin is on this environment's allowlist.
     const cors = corsHeaders(env, origin);
@@ -1421,6 +1715,22 @@ const handler = {
     // spray against Supabase Auth through us).
     const ipBinding = dashboardLike ? 'DASHBOARD_IP_LIMIT' : 'DRIVER_IP_LIMIT';
     if (await rateLimited(env, ipBinding, clientIp(request))) return rateLimitResponse(cors, ipBinding);
+
+    // /users/* never call Anthropic, so they are exempt from the AI key check
+    // — but they refuse to run without the secret key (no anon fallback).
+    if (usersLike) {
+      if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY || !env.SUPABASE_SECRET_KEY) {
+        return jsonError(cors, 500, 'api_error', 'Proxy is not configured.');
+      }
+      try {
+        if (path === '/users/invite') return await handleUsersInvite(request, env, cors, origin);
+        return await handleUsersRemove(request, env, cors);
+      } catch (err) {
+        console.error('fleet-proxy error:', err && err.message);
+        Sentry.captureException(err);
+        return jsonError(cors, 502, 'api_error', USERS_UNAVAILABLE);
+      }
+    }
 
     if (!env.ANTHROPIC_API_KEY || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
       return jsonError(cors, 500, 'api_error', 'Proxy is not configured.');

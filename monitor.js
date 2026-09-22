@@ -1,4 +1,5 @@
-// FleetDesk — error monitoring (Sentry), shared by index.html and driver.html.
+// FleetDesk — error monitoring (Sentry), shared by index.html, driver.html
+// and accept.html.
 //
 // Loaded in <head> straight after sentry.bundle.min.js (self-hosted copy of
 // @sentry/browser 10.73.0, errors-only bundle) and BEFORE every other script,
@@ -24,9 +25,11 @@
 (function(){
   'use strict';
 
-  var FLEETDESK_RELEASE='fleetdesk-v87';
+  var FLEETDESK_RELEASE='fleetdesk-v88';
   var DSN='https://7415a2ef1c96f2c4907c7b4c958541f4@o4512041337618432.ingest.de.sentry.io/4512041379758160';
-  var PAGE=/driver\.html$/i.test(location.pathname)?'driver':'dashboard';
+  var PAGE=/driver\.html$/i.test(location.pathname)?'driver'
+    :/accept\.html$/i.test(location.pathname)?'accept'
+    :'dashboard';
   var ENV=(/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname)||location.protocol==='file:')?'local':'production';
   // Only calls to these hosts are watched by the fetch wrapper.
   var API_HOSTS=/(\.supabase\.co|\.workers\.dev)$/i;

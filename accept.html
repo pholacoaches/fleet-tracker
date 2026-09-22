@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- Gap A block 3 CSP. All scripts are local; data goes only to Supabase
+     Auth (verify the invite, set the password) and Sentry. frame-ancestors
+     can't be set via meta — accepted GitHub Pages limitation. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://wlwwzbyuchsonwugqhww.supabase.co https://o4512041337618432.ingest.de.sentry.io; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Accept Invite</title>
+<script src="sentry.bundle.min.js"></script>
+<script src="monitor.js"></script>
+<style>
+@font-face { font-family: 'Century Gothic'; src: local('Century Gothic'), local('CenturyGothic'); }
+:root {
+  --accent: #1971C2; --accent2: #0C5A99; --accent-light: #E7F5FF;
+  --accent-glow: rgba(25,113,194,0.3); --green: #2F9E44; --red: #C92A2A;
+  --amber: #E67700; --bg: #F8F9FA; --surface: #FFFFFF; --border: #DEE2E6;
+  --text: #212529; --text2: #495057; --text3: #868E96;
+  --font: 'Century Gothic', 'Trebuchet MS', sans-serif;
+  --radius: 12px; --shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.header {
+  background: var(--accent); padding: 20px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.header-logo { font-size: 22px; font-weight: 700; color: white; letter-spacing: 0.5px; }
+.header-sub { font-size: 11px; color: rgba(255,255,255,0.75); text-transform: uppercase; letter-spacing: 1.5px; }
+
+.main { padding: 24px 20px; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+.screen { display: none; }
+.screen.show { display: block; }
+
+/* ── Expired link ── */
+.center-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; text-align: center; gap: 16px; padding: 24px; }
+.big-icon { font-size: 64px; }
+.center-title { font-size: 22px; font-weight: 700; color: var(--red); }
+.center-sub { font-size: 15px; color: var(--text2); line-height: 1.7; max-width: 320px; }
+
+/* ── Set password ── */
+.invite-title { font-size: 24px; font-weight: 700; color: var(--text); text-align: center; line-height: 1.4; }
+.invite-who { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.role-badge {
+  background: var(--accent-light); color: var(--accent); border: 1.5px solid var(--accent);
+  border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.8px;
+}
+.invite-email { font-size: 14px; color: var(--text2); word-break: break-all; }
+.role-desc { font-size: 14px; color: var(--text2); text-align: center; line-height: 1.7; }
+
+.card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.card-body { padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+.field-label { font-size: 12px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; }
+.pw-input {
+  width: 100%; padding: 14px 16px; font-size: 16px; font-family: var(--font);
+  color: var(--text); border: 2px solid var(--border); border-radius: 10px;
+  outline: none; transition: border-color 0.15s; margin-bottom: 8px;
+}
+.pw-input:focus { border-color: var(--accent); }
+.pw-helper { font-size: 13px; color: var(--text3); line-height: 1.6; }
+
+.err-banner {
+  display: none; background: #FFF5F5; border: 1.5px solid #FFA8A8; border-radius: 10px;
+  padding: 14px 16px; font-size: 13px; color: var(--red); font-weight: 700; line-height: 1.6;
+}
+.err-banner.show { display: block; }
+
+.big-btn {
+  display: block; width: 100%; padding: 18px; background: var(--accent); color: white;
+  border: none; border-radius: var(--radius); font-family: var(--font);
+  font-size: 17px; font-weight: 700; cursor: pointer; letter-spacing: 0.3px;
+  box-shadow: 0 4px 12px var(--accent-glow); transition: background 0.15s;
+  text-align: center; text-decoration: none;
+}
+.big-btn:active, .big-btn:hover { background: var(--accent2); }
+.big-btn:disabled { background: #9ca3af !important; color: #f3f4f6 !important; cursor: not-allowed; box-shadow: none; }
+
+.footnote { font-size: 12px; color: var(--text3); text-align: center; line-height: 1.6; }
+.footer-note { font-size: 11px; color: var(--text3); text-align: center; line-height: 1.6; padding-bottom: 24px; }
+
+.loading-spinner {
+  width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white; border-radius: 50%;
+  animation: spin 0.7s linear infinite; display: inline-block; margin-right: 8px; vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.page-loading { display: flex; align-items: center; justify-content: center; min-height: 50vh; color: var(--text3); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">FleetDesk</div>
+  <div class="header-sub">Accept Invite</div>
+</div>
+
+<!-- LOADING (while the link is read) -->
+<div id="loadingScreen" class="screen show"><div class="page-loading">Checking your link...</div></div>
+
+<!-- EXPIRED / USED / MISSING LINK -->
+<div id="expiredScreen" class="screen">
+  <div class="center-screen">
+    <div class="big-icon"><svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="display:block;color:var(--red)"><path d="M9 15l3 -3m2 -2l1 -1"/><path d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .463"/><path d="M3 3l18 18"/><path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"/></svg></div>
+    <div class="center-title">This invite link has expired</div>
+    <div class="center-sub">Or it has already been used. Ask the person who invited you to send a new one.</div>
+    <a class="big-btn" href="index.html" style="max-width:320px;">Go to the sign-in page</a>
+    <div class="footnote" style="max-width:320px;">Already set your password? Sign in as normal - you don't need the invite link again.</div>
+  </div>
+</div>
+
+<!-- SET PASSWORD -->
+<div id="setScreen" class="screen">
+  <div class="main">
+    <div class="invite-title" id="inviteTitle"></div>
+    <div class="invite-who">
+      <span class="role-badge" id="roleBadge"></span>
+      <span class="invite-email" id="inviteEmail"></span>
+    </div>
+    <div class="role-desc" id="roleDesc"></div>
+
+    <form id="pwForm" class="card" novalidate>
+      <div class="card-body">
+        <!-- Lets password managers file the new password under the right email -->
+        <input type="email" id="pwUsername" autocomplete="username" readonly hidden>
+        <label class="field-label" for="pw1">Choose a password</label>
+        <input class="pw-input" type="password" id="pw1" placeholder="At least 8 characters" autocomplete="new-password">
+        <label class="field-label" for="pw2">Type it again</label>
+        <input class="pw-input" type="password" id="pw2" placeholder="Same password" autocomplete="new-password">
+        <div class="pw-helper" id="pwHelper"></div>
+      </div>
+    </form>
+
+    <div class="err-banner" id="errBanner" role="alert"></div>
+    <button class="big-btn" id="setBtn" type="submit" form="pwForm">Set password and sign in</button>
+
+    <div class="footnote" id="linkNote"></div>
+    <div class="footer-note">Didn't expect this? You can ignore the email - nothing happens until you set a password.</div>
+  </div>
+</div>
+
+<script>
+// Gap A block 3: the invite link (made by the Worker's /users/invite) lands
+// here as accept.html#token_hash=…&email=…&inviter=…&company=…&role=…
+// The screen is built from those link values ONLY — they are display text,
+// never trusted for anything else. The one-time token is NOT spent on load:
+// it is verified only when "Set password and sign in" is pressed, so a link
+// opened and abandoned (or fetched by a link previewer) still works later.
+//
+// Like index.html, this page talks to Supabase Auth (GoTrue) over REST — no
+// supabase-js. On success it writes the same three localStorage keys
+// index.html's checkAuth() reads, then hands over to index.html signed in.
+const SUPABASE_URL='https://wlwwzbyuchsonwugqhww.supabase.co';
+const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
+const AUTH_TOKEN_KEY='fleet_auth_token';     // must match index.html
+const AUTH_REFRESH_KEY='fleet_auth_refresh'; // must match index.html
+const AUTH_TIME_KEY='fleet_auth_time';       // must match index.html
+const TENANT_CACHE_KEY='fleet_tenant_v1';    // must match index.html
+// The link values live in THIS TAB's sessionStorage once read, so the token
+// can leave the address bar and a refresh still shows the form. After the
+// token is spent, the session it returned is kept there too: a password the
+// server refuses (too short, found in a breach) can be retried without the
+// already-used token. Cleared as soon as the password is set.
+const INVITE_KEY='fleet_invite_v1';
+const ROLE_LABEL={manager:'Manager',viewer:'Viewer'};
+const ROLE_DESC={
+  manager:'Managers can add, edit and delete the day-to-day records - fuel, vehicles, drivers, tyres, maintenance and renewals.',
+  viewer:'Viewers can look at every screen and report. They cannot add, edit or delete anything.'
+};
+const BTN_LABEL='Set password and sign in';
+
+let invite=null; // {token_hash, email, inviter, company, role, session?}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('show',s.id===id));
+  window.scrollTo({top:0});
+}
+
+function saveInvite(){
+  try{sessionStorage.setItem(INVITE_KEY,JSON.stringify(invite));}catch{}
+}
+function dropInvite(){
+  invite=null;
+  try{sessionStorage.removeItem(INVITE_KEY);}catch{}
+}
+
+// Every value must be present and non-empty — no stand-in text is invented.
+function validInvite(v){
+  if(!v||typeof v!=='object')return false;
+  for(const k of ['token_hash','email','inviter','company','role']){
+    if(typeof v[k]!=='string'||!v[k].trim())return false;
+  }
+  return Object.prototype.hasOwnProperty.call(ROLE_LABEL,v.role);
+}
+
+function readInvite(){
+  if(location.hash.length>1){
+    const p=new URLSearchParams(location.hash.slice(1));
+    const v={
+      token_hash:p.get('token_hash')||'',
+      email:(p.get('email')||'').trim(),
+      inviter:(p.get('inviter')||'').trim(),
+      company:(p.get('company')||'').trim(),
+      role:p.get('role')||''
+    };
+    // Token out of the address bar (and browser history) straight away.
+    history.replaceState(null,'',location.pathname+location.search);
+    // A fresh link always wins over anything left in this tab.
+    dropInvite();
+    if(validInvite(v)){invite=v;saveInvite();}
+    return;
+  }
+  try{
+    const v=JSON.parse(sessionStorage.getItem(INVITE_KEY));
+    if(validInvite(v))invite=v;
+  }catch{}
+}
+
+function renderInvite(){
+  const firstName=invite.inviter.split(/\s+/)[0];
+  document.title=invite.company+' — Accept Invite';
+  document.getElementById('inviteTitle').textContent=`${invite.inviter} invited you to join ${invite.company}`;
+  document.getElementById('roleBadge').textContent=ROLE_LABEL[invite.role];
+  document.getElementById('inviteEmail').textContent=invite.email;
+  document.getElementById('pwUsername').value=invite.email;
+  document.getElementById('roleDesc').textContent=ROLE_DESC[invite.role];
+  document.getElementById('pwHelper').textContent=`Use something only you know. Nobody at ${invite.company} can see it.`;
+  document.getElementById('linkNote').textContent=`This link works for 24 hours and can only be used once. If it stops working, ask ${firstName} to send a new invite.`;
+  showScreen('setScreen');
+}
+
+function showErr(msg){
+  const el=document.getElementById('errBanner');
+  el.textContent=msg;
+  el.classList.toggle('show',!!msg);
+}
+
+function setBusy(busy,text){
+  const btn=document.getElementById('setBtn');
+  btn.disabled=busy;
+  if(busy)btn.innerHTML='<span class="loading-spinner"></span> '+text;
+  else btn.textContent=BTN_LABEL;
+}
+
+// GoTrue error reply → plain English. Known password refusals get a friendly
+// sentence; anything else shows Supabase's own message, never a blank.
+function authErrorText(data,status){
+  const raw=data&&[data.msg,data.message,data.error_description,data.error].find(s=>typeof s==='string'&&s.trim());
+  const reasons=data&&data.weak_password&&Array.isArray(data.weak_password.reasons)?data.weak_password.reasons:[];
+  if(reasons.includes('pwned'))return'That password has been found in a known data breach, so it is not safe to use. Please choose a different one.';
+  if(reasons.includes('length'))return'That password is too short.'+(raw?' '+raw:'');
+  return raw||`Something went wrong (error ${status}). Please try again.`;
+}
+
+// Token → session. Returns true, or false after it has shown why.
+async function verifyInvite(){
+  const res=await fetch(`${SUPABASE_URL}/auth/v1/verify`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+    body:JSON.stringify({type:'invite',token_hash:invite.token_hash})
+  });
+  const data=await res.json().catch(()=>({}));
+  if(res.ok&&data&&data.access_token){
+    invite.session={access_token:data.access_token,refresh_token:data.refresh_token||''};
+    saveInvite();
+    return true;
+  }
+  // Expired, already used, or never valid: GoTrue answers 403 otp_expired.
+  if(res.status===403||(data&&data.error_code==='otp_expired')){
+    dropInvite();
+    showScreen('expiredScreen');
+    return false;
+  }
+  setBusy(false);
+  showErr(authErrorText(data,res.status));
+  return false;
+}
+
+// An earlier session on this device (someone else, or an older login) is
+// signed out first, so the new user never inherits its tenant cache.
+async function replaceDeviceSession(){
+  const old=localStorage.getItem(AUTH_TOKEN_KEY);
+  if(old&&old!==invite.session.access_token){
+    try{
+      await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=local`,{
+        method:'POST',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+old}
+      });
+    }catch{}
+  }
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_REFRESH_KEY);
+  localStorage.removeItem(AUTH_TIME_KEY);
+  localStorage.removeItem(TENANT_CACHE_KEY);
+}
+
+async function submitPassword(e){
+  e.preventDefault();
+  if(!invite)return;
+  const pw1=document.getElementById('pw1').value;
+  const pw2=document.getElementById('pw2').value;
+  showErr('');
+  if(pw1.length<8){showErr('Your password must be at least 8 characters.');return;}
+  if(pw1!==pw2){showErr('The two passwords do not match. Please type the same password twice.');return;}
+  setBusy(true,'Setting password...');
+  try{
+    if(!invite.session&&!(await verifyInvite()))return;
+    const res=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+invite.session.access_token},
+      body:JSON.stringify({password:pw1})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){
+      setBusy(false);
+      if(res.status===401){
+        // The session from the spent token is no longer accepted. The link
+        // cannot be used again — say so rather than loop.
+        dropInvite();
+        showErr('Your invite session has ended before the password was saved. Use "Forgot password?" on the sign-in page with this email to set one.');
+        return;
+      }
+      showErr(authErrorText(data,res.status));
+      return;
+    }
+    // Password set: this session becomes the app session, then index.html
+    // takes over already signed in (its checkAuth() sees a fresh token).
+    setBusy(true,'Signing you in...');
+    await replaceDeviceSession();
+    localStorage.setItem(AUTH_TOKEN_KEY,invite.session.access_token);
+    if(invite.session.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,invite.session.refresh_token);
+    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
+    dropInvite();
+    location.replace('index.html');
+  }catch(err){
+    console.error('[FleetDesk] accept invite failed:',err);
+    setBusy(false);
+    showErr('Connection error. Please check your internet connection and try again.');
+  }
+}
+
+document.getElementById('pwForm').addEventListener('submit',submitPassword);
+readInvite();
+if(invite)renderInvite();else showScreen('expiredScreen');
+</script>
+</body>
+</html>
