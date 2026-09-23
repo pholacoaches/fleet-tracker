@@ -2439,6 +2439,54 @@ async function usersSetRole(id,role){
   return Array.isArray(rows)&&rows.length===1?'':'That change was refused.'; // 0 rows = RLS said no
 }
 
+// POST to a /users/* Worker route with the owner's token. Throws on network.
+async function usersPost(path,body){
+  const res=await fetch(`${WORKER_URL}${path}`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
+    body:JSON.stringify(body)
+  });
+  const data=await res.json().catch(()=>null);
+  return{res,data};
+}
+
+// Remove and Cancel invite both delete the login on the Worker.
+async function usersRemove(id){
+  const{res,data}=await usersPost('/users/remove',{user_id:id});
+  return res.ok&&data&&data.ok===true?'':usersFail(res.status,data,'/users/remove');
+}
+
+// Resend = remove, then a fresh invite with the same name, email and role.
+// The new link only goes to block 2's link box (same rules as block 2).
+async function usersResend(u,name){
+  if(u.role!=='manager'&&u.role!=='viewer')return US_ACT_FAIL;
+  const removed=await usersRemove(u.id);
+  if(removed)return removed;
+  const half=`${name} was removed, but the new invite failed. Use Invite user to invite them again.`;
+  const gen=++_inviteGen; // replaces any open invite form
+  let res,data;
+  try{
+    ({res,data}=await usersPost('/users/invite',{email:u.email||'',full_name:(u.full_name||'').trim(),role:u.role}));
+  }catch(err){
+    if(!(err&&err.message==='Not signed in')){
+      console.error('[FleetDesk] /users/invite error:',err&&err.name);
+      try{FleetDesk.reportError('users invite error',{endpoint:'/users/invite'});}catch{}
+    }
+    return half;
+  }
+  const url=res.ok&&data&&typeof data.invite_url==='string'?data.invite_url:'';
+  if(url&&/^https?:\/\//i.test(url)){
+    if(gen!==_inviteGen)return''; // panel closed meanwhile: they show as Invited
+    const box=document.getElementById('usersInvite');
+    if(box)box.style.display='block';
+    showInviteLink(url,data.expires_at);
+    return'';
+  }
+  // Status only: a 200 with a bad shape could still hold the link.
+  if(res.status!==401&&res.status!==403&&res.status!==429)usersFail(res.status,null,'/users/invite');
+  return half;
+}
+
 const US_ACT_CONFIRM={
   manager:n=>`Make ${n} a Manager? They'll be able to add, edit and delete. Every change is logged.`,
   viewer:n=>`Make ${n} a Viewer? They'll only be able to view.`
@@ -2453,7 +2501,11 @@ async function usersAct(act,id){
   const name=((u.full_name||'').trim())||u.email||'this person';
   const to=u.role==='manager'?'viewer':'manager';
   let ask,run;
+  const invited=u.status!=='active';
   if(act==='role'){ask=US_ACT_CONFIRM[to](name);run=()=>usersSetRole(id,to);}
+  else if(act==='remove'&&!invited){ask=`Remove ${name}? They won't be able to sign in any more. Their past changes stay in the Change log.`;run=()=>usersRemove(id);}
+  else if(act==='cancel'&&invited){ask=`Cancel the invite for ${name}? The link will stop working.`;run=()=>usersRemove(id);}
+  else if(act==='resend'&&invited){ask=`Send ${name} a new invite link? The old link will stop working.`;run=()=>usersResend(u,name);}
   else return;
   if(!confirm(ask))return;
   row.dataset.busy='1';
