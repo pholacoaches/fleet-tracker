@@ -48,6 +48,7 @@
  *                        nothing is spent until the invitee presses Save there.
  *   POST /users/remove   { user_id }. Deletes the login of someone in the
  *                        caller's own tenant (profile row cascades).
+ *                        Owners are refused (403) before anything is deleted.
  *                        Role changes are NOT here — the app does them
  *                        directly under RLS (gap A 4b).
  *
@@ -1346,10 +1347,11 @@ async function handleUsersInvite(request, env, cors, origin) {
 }
 
 // ── Route: POST /users/remove ────────────────────────────────────────────────
-// Deletes the auth user; the profile row cascades away. The last-owner
-// trigger cannot fire from here in normal use (the caller is an owner of the
-// same tenant and cannot remove themselves), but any refusal Supabase gives is
-// passed on rather than swallowed.
+// Deletes the auth user; the profile row cascades away. An Owner is never
+// removed here: the secret key skips the database's own "only the system can
+// remove an Owner" check (auth.uid() is null), so the Worker refuses first.
+// Supabase's own error text stays in the Worker log — the browser only ever
+// gets a plain message.
 async function handleUsersRemove(request, env, cors) {
   const pre = await ownerPrelude(request, env, cors);
   if (pre.fail) return pre.fail;
@@ -1366,7 +1368,7 @@ async function handleUsersRemove(request, env, cors) {
   // Must be in the caller's own tenant. Someone in another company gets the
   // same answer as someone who does not exist.
   const lookup = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(target)}&tenant_id=eq.${encodeURIComponent(pre.tenantId)}&select=id`,
+    `${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(target)}&tenant_id=eq.${encodeURIComponent(pre.tenantId)}&select=id,role`,
     { headers: adminHeaders(env) }
   );
   if (!lookup.ok) {
@@ -1377,13 +1379,19 @@ async function handleUsersRemove(request, env, cors) {
   if (!Array.isArray(rows) || rows.length !== 1) {
     return jsonError(cors, 404, 'not_found_error', 'That person is not in your company.');
   }
+  // Checked before anything is deleted. Anything other than a known
+  // non-owner role is refused too, so an unreadable role never slips through.
+  if (rows[0].role !== 'manager' && rows[0].role !== 'viewer') {
+    return jsonError(cors, 403, 'permission_error', "An Owner can't be removed.");
+  }
 
   const del = await deleteAuthUser(env, target);
   if (!del.ok) {
     const e = await del.json().catch(() => null);
     const msg = e && typeof (e.msg || e.message) === 'string' ? String(e.msg || e.message).slice(0, 200) : '';
+    console.error('remove user failed:', del.status, msg);
     reportMessage(`remove user failed ${del.status}`, 'error', { upstream: 'supabase', http_status: del.status });
-    return jsonError(cors, del.status >= 500 ? 502 : 409, 'api_error', msg ? `Could not remove this person: ${msg}` : 'Could not remove this person. Please try again.');
+    return jsonError(cors, del.status >= 500 ? 502 : 409, 'api_error', "Couldn't remove this person. Please try again.");
   }
   return jsonOk(cors, { ok: true });
 }
