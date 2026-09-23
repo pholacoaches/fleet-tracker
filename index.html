@@ -2486,6 +2486,8 @@ async function sendInvite(){
   if(res.status===400){fail(msg&&msg.length<=200&&!/[<>]/.test(msg)?msg:'Check the name and email.');return;}
   if(res.status===403){fail(PERM_MSG);return;}
   if(res.status===401){fail(US_SESSION_MSG);return;}
+  // Throttled: the Worker's own "wait a minute" message (it reports 429s itself)
+  if(res.status===429){fail(msg&&msg.length<=200&&!/[<>]/.test(msg)?msg:"Couldn't create the invite. Try again.");return;}
   // Status only: a 200 with a bad shape could still hold the link.
   console.error('[FleetDesk] /users/invite failed:',res.status);
   try{FleetDesk.reportError('users invite failed',{endpoint:'/users/invite',status:res.status});}catch{}
