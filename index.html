@@ -757,9 +757,23 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .us-status.us-expired { color:var(--amber); }
 .us-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
 .us-msg { font-size:12px; color:var(--text3); padding:8px 0; }
+.us-head .btn { padding:5px 10px; font-size:11px; }
+/* Invite form + link (gap A 4b block 2) */
+.us-invite { margin:8px 0 6px; padding:12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface2); }
+.us-inv-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:10px; }
+.us-invite .login-input { margin-bottom:2px; }
+.us-field-err { font-size:11px; color:var(--red); min-height:14px; margin-bottom:8px; }
+.us-role-opt { display:flex; align-items:flex-start; gap:8px; margin:4px 0 8px; font-size:12px; color:var(--text2); line-height:1.4; cursor:pointer; }
+.us-role-opt input { margin:2px 0 0; flex-shrink:0; }
+.us-role-opt strong { color:var(--text); }
+.us-inv-btns { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.us-inv-btns .btn { text-decoration:none; }
+.us-inv-link { resize:none; font-size:12px; word-break:break-all; line-height:1.4; }
+.us-inv-cap { margin:8px 0 0; }
 @media (max-width: 600px) {
   .us-meta { flex-basis:100%; margin-left:0; justify-content:flex-start; }
   .us-status { text-align:left; }
+  .us-inv-btns .btn { flex:1 1 auto; justify-content:center; }
 }
 .logout-btn {
   font-size:11px; padding:4px 12px; border:1.5px solid rgba(255,255,255,0.4);
@@ -2287,6 +2301,7 @@ function renderAccountIdentity(){
 
 function closeAccountPanel(){
   document.getElementById('accountModal').style.display='none';
+  closeInviteForm(); // also wipes any invite link on show
 }
 
 // ── USERS LIST (gap A 4b, Owner only) ───────────────────────────────────────
@@ -2315,7 +2330,7 @@ async function loadCompanyUsers(){
   const list=document.getElementById('usersList');
   if(!list)return;
   const gen=++_usersGen;
-  if(!isOwner()){list.innerHTML='';return;} // manager/viewer: no fetch at all
+  if(!isOwner()){list.innerHTML='';closeInviteForm();return;} // manager/viewer: no fetch at all
   document.getElementById('usersSub').innerHTML=usersSubLine();
   usersMsg('Loading…');
   try{
@@ -2373,6 +2388,143 @@ function renderCompanyUsers(rows){
       <div class="us-actions"></div>
     </div>`;
   }).join('');
+}
+
+// ── INVITE (gap A 4b block 2, Owner only) ────────────────────────────────────
+// POST /users/invite on the Worker; the Worker re-checks the caller is an
+// owner and takes the tenant from the database, never from this body.
+// The invite link is a login key: it only ever lives in the read-only box
+// and the WhatsApp href — never a global, console, error monitoring,
+// localStorage or an error message. Done / closing the panel wipes it.
+const US_INVITE_EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/; // same rule as the Worker
+const US_SESSION_MSG='Your session has expired. Please log out and log back in, then try again.';
+const US_COPY_LABEL='<svg class="icon" aria-hidden="true"><use href="#icon-copy"/></svg>Copy';
+let _inviteGen=0; // a reply that lands after Cancel/close is dropped
+
+function openInviteForm(){
+  if(!isOwner())return;
+  const box=document.getElementById('usersInvite');
+  if(!box)return;
+  _inviteGen++;
+  box.innerHTML=`<div class="us-inv-title">Invite someone</div>
+    <label class="login-label" for="usInvName">Full name</label>
+    <input class="login-input" id="usInvName" maxlength="100" autocomplete="off">
+    <div class="us-field-err" id="usInvNameErr"></div>
+    <label class="login-label" for="usInvEmail">Email</label>
+    <input class="login-input" type="email" id="usInvEmail" maxlength="254" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <div class="us-field-err" id="usInvEmailErr"></div>
+    <label class="login-label">Role</label>
+    <label class="us-role-opt"><input type="radio" name="usInvRole" value="manager"><span><strong>Manager</strong> — Does day-to-day work, including deletes. Every change is logged.</span></label>
+    <label class="us-role-opt"><input type="radio" name="usInvRole" value="viewer" checked><span><strong>Viewer</strong> — Can see everything, can't change anything.</span></label>
+    <div class="us-inv-btns">
+      <button type="button" class="btn btn-primary" id="usInvSend" onclick="sendInvite()">Create invite link</button>
+      <button type="button" class="btn btn-outline" onclick="closeInviteForm()">Cancel</button>
+    </div>
+    <div class="login-err" id="usInvErr"></div>`;
+  box.style.display='block';
+  document.getElementById('usInvName').focus();
+}
+
+function closeInviteForm(){
+  _inviteGen++;
+  const box=document.getElementById('usersInvite');
+  if(!box)return;
+  box.innerHTML='';
+  box.style.display='none';
+}
+
+async function sendInvite(){
+  if(!isOwner())return;
+  const btn=document.getElementById('usInvSend');
+  if(!btn||btn.disabled)return;
+  const full_name=document.getElementById('usInvName').value.trim();
+  const email=document.getElementById('usInvEmail').value.trim();
+  const roleEl=document.querySelector('input[name="usInvRole"]:checked');
+  const role=roleEl&&roleEl.value==='manager'?'manager':'viewer';
+  const nameErr=document.getElementById('usInvNameErr');
+  const emailErr=document.getElementById('usInvEmailErr');
+  const errEl=document.getElementById('usInvErr');
+  nameErr.textContent='';emailErr.textContent='';errEl.textContent='';
+  let bad=false;
+  if(!full_name){nameErr.textContent='Please enter their full name.';bad=true;}
+  if(!US_INVITE_EMAIL_RE.test(email)){emailErr.textContent='Please enter a valid email address.';bad=true;}
+  if(bad)return;
+
+  const gen=++_inviteGen;
+  btn.disabled=true;btn.textContent='Creating…';
+  const fail=msg=>{
+    if(gen!==_inviteGen)return;
+    btn.disabled=false;btn.textContent='Create invite link';
+    errEl.textContent=msg;
+  };
+  let res,data;
+  try{
+    res=await fetch(`${WORKER_URL}/users/invite`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
+      body:JSON.stringify({email,full_name,role})
+    });
+    data=await res.json().catch(()=>null);
+  }catch(err){
+    if(gen!==_inviteGen)return;
+    if(err&&err.message==='Not signed in'){fail(US_SESSION_MSG);return;}
+    console.error('[FleetDesk] /users/invite error:',err);
+    try{FleetDesk.reportError('users invite error',{endpoint:'/users/invite'});}catch{}
+    fail("Couldn't create the invite. Try again.");
+    return;
+  }
+  if(gen!==_inviteGen)return; // Cancel / panel closed while waiting
+  const url=res.ok&&data&&typeof data.invite_url==='string'?data.invite_url:'';
+  if(url&&/^https?:\/\//i.test(url)){
+    showInviteLink(url,data.expires_at);
+    loadCompanyUsers(); // the new person shows as Invited
+    return;
+  }
+  // Error bodies are {error:{message}} — they never carry a link.
+  const msg=data&&data.error&&typeof data.error.message==='string'?data.error.message.trim():'';
+  if(res.status===409){fail('That email already has a FleetDesk login.');return;}
+  if(res.status===400){fail(msg&&msg.length<=200&&!/[<>]/.test(msg)?msg:'Check the name and email.');return;}
+  if(res.status===403){fail(PERM_MSG);return;}
+  if(res.status===401){fail(US_SESSION_MSG);return;}
+  // Status only: a 200 with a bad shape could still hold the link.
+  console.error('[FleetDesk] /users/invite failed:',res.status);
+  try{FleetDesk.reportError('users invite failed',{endpoint:'/users/invite',status:res.status});}catch{}
+  fail("Couldn't create the invite. Try again.");
+}
+
+function showInviteLink(url,expiresAt){
+  const box=document.getElementById('usersInvite');
+  if(!box)return;
+  const exp=fmtSADateTime(expiresAt);
+  box.innerHTML=`<div class="us-inv-title">Invite link ready</div>
+    <textarea class="login-input us-inv-link" id="usInvLink" rows="3" readonly aria-label="Invite link"></textarea>
+    <div class="us-inv-btns">
+      <button type="button" class="btn btn-primary" id="usInvCopy" onclick="copyInviteLink()">${US_COPY_LABEL}</button>
+      <a class="btn btn-outline" id="usInvWa" target="_blank" rel="noopener"><svg class="icon" aria-hidden="true"><use href="#icon-brand-whatsapp"/></svg>Open WhatsApp</a>
+      <button type="button" class="btn btn-outline" onclick="closeInviteForm()">Done</button>
+    </div>
+    <div class="login-hint us-inv-cap">Send this link on WhatsApp. It works once and lasts 24 hours.${exp?' Expires '+escapeHtml(exp)+'.':''}</div>`;
+  // Set as properties, never interpolated into markup
+  document.getElementById('usInvLink').value=url;
+  document.getElementById('usInvWa').href='https://wa.me/?text='+encodeURIComponent(
+    `You've been invited to FleetDesk. Open this link to set your password. It works once and lasts 24 hours: ${url}`);
+}
+
+async function copyInviteLink(){
+  const box=document.getElementById('usInvLink');
+  const btn=document.getElementById('usInvCopy');
+  if(!box||!btn)return;
+  let ok=false;
+  try{
+    if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(box.value);ok=true;}
+  }catch{}
+  if(!ok){
+    // Fallback: select the text so it can be copied by hand
+    box.focus();box.select();
+    try{ok=document.execCommand('copy');}catch{}
+  }
+  btn.textContent=ok?'Copied':'Selected — copy it';
+  setTimeout(()=>{const b=document.getElementById('usInvCopy');if(b)b.innerHTML=US_COPY_LABEL;},1800);
 }
 
 // The account email, without asking the user to type it: the JWT carries it;
@@ -8260,9 +8412,10 @@ initApp();
     <div id="accountUsersWrap" data-role="owner">
       <div class="us-head">
         <label class="login-label" style="margin-bottom:0;">Users</label>
-        <div class="us-actions" id="usersHeadActions"></div>
+        <div class="us-actions" id="usersHeadActions"><button type="button" class="btn btn-outline" onclick="openInviteForm()"><svg class="icon" aria-hidden="true"><use href="#icon-plus"/></svg>Invite user</button></div>
       </div>
       <div class="login-hint" id="usersSub" style="margin:4px 0 4px;"></div>
+      <div class="us-invite" id="usersInvite" style="display:none;"></div>
       <div class="us-list" id="usersList"></div>
     </div>
     <!-- Gap A: Owner only (role is a UI hint; audit_log RLS is the real gate) -->
