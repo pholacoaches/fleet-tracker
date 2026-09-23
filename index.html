@@ -770,8 +770,12 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .us-inv-btns .btn { text-decoration:none; }
 .us-inv-link { resize:none; font-size:12px; word-break:break-all; line-height:1.4; }
 .us-inv-cap { margin:8px 0 0; }
+/* Row buttons (gap A 4b block 3) */
+.us-actions { flex-wrap:wrap; justify-content:flex-end; }
+.us-actions .btn { padding:4px 9px; font-size:11px; }
 @media (max-width: 600px) {
   .us-meta { flex-basis:100%; margin-left:0; justify-content:flex-start; }
+  .us-actions { flex-basis:100%; justify-content:flex-start; }
   .us-status { text-align:left; }
   .us-inv-btns .btn { flex:1 1 auto; justify-content:center; }
 }
@@ -2326,10 +2330,12 @@ function usersError(msg){
   usersMsg(`${escapeHtml(msg)} <button type="button" class="cl-more" onclick="loadCompanyUsers()">Retry</button>`);
 }
 
-async function loadCompanyUsers(){
+// keepMsg: a row action's message stays on screen across its refresh.
+async function loadCompanyUsers(keepMsg){
   const list=document.getElementById('usersList');
   if(!list)return;
   const gen=++_usersGen;
+  if(keepMsg!==true)usersActMsg('');
   if(!isOwner()){list.innerHTML='';closeInviteForm();return;} // manager/viewer: no fetch at all
   document.getElementById('usersSub').innerHTML=usersSubLine();
   usersMsg('Loading…');
@@ -2369,12 +2375,23 @@ function usersStatus(u){
   return{cls:'',text:'Active'};
 }
 
-// Buttons (Invite / Change role / Remove) arrive in blocks 2–3; the action
-// slots are here now so the row layout does not move when they do. The row
-// for the signed-in owner never gets action buttons.
+// Row buttons (block 3). The signed-in owner's own row and every Owner row
+// never get buttons. Only a well-formed id ever goes into the onclick.
+const US_ID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let _usersById=new Map(); // id → row from the last render, for the actions
+
+function usersActionsHtml(u){
+  if(!u||u.is_me===true||u.role==='owner'||typeof u.id!=='string'||!US_ID_RE.test(u.id))return'';
+  const b=(act,label)=>`<button type="button" class="btn btn-outline" onclick="usersAct('${act}','${u.id}')">${label}</button>`;
+  const roleBtn=b('role',u.role==='manager'?'Make Viewer':'Make Manager');
+  if(u.status==='active')return roleBtn+b('remove','Remove');
+  return roleBtn+b('resend','Resend')+b('cancel','Cancel invite');
+}
+
 function renderCompanyUsers(rows){
   const list=document.getElementById('usersList');
   if(!list)return;
+  _usersById=new Map(rows.filter(u=>u&&typeof u.id==='string').map(u=>[u.id,u]));
   if(rows.length===0){usersMsg('No users yet.');return;}
   list.innerHTML=rows.map(u=>{
     const name=escapeHtml(((u&&u.full_name)||'').trim()||'No name yet');
@@ -2382,12 +2399,78 @@ function renderCompanyUsers(rows){
     const role=US_ROLE_LABEL[u&&u.role]||'Viewer';
     const st=usersStatus(u);
     const you=u&&u.is_me===true?'<span class="us-you">You</span>':'';
-    return`<div class="us-row">
+    const rowId=u&&typeof u.id==='string'&&US_ID_RE.test(u.id)?` id="usRow-${u.id}"`:'';
+    return`<div class="us-row"${rowId}>
       <div class="us-who"><div class="us-name">${name}${you}</div><div class="us-email">${email}</div></div>
       <div class="us-meta"><span class="role-pill">${role}</span><span class="us-status${st.cls}">${st.text}</span></div>
-      <div class="us-actions"></div>
+      <div class="us-actions">${usersActionsHtml(u)}</div>
     </div>`;
   }).join('');
+}
+
+// ── MANAGE (gap A 4b block 3, Owner only) ────────────────────────────────────
+const US_ACT_FAIL="Couldn't do that. Try again.";
+
+function usersActMsg(text){
+  const el=document.getElementById('usersActErr');
+  if(el)el.textContent=text||'';
+}
+
+// Anything that is not 401 / 403 / 429 is logged with the status code only.
+function usersFail(status,data,endpoint){
+  if(status===403)return PERM_MSG;
+  if(status===401)return US_SESSION_MSG;
+  if(status===429)return usWorkerMsg(data)||US_ACT_FAIL; // the Worker reports 429s itself
+  console.error(`[FleetDesk] ${endpoint} failed:`,status);
+  try{FleetDesk.reportError('users manage failed',{endpoint,status});}catch{}
+  return US_ACT_FAIL;
+}
+
+// Each step returns '' when it worked, or the message to show.
+async function usersSetRole(id,role){
+  if(role!=='manager'&&role!=='viewer')return US_ACT_FAIL;
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id`,{
+    method:'PATCH',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify({role})
+  });
+  if(!res.ok)return usersFail(res.status,null,'/rest/v1/profiles');
+  const rows=await res.json().catch(()=>null);
+  return Array.isArray(rows)&&rows.length===1?'':'That change was refused.'; // 0 rows = RLS said no
+}
+
+const US_ACT_CONFIRM={
+  manager:n=>`Make ${n} a Manager? They'll be able to add, edit and delete. Every change is logged.`,
+  viewer:n=>`Make ${n} a Viewer? They'll only be able to view.`
+};
+
+async function usersAct(act,id){
+  if(!isOwner())return;
+  const u=_usersById.get(id);
+  if(!u||u.is_me===true||u.role==='owner')return;
+  const row=document.getElementById('usRow-'+id);
+  if(!row||row.dataset.busy)return;
+  const name=((u.full_name||'').trim())||u.email||'this person';
+  const to=u.role==='manager'?'viewer':'manager';
+  let ask,run;
+  if(act==='role'){ask=US_ACT_CONFIRM[to](name);run=()=>usersSetRole(id,to);}
+  else return;
+  if(!confirm(ask))return;
+  row.dataset.busy='1';
+  row.querySelectorAll('.us-actions button').forEach(b=>{b.disabled=true;});
+  usersActMsg('');
+  let msg;
+  try{msg=await run();}
+  catch(err){
+    if(err&&err.message==='Not signed in')msg=US_SESSION_MSG;
+    else{
+      console.error('[FleetDesk] users manage error:',err&&err.name);
+      try{FleetDesk.reportError('users manage error',{action:act});}catch{}
+      msg=US_ACT_FAIL;
+    }
+  }
+  usersActMsg(msg);
+  loadCompanyUsers(true); // rebuilds the rows, which clears busy
 }
 
 // ── INVITE (gap A 4b block 2, Owner only) ────────────────────────────────────
@@ -2400,6 +2483,12 @@ const US_INVITE_EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/; // same rule as the Worke
 const US_SESSION_MSG='Your session has expired. Please log out and log back in, then try again.';
 const US_COPY_LABEL='<svg class="icon" aria-hidden="true"><use href="#icon-copy"/></svg>Copy';
 let _inviteGen=0; // a reply that lands after Cancel/close is dropped
+
+// The Worker's own error text ({error:{message}}), only if short and plain.
+function usWorkerMsg(data){
+  const msg=data&&data.error&&typeof data.error.message==='string'?data.error.message.trim():'';
+  return msg&&msg.length<=200&&!/[<>]/.test(msg)?msg:'';
+}
 
 function openInviteForm(){
   if(!isOwner())return;
@@ -2481,13 +2570,13 @@ async function sendInvite(){
     return;
   }
   // Error bodies are {error:{message}} — they never carry a link.
-  const msg=data&&data.error&&typeof data.error.message==='string'?data.error.message.trim():'';
+  const msg=usWorkerMsg(data);
   if(res.status===409){fail('That email already has a FleetDesk login.');return;}
-  if(res.status===400){fail(msg&&msg.length<=200&&!/[<>]/.test(msg)?msg:'Check the name and email.');return;}
+  if(res.status===400){fail(msg||'Check the name and email.');return;}
   if(res.status===403){fail(PERM_MSG);return;}
   if(res.status===401){fail(US_SESSION_MSG);return;}
   // Throttled: the Worker's own "wait a minute" message (it reports 429s itself)
-  if(res.status===429){fail(msg&&msg.length<=200&&!/[<>]/.test(msg)?msg:"Couldn't create the invite. Try again.");return;}
+  if(res.status===429){fail(msg||"Couldn't create the invite. Try again.");return;}
   // Status only: a 200 with a bad shape could still hold the link.
   console.error('[FleetDesk] /users/invite failed:',res.status);
   try{FleetDesk.reportError('users invite failed',{endpoint:'/users/invite',status:res.status});}catch{}
@@ -8418,6 +8507,7 @@ initApp();
       </div>
       <div class="login-hint" id="usersSub" style="margin:4px 0 4px;"></div>
       <div class="us-invite" id="usersInvite" style="display:none;"></div>
+      <div class="login-err" id="usersActErr" role="alert"></div>
       <div class="us-list" id="usersList"></div>
     </div>
     <!-- Gap A: Owner only (role is a UI hint; audit_log RLS is the real gate) -->
