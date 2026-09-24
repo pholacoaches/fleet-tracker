@@ -7861,7 +7861,7 @@ async function fetchDrivers(){
     const res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?select=*&order=name.asc`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}
     });
-    if(!res.ok){console.error('[FleetDesk] fetchDrivers failed:',res.status,await res.text());return false;}
+    if(!res.ok){console.error('[FleetDesk] fetchDrivers failed:',res.status);return false;} // status only — drivers rows hold personal codes
     driversData=await res.json();
     return true;
   }catch(err){console.error('[FleetDesk] fetchDrivers failed:',err);return false;}
@@ -8170,7 +8170,10 @@ async function submitDriver(){
     }
     if(!res||!res.ok){
       if(res)markDenied(res.status);
-      console.error('[FleetDesk] Driver save failed:',res&&res.status,res&&await res.text());
+      // Status + PostgREST error code only: the message/details text can quote
+      // the row, including the driver's personal code
+      const pgCode=res?(await res.json().catch(()=>null))?.code:undefined;
+      console.error('[FleetDesk] Driver save failed:',res&&res.status,typeof pgCode==='string'?pgCode:'');
       errEl.textContent='Could not save the driver. Please try again.';
       errEl.classList.add('show');
       btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+(editing?'Save Changes':'Save Driver');
