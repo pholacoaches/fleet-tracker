@@ -1839,6 +1839,10 @@ async function initTenant(){
 }
 
 const PROFILE_ROLES=['owner','manager','viewer'];
+// Settles once the role is known (loadMyProfile never rejects). Every
+// AUTOMATIC write (migrations, re-sending unsynced reports) awaits it and then
+// checks the role, so a Viewer's device never sends writes RLS will refuse.
+let profileReady=Promise.resolve();
 async function loadMyProfile(){
   PROFILE={role:'viewer',full_name:'',loaded:false};
   const uid=getAuthUserId();
@@ -1965,7 +1969,7 @@ function wipeTenantLocalData(){
     try{tid=JSON.parse(localStorage.getItem(TENANT_CACHE_KEY))?.id||null;}catch{}
   }
   // Bare (pre-#4a) leftovers of the same keys are removed too.
-  [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY,SERVICE_MIGRATED_KEY,UPLOAD_IDS_MIGRATED_KEY].forEach(k=>{
+  [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY,SERVICE_MIGRATED_KEY,UPLOAD_IDS_MIGRATED_KEY,DISC_MIGRATED_KEY].forEach(k=>{
     if(tid)localStorage.removeItem(k+':'+tid);
     localStorage.removeItem(k);
   });
@@ -2031,7 +2035,7 @@ async function showDashboard(){
     document.getElementById('loginErr').textContent='Could not load your company profile. Please check your connection and try again.';
     return;
   }
-  loadMyProfile();            // role + name; not awaited — write controls stay hidden until applyRoleUI() runs
+  profileReady=loadMyProfile(); // role + name; not awaited here — write controls stay hidden until applyRoleUI() runs; automatic writes await it
   recomputeAllStats();
   renderDashboard();          // fast paint from the local cache
   syncFuelReports();          // then the DB (source of truth) takes over
@@ -2923,13 +2927,42 @@ async function fetchFuelReportsFromDb(){
   return rows.map(x=>x.report).sort((a,b)=>key(reportPeriod(a))-key(reportPeriod(b)));
 }
 
+// True when this device holds fuel data that has not reached the DB yet:
+// unsynced (dirty) periods, or local reports the one-time migration has not
+// uploaded (periods the DB has never seen, live or soft-deleted — the same
+// test the migration uses, so a cache refreshed from the DB is not "unsynced").
+// Unreadable local data counts too — it must never be overwritten.
+async function hasUnsyncedLocalFuel(){
+  if(loadDirtyPeriods().length)return true;
+  if(localStorage.getItem(nsKey(FUEL_MIGRATED_KEY)))return false;
+  const s=rawLocalReportsState();
+  if(s.status==='corrupt')return true;
+  if(!s.reports.length)return false;
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?select=period`,{
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+  });
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  const known=new Set((await res.json()).map(r=>r.period));
+  return s.reports.some(r=>!known.has(reportPeriod(r)));
+}
+
 // Once after login: migrate-once, flush unsynced local changes, then make the
 // DB version the live state. On any network failure the cached copy stays in
 // effect and everything retries on the next load.
+// Automatic writes wait for the role: only Owner / Manager (RLS can_write)
+// upload. Anyone else skips them (the flag stays unset), and if this device
+// holds unsynced fuel data it is kept — the cached copy stays on screen and
+// is not overwritten by the DB copy.
 async function syncFuelReports(){
   try{
-    await migrateLocalFuelReportsOnce();
-    await flushDirtyFuelReports();
+    await profileReady;
+    if(canWrite()){
+      await migrateLocalFuelReportsOnce();
+      await flushDirtyFuelReports();
+    }else if(await hasUnsyncedLocalFuel()){
+      console.warn('[FleetDesk] Unsynced fuel data on this device and no permission to upload it — keeping the cached copy');
+      return;
+    }
     const dbReports=await fetchFuelReportsFromDb();
     // Safety check: the DB says "no reports" but this device still holds some
     // AND migration claims to have already run. If those cached periods are
@@ -3041,11 +3074,28 @@ async function fetchVehicleServiceFromDb(){
 
 // Once after login: migrate-once, then make the DB version the live map. On
 // any network failure the cached copy stays in effect and retries next load.
+// The migration waits for the role and runs for the Owner only (RLS: only the
+// Owner may insert vehicle_service). Anyone else skips it (the flag stays
+// unset) but still gets the DB map; if this device holds settings the DB has
+// never seen (plates the migration would upload, or an unreadable cache), the
+// local cache is left untouched rather than overwritten.
+function hasUnsyncedLocalService(dbMap){
+  if(localStorage.getItem(nsKey(SERVICE_MIGRATED_KEY)))return false;
+  const raw=localStorage.getItem(nsKey(SERVICE_KEY));
+  if(raw===null)return false;
+  let local;
+  try{local=JSON.parse(raw);}catch{return true;}
+  if(!local||typeof local!=='object')return true;
+  return Object.keys(local).some(p=>local[p]&&local[p].lastServiceOdo>0&&local[p].interval>0&&!dbMap[p]);
+}
 async function syncVehicleService(){
   try{
-    await migrateLocalServiceOnce();
+    await profileReady;
+    const owner=isOwner();
+    if(owner)await migrateLocalServiceOnce();
     serviceData=await fetchVehicleServiceFromDb();
-    saveServiceCache();
+    if(owner||!hasUnsyncedLocalService(serviceData))saveServiceCache();
+    else console.warn('[FleetDesk] Unsynced service settings on this device and no permission to upload them — local copy kept');
     filterVehicles(); // refresh service rows on vehicle cards (no-op pre-render)
   }catch(err){
     console.warn('[FleetDesk] Service data sync failed — showing cached data:',err);
@@ -5542,7 +5592,8 @@ async function fetchCompliance(){
     const rows=await res.json();
     complianceData={};
     rows.forEach(r=>complianceData[r.plate]=r);
-    if(rows.length===0)await migrateLocalDiscData();
+    // Automatic write: waits for the role, Owner / Manager only (RLS can_write)
+    if(rows.length===0){await profileReady;if(canWrite())await migrateLocalDiscData();}
   }catch(err){console.error('[FleetDesk] fetchCompliance failed:',err);}
 }
 
@@ -5582,19 +5633,27 @@ async function fetchFleetPlates(){
   }catch(err){console.error('[FleetDesk] fetchFleetPlates failed:',err);}
 }
 
-// One-time: carry old localStorage disc entries (DD.MM.YYYY) into Supabase
+// One-time per tenant: carry old localStorage disc entries (DD.MM.YYYY) into
+// Supabase. The flag is set only once there is nothing left to upload or the
+// upload succeeded; unreadable local data leaves it unset and is never touched.
+const DISC_MIGRATED_KEY='fleet_discs_migrated_v1';
 async function migrateLocalDiscData(){
+  if(localStorage.getItem(nsKey(DISC_MIGRATED_KEY)))return;
   let old={};
   // Namespaced read: another tenant's legacy Phola disc data must never be
   // migrated into this tenant's vehicle_compliance rows
-  try{old=JSON.parse(localStorage.getItem(nsKey('fleet_discs_v2')))||{};}catch{old={};}
+  try{old=JSON.parse(localStorage.getItem(nsKey('fleet_discs_v2')))||{};}catch{
+    console.error('[FleetDesk] Local disc data exists but cannot be read — NOT marking as migrated');
+    return;
+  }
   const toIso=s=>{const p=String(s||'').split('.');return p.length===3?`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`:null;};
   const rows=Object.entries(old)
     .filter(([,d])=>d&&(d.expiryDate||d.licenceNo||d.makeModel))
     .map(([plate,d])=>({plate,make_model:d.makeModel||null,licence_disc_expiry:toIso(d.expiryDate),licence_disc_no:d.licenceNo||null}));
-  if(rows.length===0)return;
+  if(rows.length===0){localStorage.setItem(nsKey(DISC_MIGRATED_KEY),new Date().toISOString());return;}
   if(await upsertCompliance(rows)){
     rows.forEach(r=>complianceData[r.plate]=r);
+    localStorage.setItem(nsKey(DISC_MIGRATED_KEY),new Date().toISOString());
     console.log('[FleetDesk] Migrated',rows.length,'disc record(s) from localStorage to Supabase');
   }
 }
