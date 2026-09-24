@@ -5030,7 +5030,10 @@ function renderChangeLog(){
 
 // ── ODOMETER PHOTOS (private bucket, signed URLs) ─────────────────────────────
 const ODO_PHOTO_BUCKET='odometer-photos';
-const ODO_PHOTO_TTL=5400; // seconds (90 min)
+// Short on purpose: a signed link cannot be revoked, so a removed user keeps
+// any link they already hold until it expires.
+const ODO_PHOTO_TTL=600; // seconds (10 min)
+const ODO_PHOTO_MARGIN=60; // seconds — a cached link is re-signed this long before it expires
 const _signedUrlCache={}; // photo_path -> {url, expires(ms)}
 
 // photo_path rows are stored as "odometer-photos/<file>.jpg" — the sign endpoint
@@ -5053,7 +5056,7 @@ async function getSignedPhotoUrl(photoPath){
   const data=await res.json();
   if(!data.signedURL)throw new Error('No signedURL in sign response');
   const url=`${SUPABASE_URL}/storage/v1${data.signedURL}`;
-  _signedUrlCache[photoPath]={url,expires:Date.now()+(ODO_PHOTO_TTL-300)*1000};
+  _signedUrlCache[photoPath]={url,expires:Date.now()+(ODO_PHOTO_TTL-ODO_PHOTO_MARGIN)*1000};
   return url;
 }
 
@@ -5141,8 +5144,11 @@ function invoiceObjectPath(invoiceUrl){
   return invoiceUrl.replace(/^odometer-photos\//,'');
 }
 
-// Placeholder link that hydrates itself with a signed URL (same 90-min TTL +
+// Placeholder link that hydrates itself with a signed URL (same 10-min TTL +
 // cache as odometer photos). Works for images and PDFs — both open in a new tab.
+// A link left on screen past its expiry is re-signed on tap instead of opening
+// a dead URL (the re-signed link opens on the next tap — a new tab opened
+// after an await would be blocked as a popup).
 let _invLinkSeq=0;
 function invoiceLinkHtml(invoiceUrl,label){
   if(!invoiceUrl)return'';
@@ -5160,11 +5166,23 @@ async function hydrateInvoiceLink(id){
   el.removeAttribute('href');
   el.onclick=null;
   try{
-    const url=await getSignedPhotoUrl(invoiceObjectPath(el.dataset.inv));
+    const objPath=invoiceObjectPath(el.dataset.inv);
+    const url=await getSignedPhotoUrl(objPath);
+    // The link may come from the cache — it goes stale when the cache entry does
+    const staleAt=_signedUrlCache[objPath]?.expires||0;
+    const label=svgIcon('file-invoice')+escapeHtml(el.dataset.label);
     el.href=url;
     el.target='_blank';
     el.rel='noopener';
-    el.innerHTML=svgIcon('file-invoice')+escapeHtml(el.dataset.label);
+    el.innerHTML=label;
+    el.onclick=e=>{
+      if(Date.now()<staleAt){el.innerHTML=label;return;}
+      e.preventDefault();
+      hydrateInvoiceLink(id).then(()=>{
+        const again=document.getElementById(id);
+        if(again&&again.href)again.innerHTML=svgIcon('file-invoice')+'Tap again to open';
+      });
+    };
   }catch(err){
     el.innerHTML=svgIcon('alert-triangle')+'Invoice unavailable — tap to retry';
     el.onclick=e=>{e.preventDefault();hydrateInvoiceLink(id);};
