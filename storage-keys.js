@@ -25,14 +25,16 @@ const FD_TENANT_LOCAL_KEYS=[
 const FD_TENANT_CACHE_KEY='fleet_tenant_v1'; // must match TENANT_CACHE_KEY in index.html / accept.html
 
 // Logout, a dead session, and a new person signing in on this device: the
-// listed keys go for the cached company (and as bare pre-#4a leftovers), then
-// the tenant cache. The DB is the source of truth, so nothing is lost.
+// listed keys go for EVERY company on the device — bare (pre-#4a) and
+// "<key>:<any id>" — then the tenant cache. It does not depend on the tenant
+// cache, so leftovers of a company whose cache is already gone are caught too.
+// The DB is the source of truth, so nothing is lost.
 function wipeTenantLocalData(){
-  let tid=null;
-  try{tid=JSON.parse(localStorage.getItem(FD_TENANT_CACHE_KEY))?.id||null;}catch{}
-  FD_TENANT_LOCAL_KEYS.forEach(k=>{
-    if(tid)localStorage.removeItem(k+':'+tid);
-    localStorage.removeItem(k);
+  const names=[];
+  for(let i=0;i<localStorage.length;i++)names.push(localStorage.key(i));
+  // Collected first, removed after: removing while walking shifts the indexes.
+  names.forEach(n=>{
+    if(typeof n==='string'&&FD_TENANT_LOCAL_KEYS.some(k=>n===k||n.startsWith(k+':')))localStorage.removeItem(n);
   });
   localStorage.removeItem(FD_TENANT_CACHE_KEY);
 }
