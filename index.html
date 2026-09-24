@@ -1775,6 +1775,7 @@ body.role-write [data-role="readonly"] { display: none !important; }
 </main>
 
 <script src="esc.js"></script>
+<script src="storage-keys.js"></script>
 <script>
 // Pick the Worker per environment — same rule as driver.html. Localhost gets
 // fleet-proxy-dev (its CORS allowlist includes localhost 8377/8787);
@@ -1986,23 +1987,8 @@ function clearStoredAuth(){
 
 // Build #4b wipe, shared by logout() and every stale-session path (pilot fix 2
 // item 2): the tenant's business data and the tenant cache die with the
-// session. The DB is the source of truth, so nothing is lost. checkAuth()
-// runs at boot while TENANT is still null (nsKey() would return bare keys),
-// so resolve the namespace from the cached tenant when needed.
-function wipeTenantLocalData(){
-  let tid=TENANT?.id||null;
-  if(!tid){
-    try{tid=JSON.parse(localStorage.getItem(TENANT_CACHE_KEY))?.id||null;}catch{}
-  }
-  // Bare (pre-#4a) leftovers of the same keys are removed too.
-  // accept.html has a copy of this key list (TENANT_LOCAL_KEYS) — keep both in step.
-  [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY,SERVICE_MIGRATED_KEY,UPLOAD_IDS_MIGRATED_KEY,DISC_MIGRATED_KEY].forEach(k=>{
-    if(tid)localStorage.removeItem(k+':'+tid);
-    localStorage.removeItem(k);
-  });
-  // Drop the tenant cache so the next login can never inherit this tenant
-  localStorage.removeItem(TENANT_CACHE_KEY);
-}
+// session. wipeTenantLocalData() and its key list live in storage-keys.js
+// (shared with accept.html) — a new per-company key must be added there.
 
 // A session found dead (stale token, failed refresh, legacy token) takes the
 // tenant's local data with it — never leave one tenant's cache behind for the
