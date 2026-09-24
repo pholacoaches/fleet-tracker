@@ -13,7 +13,8 @@
 //     browser's User-Agent, and masks tokens, keys, e-mail addresses, driver
 //     codes, plates, long digit runs and data: URIs inside any message text.
 //   • fetch wrapper — every Supabase / Worker response that is not 2xx becomes
-//     a Sentry error carrying ONLY method, shortened path and status.
+//     a Sentry error carrying ONLY method, shortened path and status, except
+//     the expected user mistakes listed above reportFail().
 //   • window.FleetDesk helpers — setTenant(id), reportError(msg, extra) and the
 //     console test hook testSentry() (see README section "Error monitoring").
 //
@@ -171,6 +172,45 @@
     });
   }
 
+  // Expected user mistakes are not app faults and are not reported:
+  //   • Supabase Auth refusals below, matched on GoTrue's error_code — wrong
+  //     password, weak / same password, used or expired link, dead session.
+  //     refresh_token_already_used is NOT here on purpose: it can mean a
+  //     stolen refresh token was replayed, so it is still reported.
+  //   • Worker 429s — the Worker already reports its own throttling.
+  //   • Worker /users/invite 400 / 409 — bad name / email, email already has
+  //     a login; the form shows the reason.
+  // Everything else — including Supabase Auth 429s, RLS 403s and driver-code
+  // refusals — is still reported.
+  var EXPECTED_AUTH_CODES={
+    invalid_credentials:1,weak_password:1,same_password:1,otp_expired:1,
+    refresh_token_not_found:1,session_not_found:1,session_expired:1
+  };
+  function isExpectedWorkerFail(path,status){
+    if(status===429)return true;
+    return path==='/users/invite'&&(status===400||status===409);
+  }
+  // Reads a COPY of the reply body so the caller's own res.json() still works.
+  // Anything unreadable is reported as before.
+  function reportUnlessExpectedAuth(res,method,url){
+    var copy;
+    try{copy=res.clone();}catch(e){reportHttp(method,url,res.status);return;}
+    copy.json().then(function(data){
+      var code=data&&typeof data.error_code==='string'?data.error_code:'';
+      if(!Object.prototype.hasOwnProperty.call(EXPECTED_AUTH_CODES,code))reportHttp(method,url,res.status);
+    },function(){reportHttp(method,url,res.status);});
+  }
+  function reportFail(res,method,url){
+    var worker=/\.workers\.dev$/i.test(hostOf(url));
+    var path=shortPath(url);
+    if(worker){
+      if(!isExpectedWorkerFail(path,res.status))reportHttp(method,url,res.status);
+      return;
+    }
+    if(/^\/auth\/v1\//.test(path)&&res.status!==429){reportUnlessExpectedAuth(res,method,url);return;}
+    reportHttp(method,url,res.status);
+  }
+
   var nativeFetch=window.fetch;
   if(typeof nativeFetch==='function'){
     window.fetch=function(input,init){
@@ -183,7 +223,7 @@
       // intact: a rejected fetch still rejects for them (and still reaches
       // Sentry as an unhandled rejection if they never catch it).
       return p.then(function(res){
-        try{if(res&&!res.ok)reportHttp(method,url,res.status);}catch(e){}
+        try{if(res&&!res.ok)reportFail(res,method,url);}catch(e){}
         return res;
       });
     };
