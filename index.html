@@ -2876,13 +2876,18 @@ function markPeriodDirty(p){const a=loadDirtyPeriods();if(!a.includes(p)){a.push
 function clearPeriodDirty(p){saveDirtyPeriods(loadDirtyPeriods().filter(x=>x!==p));}
 
 async function upsertFuelReportToDb(report){
-  const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?on_conflict=tenant_id,period`,{
+  // select=period keeps the echoed row small (the report JSON is large)
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/fuel_reports?on_conflict=tenant_id,period&select=period`,{
     method:'POST',
-    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
     // deleted_at:null resurrects the period if it was previously soft-deleted
     body:JSON.stringify({period:reportPeriod(report),report,deleted_at:null})
   });
-  if(!res.ok)throw new Error('HTTP '+res.status+' — '+await res.text().catch(()=>''));
+  if(!res.ok){markDenied(res.status);throw new Error('HTTP '+res.status+' — '+await res.text().catch(()=>''));}
+  // return=representation: 0 rows back = the DB saved nothing — a failure,
+  // never a success (204 lies). The period stays dirty and is re-sent.
+  const rows=await res.json().catch(()=>null);
+  if(!Array.isArray(rows)||rows.length===0){noteDenied();throw new Error('no row returned');}
 }
 
 async function pushFuelReport(report){
@@ -5685,13 +5690,16 @@ async function migrateLocalDiscData(){
 
 async function upsertCompliance(rows){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_compliance?on_conflict=tenant_id,plate`,{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/vehicle_compliance?on_conflict=tenant_id,plate&select=plate`,{
       method:'POST',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
       body:JSON.stringify(rows)
     });
-    if(!res.ok){markDenied(res.status);console.error('[FleetDesk] Compliance save failed:',res.status,await res.text());}
-    return res.ok;
+    if(!res.ok){markDenied(res.status);console.error('[FleetDesk] Compliance save failed:',res.status,await res.text());return false;}
+    // return=representation: 0 rows back = the DB saved nothing (204 lies)
+    const saved=await res.json().catch(()=>null);
+    if(!Array.isArray(saved)||saved.length===0){noteDenied();console.error('[FleetDesk] Compliance save returned no row');return false;}
+    return true;
   }catch(err){console.error('[FleetDesk] Compliance save error:',err);return false;}
 }
 
@@ -8109,14 +8117,14 @@ async function submitDriver(){
   const editing=driverFormMode!=='add';
   btn.disabled=true;btn.textContent='Saving...';
   try{
-    const headers={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'};
+    // Both paths use return=representation: 0 rows back = nothing saved (204 lies)
+    const headers={'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=representation'};
     let res;
     if(editing){
       const body={name,phone:phone||null,
         licence_expiry:document.getElementById('df-licence').value||null,
         prdp_expiry:document.getElementById('df-prdp').value||null};
-      // PATCH uses return=representation so 0 rows back = nothing saved (the POST add path keeps return=minimal — a real insert can't silently match 0 rows)
-      res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverFormMode}&select=id`,{method:'PATCH',headers:{...headers,'Prefer':'return=representation'},body:JSON.stringify(body)});
+      res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverFormMode}&select=id`,{method:'PATCH',headers,body:JSON.stringify(body)});
     }else{
       // Refresh the list first so the uniqueness check sees codes added from other devices
       await fetchDrivers();
@@ -8124,7 +8132,7 @@ async function submitDriver(){
       for(let attempt=0;attempt<3;attempt++){
         const code=generateDriverCode(name);
         if(!code)break;
-        res=await fetch(`${SUPABASE_URL}/rest/v1/drivers`,{method:'POST',headers,body:JSON.stringify({name,phone:phone||null,personal_code:code})});
+        res=await fetch(`${SUPABASE_URL}/rest/v1/drivers?select=id`,{method:'POST',headers,body:JSON.stringify({name,phone:phone||null,personal_code:code})});
         if(res.status!==409)break;
       }
     }
@@ -8136,16 +8144,15 @@ async function submitDriver(){
       btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+(editing?'Save Changes':'Save Driver');
       return;
     }
-    if(editing){
-      const rows=await res.json();
-      if(!Array.isArray(rows)||rows.length===0){
-        noteDenied();
-        console.error('[FleetDesk] Driver edit matched no row for id',driverFormMode);
-        errEl.textContent='Update didn\'t save — please try again.';
-        errEl.classList.add('show');
-        btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+'Save Changes';
-        return;
-      }
+    const rows=await res.json().catch(()=>null);
+    if(!Array.isArray(rows)||rows.length===0){
+      noteDenied();
+      if(editing)console.error('[FleetDesk] Driver edit matched no row for id',driverFormMode);
+      else console.error('[FleetDesk] Driver add returned no row');
+      errEl.textContent=editing?'Update didn\'t save — please try again.':'Could not save the driver. Please try again.';
+      errEl.classList.add('show');
+      btn.disabled=false;btn.innerHTML=svgIcon('device-floppy')+(editing?'Save Changes':'Save Driver');
+      return;
     }
     closeDriverForm();
     await renderDriversTab();
