@@ -755,7 +755,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .us-meta .role-pill { margin-left:0; }
 .us-status { font-size:11px; font-weight:600; color:var(--text2); text-align:right; }
 .us-status.us-expired { color:var(--amber); }
-.us-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.us-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
 .us-msg { font-size:12px; color:var(--text3); padding:8px 0; }
 .us-head .btn { padding:5px 10px; font-size:11px; }
 /* Invite form + link (gap A 4b block 2) */
@@ -771,7 +771,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .us-inv-link { resize:none; font-size:12px; word-break:break-all; line-height:1.4; }
 .us-inv-cap { margin:8px 0 0; }
 /* Row buttons (gap A 4b block 3) */
-.us-actions { flex-wrap:wrap; justify-content:flex-end; }
 .us-actions .btn { padding:4px 9px; font-size:11px; }
 @media (max-width: 600px) {
   .us-meta { flex-basis:100%; margin-left:0; justify-content:flex-start; }
