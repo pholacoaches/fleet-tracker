@@ -1843,8 +1843,14 @@ const PROFILE_ROLES=['owner','manager','viewer'];
 // AUTOMATIC write (migrations, re-sending unsynced reports) awaits it and then
 // checks the role, so a Viewer's device never sends writes RLS will refuse.
 let profileReady=Promise.resolve();
-async function loadMyProfile(){
-  PROFILE={role:'viewer',full_name:'',loaded:false};
+// First load: unknown = viewer until the row arrives, and a failed fetch stays
+// viewer. refresh=true (noteDenied self-heal): the current role stays in
+// effect while the fetch runs, and a failed fetch (network error, non-2xx)
+// keeps it — only a real answer from the DB replaces it.
+async function loadMyProfile(refresh){
+  const next={role:'viewer',full_name:'',loaded:false};
+  if(!refresh)PROFILE=next;
+  let answered=false;
   const uid=getAuthUserId();
   try{
     if(uid){
@@ -1852,17 +1858,20 @@ async function loadMyProfile(){
         headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
       });
       const rows=res.ok?await res.json():null;
-      if(Array.isArray(rows)&&rows.length===1){
+      answered=Array.isArray(rows);
+      if(answered&&rows.length===1){
         const r=rows[0];
-        if(PROFILE_ROLES.includes(r.role))PROFILE.role=r.role;
+        if(PROFILE_ROLES.includes(r.role))next.role=r.role;
         else console.warn('[FleetDesk] profile has unknown role',r.role,'— role defaults to viewer');
-        PROFILE.full_name=typeof r.full_name==='string'?r.full_name.trim():'';
+        next.full_name=typeof r.full_name==='string'?r.full_name.trim():'';
       }else{
         console.warn('[FleetDesk] profile fetch returned no row — role defaults to viewer');
       }
     }
   }catch(err){console.warn('[FleetDesk] profile fetch failed — role defaults to viewer',err);}
-  PROFILE.loaded=true;
+  if(refresh&&!answered){console.warn('[FleetDesk] role refresh failed — keeping the current role');return;}
+  next.loaded=true;
+  PROFILE=next;
   applyRoleUI(); // also refreshes the Account panel if it is open
 }
 
@@ -1893,7 +1902,7 @@ function noteDenied(){
   _roleRefreshTimer=setTimeout(()=>{
     _roleRefreshTimer=null;
     _roleRefreshAt=Date.now();
-    profileReady=loadMyProfile();
+    profileReady=loadMyProfile(true);
   },1000);
 }
 function markDenied(status){if(status===403)noteDenied();else if(status===401)writeDenied=true;}
