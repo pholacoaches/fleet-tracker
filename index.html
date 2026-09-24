@@ -2292,11 +2292,7 @@ function getAuthEmail(){
 // Current user's auth uuid (JWT sub claim) — used to fetch the user's own
 // profiles row. (deleted_by is stamped by the DB, never by the app.)
 function getAuthUserId(){
-  try{
-    const token=localStorage.getItem(AUTH_TOKEN_KEY);
-    const payload=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-    return payload.sub||null;
-  }catch{return null;}
+  try{return fdTokenUserId(localStorage.getItem(AUTH_TOKEN_KEY));}catch{return null;}
 }
 
 function openAccountPanel(){
