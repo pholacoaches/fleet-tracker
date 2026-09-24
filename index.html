@@ -1995,6 +1995,7 @@ function wipeTenantLocalData(){
     try{tid=JSON.parse(localStorage.getItem(TENANT_CACHE_KEY))?.id||null;}catch{}
   }
   // Bare (pre-#4a) leftovers of the same keys are removed too.
+  // accept.html has a copy of this key list (TENANT_LOCAL_KEYS) — keep both in step.
   [...LEGACY_LOCAL_KEYS,FUEL_MIGRATED_KEY,FUEL_DIRTY_KEY,SERVICE_MIGRATED_KEY,UPLOAD_IDS_MIGRATED_KEY,DISC_MIGRATED_KEY].forEach(k=>{
     if(tid)localStorage.removeItem(k+':'+tid);
     localStorage.removeItem(k);

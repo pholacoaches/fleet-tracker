@@ -294,6 +294,27 @@ async function replaceDeviceSession(session){
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_REFRESH_KEY);
   localStorage.removeItem(AUTH_TIME_KEY);
+  wipeTenantLocalData();
+}
+
+// Same wipe as index.html's logout (wipeTenantLocalData): the previous user's
+// cached business data, one-time migration flags and unsynced-report list go,
+// both under their tenant namespace and as bare pre-#4a leftovers, then the
+// tenant cache itself. The DB is the source of truth, so nothing is lost.
+// Key names must match index.html (LEGACY_LOCAL_KEYS + the *_MIGRATED_KEY /
+// FUEL_DIRTY_KEY constants).
+const TENANT_LOCAL_KEYS=[
+  'fleet_tracker_v2','fleet_service_v1','fleet_upload_ids_v1','fleet_discs_v2',
+  'fleet_fuel_migrated_v1','fleet_fuel_dirty_v1','fleet_service_migrated_v1',
+  'fleet_upload_ids_migrated_v1','fleet_discs_migrated_v1'
+];
+function wipeTenantLocalData(){
+  let tid=null;
+  try{tid=JSON.parse(localStorage.getItem(TENANT_CACHE_KEY))?.id||null;}catch{}
+  TENANT_LOCAL_KEYS.forEach(k=>{
+    if(tid)localStorage.removeItem(k+':'+tid);
+    localStorage.removeItem(k);
+  });
   localStorage.removeItem(TENANT_CACHE_KEY);
 }
 
