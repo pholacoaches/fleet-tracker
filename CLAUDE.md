@@ -11,9 +11,10 @@ recaps unless asked.
 Session state lives in the planning chat's knowledge file, not here —
 this file is stable rules only.
 
-## The app is TWELVE files — back up all twelve before any change
-index.html (~428KB, single-file app), driver.html, sw.js,
-manifest.json, esc.js, monitor.js, sentry.bundle.min.js,
+## The app is FOURTEEN files — back up all fourteen before any change
+index.html (~428KB, single-file app), driver.html, accept.html, sw.js,
+manifest.json, esc.js, storage-keys.js (shared per-company localStorage
+key list + wipe), monitor.js, sentry.bundle.min.js,
 xlsx.full.min.js (self-hosted SheetJS 0.20.3 — patched, do not
 downgrade to npm/CDN 0.18.5), pdf-lib.min.js (self-hosted 1.17.1),
 hero.jpg (default hero background image),
