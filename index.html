@@ -2042,6 +2042,9 @@ async function showDashboard(){
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
   // Tenant (branding + storage namespace) must be known before anything renders
+  // Sessions that predate fleet_last_user_v1 record their user here, so the
+  // same person signing in again later is recognised (storage-keys.js).
+  fdRememberUser(getAuthUserId());
   const ok=await initTenant();
   if(!ok){
     showLogin();
@@ -2133,6 +2136,9 @@ async function login(){
       btn.textContent='Log in';
       return;
     }
+    // A different person from the last one on this device: wipe the previous
+    // user's local data first (storage-keys.js). Same person keeps it.
+    fdPrepareForUser(data.access_token);
     localStorage.setItem(AUTH_TOKEN_KEY,data.access_token);
     if(data.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,data.refresh_token);
     localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));

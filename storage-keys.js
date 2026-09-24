@@ -38,3 +38,32 @@ function wipeTenantLocalData(){
   });
   localStorage.removeItem(FD_TENANT_CACHE_KEY);
 }
+
+// The user id (JWT "sub" — a UUID, never the email) of the last person signed
+// in on this device. Deliberately NOT in the wipe list: it must survive logout
+// so the next sign-in can tell "same person again" from "someone else".
+const FD_LAST_USER_KEY='fleet_last_user_v1';
+
+function fdTokenUserId(token){
+  try{
+    const p=JSON.parse(atob(String(token).split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return typeof p.sub==='string'&&p.sub?p.sub:null;
+  }catch{return null;}
+}
+
+// Call with the NEW access token before it is stored. A different person — or
+// no recorded last user (first sign-in on this build) — gets the full wipe
+// first; the same person keeps their data, including unsynced reports.
+function fdPrepareForUser(token){
+  const uid=fdTokenUserId(token);
+  let last=null;
+  try{last=localStorage.getItem(FD_LAST_USER_KEY);}catch{}
+  if(!uid||last!==uid)wipeTenantLocalData();
+  fdRememberUser(uid);
+}
+function fdRememberUser(uid){
+  try{
+    if(uid)localStorage.setItem(FD_LAST_USER_KEY,uid);
+    else localStorage.removeItem(FD_LAST_USER_KEY);
+  }catch{}
+}

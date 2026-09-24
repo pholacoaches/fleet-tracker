@@ -338,6 +338,7 @@ async function submitPassword(e){
     dropInvite();
     setBusy(true,'Signing you in...');
     await replaceDeviceSession(session);
+    fdRememberUser(fdTokenUserId(session.access_token)); // this device's last user = the new person
     localStorage.setItem(AUTH_TOKEN_KEY,session.access_token);
     if(session.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,session.refresh_token);
     localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
