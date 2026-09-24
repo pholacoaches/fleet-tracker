@@ -5063,8 +5063,9 @@ async function getSignedPhotoUrl(photoPath){
     body:JSON.stringify({expiresIn:ODO_PHOTO_TTL})
   });
   if(!res.ok){
-    const body=await res.text().catch(()=>'');
-    console.warn('[FleetDesk] Photo sign failed:',res.status,body,'| object path:',objectPath);
+    // Status only: the object path (and Storage's error text, which can echo
+    // it) may contain the driver's personal code — photo names are <CODE>_<ts>.jpg
+    console.warn('[FleetDesk] Photo sign failed:',res.status);
     throw new Error('Signed URL request failed: '+res.status);
   }
   const data=await res.json();
