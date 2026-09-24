@@ -2562,9 +2562,23 @@ const US_COPY_LABEL='<svg class="icon" aria-hidden="true"><use href="#icon-copy"
 let _inviteGen=0; // a reply that lands after Cancel/close is dropped
 
 // The Worker's own error text ({error:{message}}), only if short and plain.
+// Only the Worker's own fixed /users/* 400 and 429 texts are ever shown — an
+// exact match against this list (worker.js: RATE_LIMIT_MESSAGE, readJsonBody,
+// handleUsersInvite). Anything else — a changed wording, server text, a link —
+// falls back to the app's own message. Keep in step with worker.js.
+const US_WORKER_MSGS=new Set([
+  'Too many requests in a short time. Please wait a minute and try again.',
+  'Request body too large',
+  'Body must be valid JSON',
+  'Please enter a valid email address.',
+  'Name must be 100 characters or fewer.',
+  'Role must be manager or viewer.',
+  'Your profile has no name yet, so the invite cannot say who it is from.',
+  'Your company has no name yet, so the invite cannot say which company it is for.'
+]);
 function usWorkerMsg(data){
   const msg=data&&data.error&&typeof data.error.message==='string'?data.error.message.trim():'';
-  return msg&&msg.length<=200&&!/[<>]/.test(msg)?msg:'';
+  return US_WORKER_MSGS.has(msg)?msg:'';
 }
 
 function openInviteForm(){

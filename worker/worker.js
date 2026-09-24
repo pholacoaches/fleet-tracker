@@ -1231,6 +1231,9 @@ async function deleteAuthUser(env, userId) {
 }
 
 // ── Route: POST /users/invite ────────────────────────────────────────────────
+// index.html shows this route's 400 texts (and RATE_LIMIT_MESSAGE, and the
+// readJsonBody errors) only if they exactly match its US_WORKER_MSGS list —
+// change a wording here and update that list too.
 async function handleUsersInvite(request, env, cors, origin) {
   const pre = await ownerPrelude(request, env, cors);
   if (pre.fail) return pre.fail;
