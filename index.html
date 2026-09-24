@@ -1879,7 +1879,24 @@ const PERM_MSG="You don't have permission to do that. Ask your company owner.";
 let writeDenied=false;
 function guardWrite(){writeDenied=false;if(canWrite())return true;alert(PERM_MSG);return false;}
 function guardOwner(){writeDenied=false;if(isOwner())return true;alert(PERM_MSG);return false;}
-function markDenied(status){if(status===401||status===403)writeDenied=true;}
+// #5 self-heal: a refused write (403, or 0 rows back on return=representation)
+// usually means this user's role changed since the page loaded. Re-fetch the
+// profile — loadMyProfile() re-runs applyRoleUI() — so the screen corrects
+// itself without a reload. Several refusals in a row share one refresh, and
+// refreshes are at most one per 30 s so a refusal that keeps coming back (a
+// real RLS bug, not a role change) can never loop. 401 is an expired session,
+// not a role change, so it does not refresh.
+let _roleRefreshTimer=null,_roleRefreshAt=0;
+function noteDenied(){
+  writeDenied=true;
+  if(_roleRefreshTimer||Date.now()-_roleRefreshAt<30000)return;
+  _roleRefreshTimer=setTimeout(()=>{
+    _roleRefreshTimer=null;
+    _roleRefreshAt=Date.now();
+    profileReady=loadMyProfile();
+  },1000);
+}
+function markDenied(status){if(status===403)noteDenied();else if(status===401)writeDenied=true;}
 function failMsg(msg){return writeDenied?PERM_MSG:msg;}
 
 // Shows/hides every data-role control via the body classes. Safe to call any
@@ -2422,7 +2439,7 @@ function usersActMsg(text){
 
 // Anything that is not 401 / 403 / 429 is logged with the status code only.
 function usersFail(status,data,endpoint){
-  if(status===403)return PERM_MSG;
+  if(status===403){noteDenied();return PERM_MSG;}
   if(status===401)return US_SESSION_MSG;
   if(status===429)return usWorkerMsg(data)||US_ACT_FAIL; // the Worker reports 429s itself
   console.error(`[FleetDesk] ${endpoint} failed:`,status);
@@ -2440,7 +2457,9 @@ async function usersSetRole(id,role){
   });
   if(!res.ok)return usersFail(res.status,null,'/rest/v1/profiles');
   const rows=await res.json().catch(()=>null);
-  return Array.isArray(rows)&&rows.length===1?'':'That change was refused.'; // 0 rows = RLS said no
+  if(Array.isArray(rows)&&rows.length===1)return'';
+  noteDenied(); // 0 rows = RLS said no
+  return'That change was refused.';
 }
 
 // POST to a /users/* Worker route with the owner's token. Throws on network.
@@ -2629,7 +2648,7 @@ async function sendInvite(){
   const msg=usWorkerMsg(data);
   if(res.status===409){fail('That email already has a FleetDesk login.');return;}
   if(res.status===400){fail(msg||'Check the name and email.');return;}
-  if(res.status===403){fail(PERM_MSG);return;}
+  if(res.status===403){noteDenied();fail(PERM_MSG);return;}
   if(res.status===401){fail(US_SESSION_MSG);return;}
   // Throttled: the Worker's own "wait a minute" message (it reports 429s itself)
   if(res.status===429){fail(msg||"Couldn't create the invite. Try again.");return;}
@@ -3023,7 +3042,7 @@ async function upsertVehicleServiceToDb(plate,rec){
   // return=representation: 0 rows back = the DB saved nothing (RLS block) —
   // that is a failure, never a success (204 lies).
   const rows=await res.json();
-  if(!Array.isArray(rows)||rows.length===0){writeDenied=true;throw new Error('no row returned');}
+  if(!Array.isArray(rows)||rows.length===0){noteDenied();throw new Error('no row returned');}
 }
 
 // One-time per tenant: push local-only service settings up to the DB. A plate
@@ -3215,9 +3234,9 @@ async function appendUploadIdsToDb(newEngenIds,newFreightIds){
     headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken(),'Content-Type':'application/json','Prefer':'resolution=ignore-duplicates,return=representation'},
     body:JSON.stringify(rows)
   });
-  if(!res.ok)throw new Error('HTTP '+res.status+' — '+await res.text().catch(()=>''));
+  if(!res.ok){markDenied(res.status);throw new Error('HTTP '+res.status+' — '+await res.text().catch(()=>''));}
   const saved=await res.json();
-  if(!Array.isArray(saved)||saved.length===0)throw new Error('no rows returned');
+  if(!Array.isArray(saved)||saved.length===0){noteDenied();throw new Error('no rows returned');}
 }
 
 function getPeriod(scheduleDate){
@@ -3967,6 +3986,7 @@ async function deleteReport(i){
     // or row gone) — do NOT touch local state, the report must stay visible.
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
+      noteDenied();
       console.error('[FleetDesk] Report delete matched no rows for period',period);
       alert('Nothing changed — it may already have been deleted.');
       return;
@@ -4080,6 +4100,7 @@ async function restoreDeleted(table,id){
     }
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
+      noteDenied();
       console.error('[FleetDesk] Restore matched no row:',table,id);
       alert('Restore didn\'t save — it may already have been restored. Refreshing the list.');
       renderRecentlyDeleted();
@@ -4352,7 +4373,7 @@ async function clearAllData(){
     });
     if(!delRes.ok){markDenied(delRes.status);throw new Error('HTTP '+delRes.status);}
     const gone=await delRes.json();
-    if((backupIds.engen.length+backupIds.freight.length)>0&&(!Array.isArray(gone)||gone.length===0)){writeDenied=true;throw new Error('no rows deleted');}
+    if((backupIds.engen.length+backupIds.freight.length)>0&&(!Array.isArray(gone)||gone.length===0)){noteDenied();throw new Error('no rows deleted');}
   }catch(err){
     alert(failMsg('⚠️ Could not clear the upload history in the cloud — the reports have NOT been cleared.\n\n'+(err.message||err)+'\n\nPlease check your connection and try again.'));
     return;
@@ -4369,6 +4390,7 @@ async function clearAllData(){
     // block, or no live rows) — stop here, local cache stays untouched.
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
+      noteDenied();
       console.error('[FleetDesk] clearAllData: fuel_reports soft-delete step matched no rows');
       alert('Update didn\'t save — please try again.');
       return;
@@ -5164,6 +5186,7 @@ async function uploadInvoiceFile(file,prefix,plate){
     body:file
   });
   if(!res.ok){
+    markDenied(res.status);
     const body=await res.text().catch(()=>'');
     console.error('[FleetDesk] Invoice upload failed:',res.status,body);
     throw new Error('Invoice upload failed: '+res.status);
@@ -5690,7 +5713,7 @@ async function patchVehicleActive(plate,active){
     if(!res.ok){markDenied(res.status);console.error('[FleetDesk] vehicles.active update failed:',res.status,await res.text());return false;}
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
-      writeDenied=true;
+      noteDenied();
       console.error('[FleetDesk] vehicles.active update matched no row for',raw);
       FleetDesk.reportError('vehicles.active PATCH matched no row',{endpoint:'/rest/v1/vehicles',status:res.status}); // plate deliberately not sent
       return false;
@@ -6311,7 +6334,7 @@ async function saveRenewal(plate,key){
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({plate,item:key,old_expiry:cur,new_expiry:newIso,cost,notes:notes||null})
     });
-    if(!res.ok)console.error('[FleetDesk] History save failed:',res.status,await res.text());
+    if(!res.ok){markDenied(res.status);console.error('[FleetDesk] History save failed:',res.status,await res.text());}
   }catch(err){console.error('[FleetDesk] History save failed:',err);}
   renderDiscView();updateDiscTabBadge();renderAlertBanner();
 }
@@ -7154,6 +7177,7 @@ async function submitTyre(){
       body:JSON.stringify(body)
     });
     if(!res.ok){
+      markDenied(res.status);
       const errText=await res.text();
       console.error('[FleetDesk] Tyre save failed:',res.status,errText);
       errEl.textContent='Could not save tyre. Please try again.';
@@ -7689,6 +7713,7 @@ async function submitMaintJob(){
       body:JSON.stringify(jobBody)
     });
     if(!res.ok){
+      markDenied(res.status);
       console.error('[FleetDesk] Job save failed:',res.status,await res.text());
       errEl.textContent='Could not save the job. Please try again.';
       errEl.classList.add('show');
@@ -7700,6 +7725,7 @@ async function submitMaintJob(){
     // return=representation: 0 rows / no id back = the job was NOT saved
     // (204 lies rule) — fail loudly instead of rendering as if it worked.
     if(!jobId){
+      noteDenied();
       console.error('[FleetDesk] Job save returned no row');
       errEl.textContent='Could not save the job. Please try again.';
       errEl.classList.add('show');
@@ -7712,7 +7738,7 @@ async function submitMaintJob(){
         headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`,'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify(parts.map(p=>({...p,job_id:jobId})))
       });
-      if(!pRes.ok)console.error('[FleetDesk] Parts save failed:',pRes.status,await pRes.text());
+      if(!pRes.ok){markDenied(pRes.status);console.error('[FleetDesk] Parts save failed:',pRes.status,await pRes.text());}
     }
     maintInvoiceFile=null;
     await renderMaintTab();
@@ -7740,6 +7766,7 @@ async function markJobDone(id){
     // return=representation: 0 rows back = the job row wasn't updated
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
+      noteDenied();
       console.error('[FleetDesk] markJobDone matched no row for id',id);
       alert(PERM_MSG);
       return;
@@ -7770,6 +7797,7 @@ async function deleteMaintJob(id){
     // return=representation: 0 rows back = nothing was soft-deleted
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
+      noteDenied();
       console.error('[FleetDesk] Job delete matched no row for id',id);
       alert('Nothing changed — it may already have been deleted.');
       return;
@@ -8099,6 +8127,7 @@ async function submitDriver(){
       }
     }
     if(!res||!res.ok){
+      if(res)markDenied(res.status);
       console.error('[FleetDesk] Driver save failed:',res&&res.status,res&&await res.text());
       errEl.textContent='Could not save the driver. Please try again.';
       errEl.classList.add('show');
@@ -8108,6 +8137,7 @@ async function submitDriver(){
     if(editing){
       const rows=await res.json();
       if(!Array.isArray(rows)||rows.length===0){
+        noteDenied();
         console.error('[FleetDesk] Driver edit matched no row for id',driverFormMode);
         errEl.textContent='Update didn\'t save — please try again.';
         errEl.classList.add('show');
@@ -8156,6 +8186,7 @@ async function toggleDriverActive(id,makeActive){
     // return=representation: 0 rows back = the driver row wasn't updated
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
+      noteDenied();
       console.error('[FleetDesk] toggleDriverActive matched no row for id',id);
       alert(PERM_MSG);
       return;
@@ -8851,6 +8882,7 @@ async function updateSubmissionStatus(id,status){
     // BEFORE the local notifData/pendingData/approvedData mutations below.
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
+      noteDenied();
       console.error('[FleetDesk] Status update matched no row for id',id);
       alert(PERM_MSG);
       return false;
@@ -8900,6 +8932,7 @@ async function deleteReading(id){
     // deleted elsewhere, or RLS block) — leave local state alone.
     const rows=await res.json();
     if(!Array.isArray(rows)||rows.length===0){
+      noteDenied();
       console.error('[FleetDesk] Reading delete matched no row for id',id);
       alert('Nothing changed — it may already have been deleted.');
       return;
