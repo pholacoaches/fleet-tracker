@@ -107,7 +107,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
     <div class="big-icon"><svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="display:block;color:var(--red)"><path d="M9 15l3 -3m2 -2l1 -1"/><path d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .463"/><path d="M3 3l18 18"/><path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"/></svg></div>
     <div class="center-title">This invite link has expired</div>
     <div class="center-sub">Or it has already been used. Ask the person who invited you to send a new one.</div>
-    <a class="big-btn" href="index.html" style="max-width:320px;">Go to the sign-in page</a>
+    <a class="big-btn" id="toSignIn" href="index.html" style="max-width:320px;">Go to the sign-in page</a>
     <div class="footnote" style="max-width:320px;">Already set your password? Sign in as normal - you don't need the invite link again.</div>
   </div>
 </div>
@@ -281,9 +281,9 @@ async function verifyInvite(){
 
 // An earlier session on this device (someone else, or an older login) is
 // signed out first, so the new user never inherits its tenant cache.
-async function replaceDeviceSession(){
+async function replaceDeviceSession(session){
   const old=localStorage.getItem(AUTH_TOKEN_KEY);
-  if(old&&old!==invite.session.access_token){
+  if(old&&old!==session.access_token){
     try{
       await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=local`,{
         method:'POST',
@@ -328,21 +328,29 @@ async function submitPassword(e){
     }
     // Password set: this session becomes the app session, then index.html
     // takes over already signed in (its checkAuth() sees a fresh token).
-    setBusy(true,'Signing you in...');
-    await replaceDeviceSession();
-    localStorage.setItem(AUTH_TOKEN_KEY,invite.session.access_token);
-    if(invite.session.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,invite.session.refresh_token);
-    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
+    // The session leaves this tab's storage straight away — from here on it
+    // lives only in this variable until it is handed to the app.
+    const session=invite.session;
     dropInvite();
+    setBusy(true,'Signing you in...');
+    await replaceDeviceSession(session);
+    localStorage.setItem(AUTH_TOKEN_KEY,session.access_token);
+    if(session.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,session.refresh_token);
+    localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
     location.replace('index.html');
   }catch(err){
     console.error('[FleetDesk] accept invite failed:',err);
     setBusy(false);
-    showErr('Connection error. Please check your internet connection and try again.');
+    // invite is already dropped once the password is saved — retrying here
+    // would do nothing, so send them to sign in instead.
+    showErr(invite?'Connection error. Please check your internet connection and try again.'
+      :'Your password is saved. Please sign in on the sign-in page with your email and new password.');
   }
 }
 
 document.getElementById('pwForm').addEventListener('submit',submitPassword);
+// Leaving for the sign-in page: nothing from the invite stays in this tab.
+document.getElementById('toSignIn').addEventListener('click',dropInvite);
 readInvite();
 if(invite)renderInvite();else showScreen('expiredScreen');
 </script>
