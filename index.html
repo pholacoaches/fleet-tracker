@@ -1881,13 +1881,15 @@ function isOwner(){return PROFILE.loaded&&PROFILE.role==='owner';}
 
 // Roles block B: second layer behind the hidden controls. Every write entry
 // point starts with `if(!guardWrite())return;` (or guardOwner). Both also reset
-// writeDenied, which the save paths set when the DB refused the write (401/403,
+// writeDenied, which the save paths set when the DB refused the write (403,
 // or a return=representation write that matched 0 rows) so the failure alert
-// can say "permission" instead of "check your connection".
+// can say "permission" instead of "check your connection". A 401 is an
+// expired login, not a refusal: it sets sessionExpired instead, and the alert
+// says so.
 const PERM_MSG="You don't have permission to do that. Ask your company owner.";
-let writeDenied=false;
-function guardWrite(){writeDenied=false;if(canWrite())return true;alert(PERM_MSG);return false;}
-function guardOwner(){writeDenied=false;if(isOwner())return true;alert(PERM_MSG);return false;}
+let writeDenied=false,sessionExpired=false;
+function guardWrite(){writeDenied=false;sessionExpired=false;if(canWrite())return true;alert(PERM_MSG);return false;}
+function guardOwner(){writeDenied=false;sessionExpired=false;if(isOwner())return true;alert(PERM_MSG);return false;}
 // #5 self-heal: a refused write (403, or 0 rows back on return=representation)
 // usually means this user's role changed since the page loaded. Re-fetch the
 // profile — loadMyProfile() re-runs applyRoleUI() — so the screen corrects
@@ -1905,8 +1907,8 @@ function noteDenied(){
     profileReady=loadMyProfile(true);
   },1000);
 }
-function markDenied(status){if(status===403)noteDenied();else if(status===401)writeDenied=true;}
-function failMsg(msg){return writeDenied?PERM_MSG:msg;}
+function markDenied(status){if(status===403)noteDenied();else if(status===401)sessionExpired=true;}
+function failMsg(msg){return writeDenied?PERM_MSG:sessionExpired?US_SESSION_MSG:msg;}
 
 // Shows/hides every data-role control via the body classes. Safe to call any
 // time — console test: PROFILE.role='viewer'; applyRoleUI()
@@ -1997,38 +1999,80 @@ function clearDeadSession(){
   wipeTenantLocalData();
 }
 
-async function checkAuth(){
+// The stored session's state, refreshing the access token when it is older
+// than 55 min: 'fresh' (usable now), 'none' (no session stored), 'dead'
+// (can never be renewed), 'offline' (the refresh could not reach GoTrue or
+// GoTrue could not answer — network error, 5xx, 429) or 'error' (storage
+// unreadable). Never clears anything itself — each caller decides.
+async function sessionStatus(){
   try{
     const token=localStorage.getItem(AUTH_TOKEN_KEY);
     const refresh=localStorage.getItem(AUTH_REFRESH_KEY);
     const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
-    if(!token)return false;
+    if(!token)return 'none';
     // Stage 5: legacy login removed — a leftover 'local-' token is not a session
-    if(token.startsWith('local-')){clearDeadSession();return false;}
+    if(token.startsWith('local-'))return 'dead';
     // Token still fresh — no network call needed
-    if(Date.now()-time<55*60*1000)return true;
+    if(Date.now()-time<55*60*1000)return 'fresh';
     // Audit fix #3 item 2: a stale access token with no refresh token can
     // never be renewed — it is a dead session, not a 24h grace period.
-    if(!refresh){clearDeadSession();return false;}
+    if(!refresh)return 'dead';
     // Token is older than 55 min — use refresh token to get a new one
-    // Audit fix #3 item 1: a refresh that fails for ANY reason (rejected by
-    // GoTrue, malformed reply, or a network error) means the stored pair is
-    // dead — wipe it rather than retrying it forever on every load.
-    let data;
+    let res;
     try{
-      const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
+      res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
         method:'POST',
         headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
         body:JSON.stringify({refresh_token:refresh})
       });
-      data=res.ok?await res.json():null;
-    }catch{data=null;}
-    if(!data||!data.access_token){clearDeadSession();return false;}
+    }catch{return 'offline';}
+    if(res.status>=500||res.status===429)return 'offline';
+    const data=res.ok?await res.json().catch(()=>null):null;
+    if(!data||!data.access_token)return 'dead';
     localStorage.setItem(AUTH_TOKEN_KEY,data.access_token);
     if(data.refresh_token)localStorage.setItem(AUTH_REFRESH_KEY,data.refresh_token);
     localStorage.setItem(AUTH_TIME_KEY,String(Date.now()));
-    return true;
-  }catch{return false;}
+    return 'fresh';
+  }catch{return 'error';}
+}
+
+// One refresh at a time: a refresh token is single-use, so two overlapping
+// refreshes (keep-alive timer + tab coming back + password change) would
+// send the same one twice. Every caller shares the check already running.
+let _sessionCheck=null;
+function sharedSessionStatus(){
+  if(!_sessionCheck)_sessionCheck=sessionStatus().finally(()=>{_sessionCheck=null;});
+  return _sessionCheck;
+}
+
+async function checkAuth(){
+  const s=await sharedSessionStatus();
+  if(s==='fresh')return true;
+  // Audit fix #3 item 1: a refresh that fails for ANY reason (rejected by
+  // GoTrue, malformed reply, or a network error) means the stored pair is
+  // dead — wipe it rather than retrying it forever on every load.
+  if(s==='dead'||s==='offline')clearDeadSession();
+  return false;
+}
+
+// Job 1 block 1: keep the login fresh while the app stays open. Without this
+// the access token expired ~1 h after the page loaded and every call after
+// that (the 10 s poll first) failed with 401. Runs every 3 min while the tab
+// is visible, and at once when the tab comes back into view. Only a session
+// GoTrue itself refuses logs out — a network blip or a GoTrue outage keeps
+// the session (and any unsent fuel reports) and tries again next time.
+const SESSION_KEEPALIVE_MS=3*60*1000;
+let _keepAliveId=null;
+async function keepSessionAlive(){
+  if(document.hidden)return;
+  if(document.getElementById('appContent').classList.contains('hidden'))return;
+  const s=await sharedSessionStatus();
+  if(s==='dead'||s==='none')logout();
+}
+function startSessionKeepAlive(){
+  if(_keepAliveId)return;
+  _keepAliveId=setInterval(keepSessionAlive,SESSION_KEEPALIVE_MS);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)keepSessionAlive();});
 }
 
 async function initApp(){
@@ -2050,6 +2094,7 @@ async function showDashboard(){
     document.getElementById('loginErr').textContent='Could not load your company profile. Please check your connection and try again.';
     return;
   }
+  startSessionKeepAlive();
   profileReady=loadMyProfile(); // role + name; not awaited here — write controls stay hidden until applyRoleUI() runs; automatic writes await it
   recomputeAllStats();
   renderDashboard();          // fast paint from the local cache
@@ -6945,7 +6990,7 @@ async function saveLicenceScan(){
   const summary=[];
   if(restored.length)summary.push(`${restored.join(', ')} restored and updated — back in service.`);
   if(driverAppFailed.length)summary.push(`${driverAppFailed.join(', ')} restored, but drivers cannot see ${driverAppFailed.length===1?'it':'them'} in the driver app yet. The card shows a Retry.`);
-  if(failed.length)summary.push(`Saved ${rows.length-failed.length} of ${rows.length}. Could not save: ${failed.join(', ')}. ${writeDenied?PERM_MSG:'Check your connection and try again.'}`);
+  if(failed.length)summary.push(`Saved ${rows.length-failed.length} of ${rows.length}. Could not save: ${failed.join(', ')}. ${failMsg('Check your connection and try again.')}`);
   if(summary.length)alert(summary.join('\n\n'));
   if(failed.length){
     updateScanSaveBtn();
