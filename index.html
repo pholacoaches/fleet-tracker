@@ -2090,13 +2090,37 @@ function sharedSessionStatus(){
 // is visible, and at once when the tab comes back into view. Only a session
 // GoTrue itself refuses logs out — a network blip or a GoTrue outage keeps
 // the session (and any unsent fuel reports) and tries again next time.
+// Job 1 block 4: each run also checks the person is still on the team — a
+// removed person's access token stays valid for up to an hour, and RLS just
+// answers "0 rows", so without this they kept the screen until they left.
+// Same two clear answers as on open (own profile gone, then no company); any
+// network error or non-2xx is not removal. Normal cost: one small profile
+// read per run; the tenants read only happens when the profile is gone.
+// A removed person whose login has ALREADY expired cannot be told apart from
+// any other ended session (GoTrue answers refresh_token_not_found for both),
+// so that case logs out without the removed message.
 const SESSION_KEEPALIVE_MS=3*60*1000;
-let _keepAliveId=null;
+let _keepAliveId=null,_keepAliveRunning=false;
 async function keepSessionAlive(){
-  if(document.hidden)return;
+  if(document.hidden||_keepAliveRunning)return;
   if(document.getElementById('appContent').classList.contains('hidden'))return;
-  const s=await sharedSessionStatus();
-  if(s==='dead'||s==='none')logout('local',true);
+  _keepAliveRunning=true;
+  try{
+    const s=await sharedSessionStatus();
+    if(s==='dead'||s==='none'){logout('local',true);return;}
+    if(s==='fresh'&&await profileGone()&&await tenantsGone())kickRemoved();
+  }finally{_keepAliveRunning=false;}
+}
+// True only on a clear "200, 0 rows" for the tenants this person can read.
+async function tenantsGone(){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/tenants?select=id`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+    });
+    if(!res.ok)return false;
+    const rows=await res.json();
+    return Array.isArray(rows)&&rows.length===0;
+  }catch{return false;}
 }
 function startSessionKeepAlive(){
   if(_keepAliveId)return;
