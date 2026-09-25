@@ -1363,6 +1363,7 @@ body.role-write [data-role="readonly"] { display: none !important; }
     <button class="login-btn" id="loginBtn" onclick="login()">Log in</button>
     <button type="button" class="login-forgot" onclick="showForgotScreen()">Forgot password?</button>
     <div class="login-err" id="loginErr"></div>
+    <button type="button" class="login-forgot hidden" id="loginRetryBtn" onclick="retryOfflineOpen()">Try again</button>
     <div class="login-credit"><img src="fleetdesk-icon-final.svg" alt="" width="20" height="20"><span>Powered by <strong>FleetDesk</strong></span></div>
   </div>
 
@@ -2045,16 +2046,6 @@ function sharedSessionStatus(){
   return _sessionCheck;
 }
 
-async function checkAuth(){
-  const s=await sharedSessionStatus();
-  if(s==='fresh')return true;
-  // Audit fix #3 item 1: a refresh that fails for ANY reason (rejected by
-  // GoTrue, malformed reply, or a network error) means the stored pair is
-  // dead — wipe it rather than retrying it forever on every load.
-  if(s==='dead'||s==='offline')clearDeadSession();
-  return false;
-}
-
 // Job 1 block 1: keep the login fresh while the app stays open. Without this
 // the access token expired ~1 h after the page loaded and every call after
 // that (the 10 s poll first) failed with 401. Runs every 3 min while the tab
@@ -2075,13 +2066,45 @@ function startSessionKeepAlive(){
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)keepSessionAlive();});
 }
 
+// Job 1 block 1b: only a refresh GoTrue clearly refuses ('dead') wipes the
+// stored pair and the device's company data. 'offline' (no internet, GoTrue
+// down, rate-limited) keeps everything — including unsent fuel reports — and
+// waits for the connection instead.
 async function initApp(){
   if(handleRecoveryRedirect())return;
-  const authed=await checkAuth();
-  if(authed){showDashboard();}else{showLogin();}
+  const s=await sharedSessionStatus();
+  if(s==='fresh'){showDashboard();return;}
+  if(s==='offline'){showOfflineOpen();return;}
+  if(s==='dead')clearDeadSession();
+  showLogin();
 }
 
+// Opened with an expired login and no way to renew it right now: login
+// screen with a note, stored login + device data untouched. Retries by
+// itself when the browser reports the connection is back, or on Try again.
+let _offlineOpenWaiting=false;
+function showOfflineOpen(){
+  showLogin();
+  _offlineOpenWaiting=true;
+  document.getElementById('loginErr').textContent="No internet — couldn't check your login. Your data on this device is safe. Please reconnect and try again.";
+  document.getElementById('loginRetryBtn').classList.remove('hidden');
+}
+async function retryOfflineOpen(){
+  if(!_offlineOpenWaiting)return;
+  const s=await sharedSessionStatus();
+  // The person may have logged in by hand while this was running
+  if(!_offlineOpenWaiting)return;
+  if(s==='offline')return; // still no connection — the note stays up
+  _offlineOpenWaiting=false;
+  document.getElementById('loginRetryBtn').classList.add('hidden');
+  if(s==='fresh'){showDashboard();return;}
+  if(s==='dead')clearDeadSession();
+  showLogin();
+}
+window.addEventListener('online',()=>{retryOfflineOpen();});
+
 async function showDashboard(){
+  _offlineOpenWaiting=false; // a manual login while offline-waiting ends the wait
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
   // Tenant (branding + storage namespace) must be known before anything renders
@@ -2117,6 +2140,8 @@ function showLogin(){
   document.getElementById('loginEmail').value='';
   document.getElementById('loginPassword').value='';
   document.getElementById('loginErr').textContent='';
+  _offlineOpenWaiting=false;
+  document.getElementById('loginRetryBtn').classList.add('hidden');
 }
 
 // Audit fix #3 item 4: scope 'local' (default, the Log out button) revokes
@@ -2778,11 +2803,13 @@ async function saveAccountPassword(){
   btn.disabled=true;btn.textContent='Saving...';
   const restoreBtn=()=>{btn.disabled=false;btn.textContent='Save new password';};
   try{
-    // Refresh the access token if it is stale. Audit fix #3 item 1: if the
-    // session turned out to be dead, checkAuth() has already wiped the stored
-    // keys — go through logout() (full reload → login screen) instead of
-    // continuing with no bearer token.
-    if(!(await checkAuth())){logout();return;}
+    // Refresh the access token if it is stale. Audit fix #3 item 1: a dead
+    // session goes through logout() (full reload → login screen) instead of
+    // continuing with no bearer token. Block 1b: no connection is not a dead
+    // session — say so and keep everything.
+    const s=await sharedSessionStatus();
+    if(s==='offline'||s==='error'){restoreBtn();errEl.textContent='Connection error. Please try again.';return;}
+    if(s!=='fresh'){logout();return;}
     const email=await getAccountEmail();
     if(!email){restoreBtn();errEl.textContent='Could not confirm your account email. Please log out and back in, then try again.';return;}
     // Security 2026-09-02: a password change must prove the CURRENT password.
