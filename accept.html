@@ -364,11 +364,12 @@ async function submitPassword(e){
     const alreadySet=!res.ok&&data&&data.error_code==='same_password';
     if(!res.ok&&!alreadySet){
       setBusy(false);
-      if(res.status===401){
+      if(res.status===401||res.status===403){
         // The session from the spent token is no longer accepted. The link
-        // cannot be used again — say so rather than loop.
+        // cannot be used again — Block 6e: show the same expired / already-used
+        // screen as a refused link, rather than a banner or a loop.
         dropInvite();
-        showErr('Your invite session has ended before the password was saved. Use "Forgot password?" on the sign-in page with this email to set one.');
+        showScreen('expiredScreen');
         return;
       }
       showErr(authErrorText(data,res.status));
