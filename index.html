@@ -1815,6 +1815,9 @@ function rgbToHex(r,g,b){return'#'+[r,g,b].map(v=>Math.max(0,Math.min(255,Math.r
 function shadeHex(h,f){const[r,g,b]=hexToRgb(h);return rgbToHex(r*(1+f),g*(1+f),b*(1+f));} // f<0 darkens
 function tintHex(h,f){const[r,g,b]=hexToRgb(h);return rgbToHex(r+(255-r)*f,g+(255-g)*f,b+(255-b)*f);}
 
+// Returns 'ok', 'removed' (the DB clearly says this person is no longer on
+// any team — see profileGone) or 'fail' (no tenant known: offline with no
+// cache, or an unclear answer).
 async function initTenant(){
   // Cached tenant paints instantly (and covers a network blip on reload);
   // logout clears the cache, so it always belongs to the active session's user.
@@ -1829,14 +1832,49 @@ async function initTenant(){
         TENANT=rows[0];
         localStorage.setItem(TENANT_CACHE_KEY,JSON.stringify(TENANT));
         applyBranding();
+      }else if(Array.isArray(rows)&&rows.length===0&&await profileGone()){
+        // Job 1 block 3: "OK, no company" used to fall back to the cached
+        // tenant, so a removed person kept seeing the old company's data.
+        return 'removed';
       }
     }
   }catch{/* offline — cached tenant (same user) stays in effect */}
-  if(!TENANT)return false;
+  if(!TENANT)return 'fail';
   FleetDesk.setTenant(TENANT.id); // error monitoring: tenant UUID tag (never the name)
   migrateLegacyLocalData();
   reloadTenantState();
-  return true;
+  return 'ok';
+}
+
+// Job 1: true only when the DB clearly answers "this person has no profile"
+// (200 with 0 rows for their own id). A network error, a non-2xx reply or an
+// unreadable body is NOT removal — it returns false and nothing is wiped.
+async function profileGone(){
+  const uid=getAuthUserId();
+  if(!uid)return false;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&id=eq.${encodeURIComponent(uid)}`,{
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
+    });
+    if(!res.ok)return false;
+    const rows=await res.json();
+    return Array.isArray(rows)&&rows.length===0;
+  }catch{return false;}
+}
+
+// Job 1: a removed person keeps nothing. Every company's local data on this
+// device goes — including fuel reports that never reached the cloud (the
+// dirty list is in FD_TENANT_LOCAL_KEYS) — and the stored login with it. No
+// server logout: the user no longer exists, so GoTrue would refuse it (403).
+// The full reload drops every in-memory copy, timer and poll; the login
+// screen then shows REMOVED_MSG once (sessionStorage flag).
+const REMOVED_MSG="Your access has been removed. Please contact your company's account owner.";
+const REMOVED_FLAG_KEY='fleet_removed_notice';
+function kickRemoved(){
+  try{stopRealtimeListener();}catch{}
+  clearDeadSession();
+  try{sessionStorage.setItem(REMOVED_FLAG_KEY,'1');}catch{}
+  window.location.reload();
 }
 
 const PROFILE_ROLES=['owner','manager','viewer'];
@@ -2072,6 +2110,11 @@ function startSessionKeepAlive(){
 // waits for the connection instead.
 async function initApp(){
   if(handleRecoveryRedirect())return;
+  // Just removed (kickRemoved reloaded the page): the login and the data are
+  // already gone — say why, once.
+  let removedNotice=false;
+  try{removedNotice=sessionStorage.getItem(REMOVED_FLAG_KEY)==='1';sessionStorage.removeItem(REMOVED_FLAG_KEY);}catch{}
+  if(removedNotice){showLogin();document.getElementById('loginErr').textContent=REMOVED_MSG;return;}
   const s=await sharedSessionStatus();
   if(s==='fresh'){showDashboard();return;}
   if(s==='offline'){showOfflineOpen();return;}
@@ -2111,8 +2154,11 @@ async function showDashboard(){
   // Sessions that predate fleet_last_user_v1 record their user here, so the
   // same person signing in again later is recognised (storage-keys.js).
   fdRememberUser(getAuthUserId());
-  const ok=await initTenant();
-  if(!ok){
+  const tenantState=await initTenant();
+  // Before anything renders or syncs — the fuel sync's "not in the cloud"
+  // safety stop must never fire for a removed person.
+  if(tenantState==='removed'){kickRemoved();return;}
+  if(tenantState!=='ok'){
     showLogin();
     document.getElementById('loginErr').textContent='Could not load your company profile. Please check your connection and try again.';
     return;
