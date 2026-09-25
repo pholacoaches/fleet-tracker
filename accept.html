@@ -287,6 +287,15 @@ async function verifyInvite(){
 // index.html refreshes at) is refreshed first. If that refresh fails the old
 // session cannot be revoked from here — the server call is skipped and the
 // device is still cleared below.
+// Block 6b: the refresh and the logout get the same 15-s limit as index.html's
+// fetchWithTimeout. A timeout counts as a failure: the old login is still
+// cleared from this device and the invite carries on, with no error shown.
+const OLD_LOGIN_TIMEOUT_MS=15000;
+function fetchWithTimeout(url,opts){
+  const ctl=new AbortController();
+  const timer=setTimeout(()=>ctl.abort(),OLD_LOGIN_TIMEOUT_MS);
+  return fetch(url,{...opts,signal:ctl.signal}).finally(()=>clearTimeout(timer));
+}
 async function freshOldToken(){
   const token=localStorage.getItem(AUTH_TOKEN_KEY);
   const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
@@ -295,7 +304,7 @@ async function freshOldToken(){
   const refresh=localStorage.getItem(AUTH_REFRESH_KEY);
   if(!refresh)return null;
   try{
-    const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
+    const res=await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
       body:JSON.stringify({refresh_token:refresh})
@@ -310,7 +319,7 @@ async function replaceDeviceSession(session){
   const old=stored&&stored!==session.access_token?await freshOldToken():null;
   if(old){
     try{
-      await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=local`,{
+      await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/logout?scope=local`,{
         method:'POST',
         headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+old}
       });

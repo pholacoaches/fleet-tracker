@@ -2237,9 +2237,11 @@ async function logout(scope='local',sessionDead=false){
   // session to revoke anyway.
   const s=sessionDead?'dead':await sharedSessionStatus();
   const t=s==='fresh'?localStorage.getItem(AUTH_TOKEN_KEY):null;
+  // Block 6b: same 15-s limit as the session checks — a logout the network
+  // never answers is treated like a dead login: the device is cleared anyway.
   if(t){
     try{
-      await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=${scope}`,{
+      await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/logout?scope=${scope}`,{
         method:'POST',
         headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+t}
       });
