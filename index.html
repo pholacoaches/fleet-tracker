@@ -1846,20 +1846,34 @@ async function initTenant(){
   return 'ok';
 }
 
-// Job 1: true only when the DB clearly answers "this person has no profile"
-// (200 with 0 rows for their own id). A network error, a non-2xx reply or an
-// unreadable body is NOT removal — it returns false and nothing is wiped.
-async function profileGone(){
-  const uid=getAuthUserId();
-  if(!uid)return false;
+// Job 1 block 6: the session / removal checks run on a timer and share one
+// promise, so a request the network never answers (captive portal, dropped
+// signal) must not hang them forever. After 15 s it is aborted — the fetch
+// rejects, and every caller already treats a rejection as "offline".
+const CHECK_TIMEOUT_MS=15000;
+function fetchWithTimeout(url,opts){
+  const ctl=new AbortController();
+  const timer=setTimeout(()=>ctl.abort(),CHECK_TIMEOUT_MS);
+  return fetch(url,{...opts,signal:ctl.signal}).finally(()=>clearTimeout(timer));
+}
+
+// Job 1: true only when the DB clearly answers "200 with 0 rows" for this
+// REST read. A network error, a timeout, a non-2xx reply or an unreadable
+// body is NOT removal — it returns false and nothing is wiped.
+async function restRowsEmpty(path){
   try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&id=eq.${encodeURIComponent(uid)}`,{
+    const res=await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${path}`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
     });
     if(!res.ok)return false;
     const rows=await res.json();
     return Array.isArray(rows)&&rows.length===0;
   }catch{return false;}
+}
+// This person's own profile row is gone.
+function profileGone(){
+  const uid=getAuthUserId();
+  return uid?restRowsEmpty(`profiles?select=id&id=eq.${encodeURIComponent(uid)}`):Promise.resolve(false);
 }
 
 // Job 1: a removed person keeps nothing. Every company's local data on this
@@ -2059,7 +2073,7 @@ async function sessionStatus(){
     // Token is older than 55 min — use refresh token to get a new one
     let res;
     try{
-      res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
+      res=await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
         method:'POST',
         headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
         body:JSON.stringify({refresh_token:refresh})
@@ -2108,19 +2122,8 @@ async function keepSessionAlive(){
   try{
     const s=await sharedSessionStatus();
     if(s==='dead'||s==='none'){logout('local',true);return;}
-    if(s==='fresh'&&await profileGone()&&await tenantsGone())kickRemoved();
+    if(s==='fresh'&&await profileGone()&&await restRowsEmpty('tenants?select=id'))kickRemoved();
   }finally{_keepAliveRunning=false;}
-}
-// True only on a clear "200, 0 rows" for the tenants this person can read.
-async function tenantsGone(){
-  try{
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/tenants?select=id`,{
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
-    });
-    if(!res.ok)return false;
-    const rows=await res.json();
-    return Array.isArray(rows)&&rows.length===0;
-  }catch{return false;}
 }
 function startSessionKeepAlive(){
   if(_keepAliveId)return;
@@ -2162,11 +2165,14 @@ async function retryOfflineOpen(){
   // The person may have logged in by hand while this was running
   if(!_offlineOpenWaiting)return;
   if(s==='offline')return; // still no connection — the note stays up
-  _offlineOpenWaiting=false;
-  document.getElementById('loginRetryBtn').classList.add('hidden');
+  cancelOfflineOpen();
   if(s==='fresh'){showDashboard();return;}
   if(s==='dead')clearDeadSession();
   showLogin();
+}
+function cancelOfflineOpen(){
+  _offlineOpenWaiting=false;
+  document.getElementById('loginRetryBtn').classList.add('hidden');
 }
 window.addEventListener('online',()=>{retryOfflineOpen();});
 
@@ -2198,6 +2204,9 @@ async function showDashboard(){
 }
 
 function showAuthCard(which){
+  // Block 6: any move between login / forgot / reset cards cancels the
+  // automatic "internet is back" retry (showOfflineOpen re-arms it after).
+  cancelOfflineOpen();
   document.getElementById('appContent').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
   ['loginCard','forgotCard','resetCard'].forEach(id=>{
@@ -2210,8 +2219,6 @@ function showLogin(){
   document.getElementById('loginEmail').value='';
   document.getElementById('loginPassword').value='';
   document.getElementById('loginErr').textContent='';
-  _offlineOpenWaiting=false;
-  document.getElementById('loginRetryBtn').classList.add('hidden');
 }
 
 // Audit fix #3 item 4: scope 'local' (default, the Log out button) revokes
@@ -2265,6 +2272,9 @@ async function login(){
   const password=document.getElementById('loginPassword').value;
   const errEl=document.getElementById('loginErr');
   const btn=document.getElementById('loginBtn');
+  // Block 6: a person logging in by hand wins — the automatic "internet is
+  // back" retry for the stored session must not open it alongside this one.
+  cancelOfflineOpen();
   errEl.textContent='';
   btn.disabled=true;
   btn.textContent='Signing in...';
