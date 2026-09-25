@@ -2342,9 +2342,22 @@ function handleRecoveryRedirect(){
   return false;
 }
 
-// Block 6c: the password is changed but the "sign out the others" call never
-// got through (15-s timeout or no connection).
+// Block 6c/6d: the password is changed but the "sign out the others" call did
+// not succeed (15-s timeout, no connection, or a non-2xx reply). After a
+// reset the person is logged out, so they are told to log in first.
 const SIGN_OUT_OTHERS_FAILED_MSG="Password changed, but other devices couldn't be signed out. Use Log out everywhere when you're back online.";
+const SIGN_OUT_OTHERS_FAILED_RESET_MSG="Password changed, but other devices couldn't be signed out. Log in, then use Log out everywhere in Account.";
+// Block 6d: true only for a real 2xx reply. A refusal, a timeout or no
+// connection all count as "the others are still signed in".
+async function signOutSessions(scope,token){
+  try{
+    const res=await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/logout?scope=${scope}`,{
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+token}
+    });
+    return res.ok;
+  }catch{return false;}
+}
 
 function validateNewPassword(pw1,pw2){
   if(pw1.length<8)return'Password must be at least 8 characters.';
@@ -2363,7 +2376,8 @@ async function submitNewPassword(){
   if(invalid){errEl.textContent=invalid;return;}
   btn.disabled=true;btn.textContent='Saving...';
   try{
-    const res=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
+    // Block 6d: 15-s limit; a timeout rejects to the catch below.
+    const res=await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/user`,{
       method:'PUT',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+recoveryToken},
       body:JSON.stringify({password:pw1})
@@ -2385,25 +2399,19 @@ async function submitNewPassword(){
     // just the recovery one, so sessions opened under the old password die
     // with it (best-effort). The recovery token is dropped from memory and
     // the user logs in fresh with the new password, same as before.
-    // Block 6c: 15-s limit. A timeout (or no connection) still counts as a
-    // changed password; the person is told the other devices are still in and
-    // stays on this card (no auto-jump) so the message can be read.
+    // Block 6c/6d: 15-s limit. A failed sign-out still counts as a changed
+    // password; the person is told the other devices are still in and stays
+    // on this card (no auto-jump) so the message can be read.
     const spent=recoveryToken;
     recoveryToken=null;
-    let othersOut=true;
-    try{
-      await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/logout?scope=global`,{
-        method:'POST',
-        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+spent}
-      });
-    }catch{othersOut=false;}
+    const othersOut=await signOutSessions('global',spent);
     document.getElementById('resetForm').classList.add('hidden');
     document.getElementById('resetBackBtn').classList.remove('hidden');
     if(othersOut){
       okEl.textContent='✓ Password changed. Please log in with your new password.';
       setTimeout(showLogin,2500);
     }else{
-      okEl.textContent=SIGN_OUT_OTHERS_FAILED_MSG;
+      okEl.textContent=SIGN_OUT_OTHERS_FAILED_RESET_MSG;
     }
   }catch{
     btn.disabled=false;btn.textContent='Save new password';
@@ -2879,11 +2887,14 @@ async function copyInviteLink(){
 async function getAccountEmail(){
   const jwtEmail=getAuthEmail();
   if(jwtEmail)return jwtEmail;
+  // Block 6d: 15-s limit. A timeout or no connection is NOT caught here — it
+  // rejects to saveAccountPassword's catch ("Connection error"), rather than
+  // being reported as an unconfirmed email.
+  const res=await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/user`,{
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+localStorage.getItem(AUTH_TOKEN_KEY)}
+  });
+  if(!res.ok)return'';
   try{
-    const res=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+localStorage.getItem(AUTH_TOKEN_KEY)}
-    });
-    if(!res.ok)return'';
     const data=await res.json();
     return data.email||'';
   }catch{return'';}
@@ -2917,7 +2928,9 @@ async function saveAccountPassword(){
     // fresh session it returns becomes this device's session, and because it
     // is seconds old the PUT below also passes the dashboard's "Secure
     // password change" toggle (sessions under 24h need no reauth nonce).
-    const grantRes=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{
+    // Block 6d: the password check and the save below get the 15-s limit; a
+    // timeout rejects to the catch at the end ("Connection error").
+    const grantRes=await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
       body:JSON.stringify({email,password:pw0})
@@ -2936,7 +2949,7 @@ async function saveAccountPassword(){
     // current_password rides along so the "Require current password" dashboard
     // toggle can be enabled without breaking this flow — GoTrue validates it
     // only when that toggle is on and ignores it otherwise.
-    const res=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
+    const res=await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/user`,{
       method:'PUT',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+grant.access_token},
       body:JSON.stringify({password:pw1,current_password:pw0})
@@ -2952,15 +2965,9 @@ async function saveAccountPassword(){
     // Revoke every session EXCEPT the fresh grant above — any device holding
     // a session under the old password is signed out; this one stays in.
     // Best-effort: the password itself is already changed at this point.
-    // Block 6c: 15-s limit; a timeout (or no connection) still counts as a
-    // changed password, but the message no longer claims the others are out.
-    let othersOut=true;
-    try{
-      await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/logout?scope=others`,{
-        method:'POST',
-        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+grant.access_token}
-      });
-    }catch{othersOut=false;}
+    // Block 6c/6d: 15-s limit; a failed sign-out still counts as a changed
+    // password, but only a 2xx reply says the others are out.
+    const othersOut=await signOutSessions('others',grant.access_token);
     restoreBtn();
     document.getElementById('accountPw0').value='';
     document.getElementById('accountPw1').value='';
