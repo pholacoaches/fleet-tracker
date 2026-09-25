@@ -2058,7 +2058,7 @@ async function keepSessionAlive(){
   if(document.hidden)return;
   if(document.getElementById('appContent').classList.contains('hidden'))return;
   const s=await sharedSessionStatus();
-  if(s==='dead'||s==='none')logout();
+  if(s==='dead'||s==='none')logout('local',true);
 }
 function startSessionKeepAlive(){
   if(_keepAliveId)return;
@@ -2147,13 +2147,19 @@ function showLogin(){
 // Audit fix #3 item 4: scope 'local' (default, the Log out button) revokes
 // only this device's session; 'global' (Log out everywhere) revokes every
 // session for the user. Both end in the same full-page reload.
-async function logout(scope='local'){
+// Job 1 block 2: a stale access token is refreshed first — GoTrue refuses
+// (403) a logout sent with an expired token, which left the server session
+// (and its refresh token) alive. If the refresh fails, or the caller already
+// knows the session is dead (sessionDead), there is nothing the server call
+// could revoke with: it is skipped, and the device is still cleared.
+async function logout(scope='local',sessionDead=false){
   if(scope!=='global')scope='local';
   // Revoke the session server-side (best-effort — an offline logout must still work).
   // Read the token directly, not via authToken(): that helper now routes a
   // missing token to logout() itself (item 6), and with no token there is no
   // session to revoke anyway.
-  const t=localStorage.getItem(AUTH_TOKEN_KEY);
+  const s=sessionDead?'dead':await sharedSessionStatus();
+  const t=s==='fresh'?localStorage.getItem(AUTH_TOKEN_KEY):null;
   if(t){
     try{
       await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=${scope}`,{
@@ -2809,7 +2815,7 @@ async function saveAccountPassword(){
     // session — say so and keep everything.
     const s=await sharedSessionStatus();
     if(s==='offline'||s==='error'){restoreBtn();errEl.textContent='Connection error. Please try again.';return;}
-    if(s!=='fresh'){logout();return;}
+    if(s!=='fresh'){logout('local',true);return;}
     const email=await getAccountEmail();
     if(!email){restoreBtn();errEl.textContent='Could not confirm your account email. Please log out and back in, then try again.';return;}
     // Security 2026-09-02: a password change must prove the CURRENT password.

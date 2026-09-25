@@ -153,7 +153,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 //
 // Like index.html, this page talks to Supabase Auth (GoTrue) over REST — no
 // supabase-js. On success it writes the same three localStorage keys
-// index.html's checkAuth() reads, then hands over to index.html signed in.
+// index.html's sessionStatus() reads, then hands over to index.html signed in.
 const SUPABASE_URL='https://wlwwzbyuchsonwugqhww.supabase.co';
 const SUPABASE_KEY='sb_publishable_p_eRLUaoRpR0lXK0n4Ew6A_efOoKah5';
 const AUTH_TOKEN_KEY='fleet_auth_token';     // must match index.html
@@ -282,9 +282,33 @@ async function verifyInvite(){
 
 // An earlier session on this device (someone else, or an older login) is
 // signed out first, so the new user never inherits its tenant cache.
+// Same rule as index.html's logout(): GoTrue refuses (403) a logout sent with
+// an expired access token, so a stale one (older than 55 min, the age
+// index.html refreshes at) is refreshed first. If that refresh fails the old
+// session cannot be revoked from here — the server call is skipped and the
+// device is still cleared below.
+async function freshOldToken(){
+  const token=localStorage.getItem(AUTH_TOKEN_KEY);
+  const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
+  if(!token||token.startsWith('local-'))return null;
+  if(Date.now()-time<55*60*1000)return token;
+  const refresh=localStorage.getItem(AUTH_REFRESH_KEY);
+  if(!refresh)return null;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+      body:JSON.stringify({refresh_token:refresh})
+    });
+    const data=res.ok?await res.json().catch(()=>null):null;
+    return data&&typeof data.access_token==='string'?data.access_token:null;
+  }catch{return null;}
+}
+
 async function replaceDeviceSession(session){
-  const old=localStorage.getItem(AUTH_TOKEN_KEY);
-  if(old&&old!==session.access_token){
+  const stored=localStorage.getItem(AUTH_TOKEN_KEY);
+  const old=stored&&stored!==session.access_token?await freshOldToken():null;
+  if(old){
     try{
       await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=local`,{
         method:'POST',
@@ -331,7 +355,7 @@ async function submitPassword(e){
       return;
     }
     // Password set: this session becomes the app session, then index.html
-    // takes over already signed in (its checkAuth() sees a fresh token).
+    // takes over already signed in (its sessionStatus() sees a fresh token).
     // The session leaves this tab's storage straight away — from here on it
     // lives only in this variable until it is handed to the app.
     const session=invite.session;
