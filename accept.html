@@ -256,9 +256,19 @@ function authErrorText(data,status){
   return raw||`Something went wrong (error ${status}). Please try again.`;
 }
 
+// Same 15-s limit as index.html's fetchWithTimeout (Block 6b/6c). A request
+// the network never answers is aborted, so the fetch rejects and the caller's
+// catch stops the spinner instead of leaving it spinning forever.
+const CHECK_TIMEOUT_MS=15000;
+function fetchWithTimeout(url,opts){
+  const ctl=new AbortController();
+  const timer=setTimeout(()=>ctl.abort(),CHECK_TIMEOUT_MS);
+  return fetch(url,{...opts,signal:ctl.signal}).finally(()=>clearTimeout(timer));
+}
+
 // Token → session. Returns true, or false after it has shown why.
 async function verifyInvite(){
-  const res=await fetch(`${SUPABASE_URL}/auth/v1/verify`,{
+  const res=await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/verify`,{
     method:'POST',
     headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
     body:JSON.stringify({type:'invite',token_hash:invite.token_hash})
@@ -287,15 +297,9 @@ async function verifyInvite(){
 // index.html refreshes at) is refreshed first. If that refresh fails the old
 // session cannot be revoked from here — the server call is skipped and the
 // device is still cleared below.
-// Block 6b: the refresh and the logout get the same 15-s limit as index.html's
-// fetchWithTimeout. A timeout counts as a failure: the old login is still
-// cleared from this device and the invite carries on, with no error shown.
-const OLD_LOGIN_TIMEOUT_MS=15000;
-function fetchWithTimeout(url,opts){
-  const ctl=new AbortController();
-  const timer=setTimeout(()=>ctl.abort(),OLD_LOGIN_TIMEOUT_MS);
-  return fetch(url,{...opts,signal:ctl.signal}).finally(()=>clearTimeout(timer));
-}
+// Block 6b: the refresh and the logout get the 15-s limit (fetchWithTimeout
+// above). A timeout counts as a failure: the old login is still cleared from
+// this device and the invite carries on, with no error shown.
 async function freshOldToken(){
   const token=localStorage.getItem(AUTH_TOKEN_KEY);
   const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
@@ -345,7 +349,7 @@ async function submitPassword(e){
   setBusy(true,'Setting password...');
   try{
     if(!invite.session&&!(await verifyInvite()))return;
-    const res=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
+    const res=await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/user`,{
       method:'PUT',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+invite.session.access_token},
       body:JSON.stringify({password:pw1})
@@ -381,7 +385,7 @@ async function submitPassword(e){
     setBusy(false);
     // invite is already dropped once the password is saved — retrying here
     // would do nothing, so send them to sign in instead.
-    showErr(invite?'Connection error. Please check your internet connection and try again.'
+    showErr(invite?'Connection problem. Please check your internet and try again.'
       :'Your password is saved. Please sign in on the sign-in page with your email and new password.');
   }
 }

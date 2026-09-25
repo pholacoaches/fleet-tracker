@@ -2342,6 +2342,10 @@ function handleRecoveryRedirect(){
   return false;
 }
 
+// Block 6c: the password is changed but the "sign out the others" call never
+// got through (15-s timeout or no connection).
+const SIGN_OUT_OTHERS_FAILED_MSG="Password changed, but other devices couldn't be signed out. Use Log out everywhere when you're back online.";
+
 function validateNewPassword(pw1,pw2){
   if(pw1.length<8)return'Password must be at least 8 characters.';
   if(pw1!==pw2)return'Passwords do not match.';
@@ -2381,18 +2385,26 @@ async function submitNewPassword(){
     // just the recovery one, so sessions opened under the old password die
     // with it (best-effort). The recovery token is dropped from memory and
     // the user logs in fresh with the new password, same as before.
+    // Block 6c: 15-s limit. A timeout (or no connection) still counts as a
+    // changed password; the person is told the other devices are still in and
+    // stays on this card (no auto-jump) so the message can be read.
     const spent=recoveryToken;
     recoveryToken=null;
+    let othersOut=true;
     try{
-      await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=global`,{
+      await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/logout?scope=global`,{
         method:'POST',
         headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+spent}
       });
-    }catch{}
+    }catch{othersOut=false;}
     document.getElementById('resetForm').classList.add('hidden');
-    okEl.textContent='✓ Password changed. Please log in with your new password.';
     document.getElementById('resetBackBtn').classList.remove('hidden');
-    setTimeout(showLogin,2500);
+    if(othersOut){
+      okEl.textContent='✓ Password changed. Please log in with your new password.';
+      setTimeout(showLogin,2500);
+    }else{
+      okEl.textContent=SIGN_OUT_OTHERS_FAILED_MSG;
+    }
   }catch{
     btn.disabled=false;btn.textContent='Save new password';
     errEl.textContent='Connection error. Please try again.';
@@ -2940,17 +2952,22 @@ async function saveAccountPassword(){
     // Revoke every session EXCEPT the fresh grant above — any device holding
     // a session under the old password is signed out; this one stays in.
     // Best-effort: the password itself is already changed at this point.
+    // Block 6c: 15-s limit; a timeout (or no connection) still counts as a
+    // changed password, but the message no longer claims the others are out.
+    let othersOut=true;
     try{
-      await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=others`,{
+      await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/logout?scope=others`,{
         method:'POST',
         headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+grant.access_token}
       });
-    }catch{}
+    }catch{othersOut=false;}
     restoreBtn();
     document.getElementById('accountPw0').value='';
     document.getElementById('accountPw1').value='';
     document.getElementById('accountPw2').value='';
-    okEl.textContent='✓ Password changed. Other devices have been signed out.';
+    okEl.textContent=othersOut
+      ?'✓ Password changed. Other devices have been signed out.'
+      :SIGN_OUT_OTHERS_FAILED_MSG;
   }catch{
     restoreBtn();
     errEl.textContent='Connection error. Please try again.';
