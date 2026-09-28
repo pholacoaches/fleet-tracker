@@ -5681,9 +5681,10 @@ function stopRealtimeListener(){
 
 // v95: never two polls at once (overlapping polls could add the same rows
 // twice), and the whole request — reply body included — has the 15-s limit.
-// A timeout is silent; the next poll simply tries again.
+// A timeout is silent; the next poll simply tries again. No internet: skip
+// (no "Failed to fetch" every 10 s); polling resumes once back online.
 async function pollForNewSubmissions(){
-  if(document.hidden||_pollRunning)return;
+  if(document.hidden||!navigator.onLine||_pollRunning)return;
   _pollRunning=true;
   try{
     const res=await fetchAllWithTimeout(
