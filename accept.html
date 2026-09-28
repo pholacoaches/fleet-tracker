@@ -256,10 +256,11 @@ function authErrorText(data,status){
   return raw||`Something went wrong (error ${status}). Please try again.`;
 }
 
-// fetchWithTimeout (15-s limit, Block 6b/6c) lives in storage-keys.js, shared
-// with index.html. A request the network never answers is aborted, so the
-// fetch rejects and the caller's catch stops the spinner instead of leaving
-// it spinning forever.
+// fetchWithTimeout and fetchAllWithTimeout (15-s limit, Block 6b/6c) live in
+// storage-keys.js, shared with index.html. fetchAllWithTimeout also covers
+// reading the reply body, so it is used wherever the reply is read. A request
+// the network never answers is aborted, so the fetch rejects and the caller's
+// catch stops the spinner instead of leaving it spinning forever.
 
 // Token → session. Returns true, or false after it has shown why.
 async function verifyInvite(){
