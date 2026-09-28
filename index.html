@@ -2100,8 +2100,8 @@ function sharedSessionStatus(){
 
 // Job 1 block 1: keep the login fresh while the app stays open. Without this
 // the access token expired ~1 h after the page loaded and every call after
-// that (the 10 s poll first) failed with 401. Runs every 3 min while the tab
-// is visible, and at once when the tab comes back into view. Only a session
+// that (the 10 s poll first) failed with 401. Runs every 1 min while the tab
+// is visible (about 60 small requests per hour per open visible tab), and at once when the tab comes back into view. Only a session
 // GoTrue itself refuses logs out — a network blip or a GoTrue outage keeps
 // the session (and any unsent fuel reports) and tries again next time.
 // Job 1 block 4: each run also checks the person is still on the team — a
@@ -2113,7 +2113,7 @@ function sharedSessionStatus(){
 // A removed person whose login has ALREADY expired cannot be told apart from
 // any other ended session (GoTrue answers refresh_token_not_found for both),
 // so that case logs out without the removed message.
-const SESSION_KEEPALIVE_MS=3*60*1000;
+const SESSION_KEEPALIVE_MS=1*60*1000;
 let _keepAliveId=null,_keepAliveRunning=false;
 async function keepSessionAlive(){
   if(document.hidden||_keepAliveRunning)return;
