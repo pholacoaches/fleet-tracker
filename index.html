@@ -1846,23 +1846,15 @@ async function initTenant(){
   return 'ok';
 }
 
-// Job 1 block 6: the session / removal checks run on a timer and share one
-// promise, so a request the network never answers (captive portal, dropped
-// signal) must not hang them forever. After 15 s it is aborted — the fetch
-// rejects, and every caller already treats a rejection as "offline".
-const CHECK_TIMEOUT_MS=15000;
-function fetchWithTimeout(url,opts){
-  const ctl=new AbortController();
-  const timer=setTimeout(()=>ctl.abort(),CHECK_TIMEOUT_MS);
-  return fetch(url,{...opts,signal:ctl.signal}).finally(()=>clearTimeout(timer));
-}
+// fetchWithTimeout / fetchAllWithTimeout (15-s limit) and
+// FD_TOKEN_REFRESH_AGE_MS live in storage-keys.js, shared with accept.html.
 
 // Job 1: true only when the DB clearly answers "200 with 0 rows" for this
 // REST read. A network error, a timeout, a non-2xx reply or an unreadable
 // body is NOT removal — it returns false and nothing is wiped.
 async function restRowsEmpty(path){
   try{
-    const res=await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/${path}`,{
+    const res=await fetchAllWithTimeout(`${SUPABASE_URL}/rest/v1/${path}`,{
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+authToken()}
     });
     if(!res.ok)return false;
@@ -2066,14 +2058,14 @@ async function sessionStatus(){
     // Stage 5: legacy login removed — a leftover 'local-' token is not a session
     if(token.startsWith('local-'))return 'dead';
     // Token still fresh — no network call needed
-    if(Date.now()-time<55*60*1000)return 'fresh';
+    if(Date.now()-time<FD_TOKEN_REFRESH_AGE_MS)return 'fresh';
     // Audit fix #3 item 2: a stale access token with no refresh token can
     // never be renewed — it is a dead session, not a 24h grace period.
     if(!refresh)return 'dead';
     // Token is older than 55 min — use refresh token to get a new one
     let res;
     try{
-      res=await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
+      res=await fetchAllWithTimeout(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
         method:'POST',
         headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
         body:JSON.stringify({refresh_token:refresh})
@@ -5667,12 +5659,19 @@ let batchRows=[];
 let batchTimer=null;
 
 let pollIntervalId=null;
+let _pollRunning=false,_pollVisBound=false;
 function startRealtimeListener(){
   if(pollIntervalId)clearInterval(pollIntervalId);
   lastSeenTimestamp=notifData.length>0?notifData[0].created_at:new Date().toISOString();
   pollTimestamp=lastSeenTimestamp;
   console.log('[FleetDesk] Polling every 10s. Seeded at:',lastSeenTimestamp);
   pollIntervalId=setInterval(pollForNewSubmissions,10000);
+  // Hidden tabs skip the poll; coming back into view polls at once (same idea
+  // as the session keep-alive). Bound once — this function can run again.
+  if(!_pollVisBound){
+    _pollVisBound=true;
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden&&pollIntervalId)pollForNewSubmissions();});
+  }
 }
 function stopRealtimeListener(){
   if(pollIntervalId){clearInterval(pollIntervalId);pollIntervalId=null;}
@@ -5680,9 +5679,14 @@ function stopRealtimeListener(){
   batchRows=[];
 }
 
+// v95: never two polls at once (overlapping polls could add the same rows
+// twice), and the whole request — reply body included — has the 15-s limit.
+// A timeout is silent; the next poll simply tries again.
 async function pollForNewSubmissions(){
+  if(document.hidden||_pollRunning)return;
+  _pollRunning=true;
   try{
-    const res=await fetch(
+    const res=await fetchAllWithTimeout(
       `${SUPABASE_URL}/rest/v1/odometer_readings?select=*&created_at=gt.${encodeURIComponent(pollTimestamp)}&deleted_at=is.null&order=created_at.asc`,
       {headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${authToken()}`}}
     );
@@ -5724,8 +5728,9 @@ async function pollForNewSubmissions(){
       },30000);
     }
   }catch(err){
+    if(err&&err.name==='AbortError')return;
     console.error('[FleetDesk] Poll error:',err);
-  }
+  }finally{_pollRunning=false;}
 }
 
 // ── DISC RENEWAL / COMPLIANCE (Supabase-backed) ──────────────────────────────

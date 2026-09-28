@@ -256,15 +256,10 @@ function authErrorText(data,status){
   return raw||`Something went wrong (error ${status}). Please try again.`;
 }
 
-// Same 15-s limit as index.html's fetchWithTimeout (Block 6b/6c). A request
-// the network never answers is aborted, so the fetch rejects and the caller's
-// catch stops the spinner instead of leaving it spinning forever.
-const CHECK_TIMEOUT_MS=15000;
-function fetchWithTimeout(url,opts){
-  const ctl=new AbortController();
-  const timer=setTimeout(()=>ctl.abort(),CHECK_TIMEOUT_MS);
-  return fetch(url,{...opts,signal:ctl.signal}).finally(()=>clearTimeout(timer));
-}
+// fetchWithTimeout (15-s limit, Block 6b/6c) lives in storage-keys.js, shared
+// with index.html. A request the network never answers is aborted, so the
+// fetch rejects and the caller's catch stops the spinner instead of leaving
+// it spinning forever.
 
 // Token → session. Returns true, or false after it has shown why.
 async function verifyInvite(){
@@ -307,7 +302,7 @@ async function freshOldToken(){
   const token=localStorage.getItem(AUTH_TOKEN_KEY);
   const time=parseInt(localStorage.getItem(AUTH_TIME_KEY)||'0');
   if(!token||token.startsWith('local-'))return null;
-  if(Date.now()-time<55*60*1000)return token;
+  if(Date.now()-time<FD_TOKEN_REFRESH_AGE_MS)return token;
   const refresh=localStorage.getItem(AUTH_REFRESH_KEY);
   if(!refresh)return null;
   try{

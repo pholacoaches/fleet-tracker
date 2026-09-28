@@ -1,8 +1,10 @@
-// FleetDesk — the one list of per-company localStorage keys, and the wipe that
-// removes them (classic script, plain globals). Loaded by index.html and
-// accept.html via <script src="storage-keys.js"></script> BEFORE their inline
-// scripts. Names are prefixed FD_ because classic scripts share one global
-// scope: a second `const TENANT_CACHE_KEY` in a page would be a SyntaxError.
+// FleetDesk — code shared by index.html and accept.html (classic script, plain
+// globals): the one list of per-company localStorage keys and the wipe that
+// removes them, plus the login timing values and the 15-s fetch limit both
+// pages use. Loaded via <script src="storage-keys.js"></script> BEFORE their
+// inline scripts. Names are prefixed FD_ because classic scripts share one
+// global scope: a second `const TENANT_CACHE_KEY` in a page would be a
+// SyntaxError. Never re-declare anything from this file in a page.
 //
 // Any change here needs a sw.js cache bump, or the service worker will keep
 // serving the previous copy to installed clients.
@@ -66,4 +68,34 @@ function fdRememberUser(uid){
     if(uid)localStorage.setItem(FD_LAST_USER_KEY,uid);
     else localStorage.removeItem(FD_LAST_USER_KEY);
   }catch{}
+}
+
+// A stored access token older than this is refreshed before use (GoTrue
+// tokens last 1 h; 5 min of slack).
+const FD_TOKEN_REFRESH_AGE_MS=55*60*1000;
+
+// Job 1 block 6: the session / removal checks run on a timer and share one
+// promise, so a request the network never answers (captive portal, dropped
+// signal) must not hang them forever. After 15 s it is aborted — the fetch
+// rejects, and every caller already treats a rejection as "offline".
+const FD_CHECK_TIMEOUT_MS=15000;
+function fetchWithTimeout(url,opts){
+  const ctl=new AbortController();
+  const timer=setTimeout(()=>ctl.abort(),FD_CHECK_TIMEOUT_MS);
+  return fetch(url,{...opts,signal:ctl.signal}).finally(()=>clearTimeout(timer));
+}
+// Same 15-s limit, but it also covers reading the reply body: the whole reply
+// is read inside the limit and handed back as a ready Response, so a reply
+// that stalls halfway rejects too. For the timer-driven checks (poll,
+// keep-alive), whose "already running" flag must never stay stuck.
+async function fetchAllWithTimeout(url,opts){
+  const ctl=new AbortController();
+  const timer=setTimeout(()=>ctl.abort(),FD_CHECK_TIMEOUT_MS);
+  try{
+    const res=await fetch(url,{...opts,signal:ctl.signal});
+    const body=await res.arrayBuffer();
+    // 204/205/304 may not carry a body in a new Response.
+    return new Response([204,205,304].includes(res.status)?null:body,
+      {status:res.status,statusText:res.statusText,headers:res.headers});
+  }finally{clearTimeout(timer);}
 }
